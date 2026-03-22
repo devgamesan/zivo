@@ -1,45 +1,75 @@
-from plain.models import CreatePathRequest, RenameRequest
+from dataclasses import dataclass, field
+
+import pytest
+
+from plain.models import TrashDeleteRequest
 from plain.services import LiveFileMutationService
 
 
-def test_file_mutation_service_renames_path(tmp_path) -> None:
-    source = tmp_path / "docs"
-    source.mkdir()
+@dataclass
+class StubFileOperationAdapter:
+    trashed_paths: list[str] = field(default_factory=list)
+    failing_paths: set[str] = field(default_factory=set)
 
-    service = LiveFileMutationService()
+    def path_exists(self, path: str) -> bool:
+        return False
 
-    result = service.execute(RenameRequest(source_path=str(source), new_name="manuals"))
+    def paths_are_same(self, source: str, destination: str) -> bool:
+        return source == destination
 
-    assert result.path == str(tmp_path / "manuals")
-    assert (tmp_path / "manuals").is_dir()
-    assert source.exists() is False
+    def remove_path(self, path: str) -> None:
+        raise NotImplementedError
+
+    def copy_path(self, source: str, destination: str) -> None:
+        raise NotImplementedError
+
+    def move_path(self, source: str, destination: str) -> None:
+        raise NotImplementedError
+
+    def generate_renamed_path(self, destination: str) -> str:
+        raise NotImplementedError
+
+    def create_file(self, path: str) -> None:
+        raise NotImplementedError
+
+    def create_directory(self, path: str) -> None:
+        raise NotImplementedError
+
+    def send_to_trash(self, path: str) -> None:
+        if path in self.failing_paths:
+            raise OSError("permission denied")
+        self.trashed_paths.append(path)
 
 
-def test_file_mutation_service_creates_file(tmp_path) -> None:
-    service = LiveFileMutationService()
+def test_file_mutation_service_trashes_single_path() -> None:
+    adapter = StubFileOperationAdapter()
+    service = LiveFileMutationService(adapter=adapter)
 
     result = service.execute(
-        CreatePathRequest(
-            parent_dir=str(tmp_path),
-            name="notes.txt",
-            kind="file",
-        )
+        TrashDeleteRequest(paths=("/tmp/plain/docs",))
     )
 
-    assert result.path == str(tmp_path / "notes.txt")
-    assert (tmp_path / "notes.txt").is_file()
+    assert adapter.trashed_paths == ["/tmp/plain/docs"]
+    assert result.message == "Trashed 1 item"
+    assert result.removed_paths == ("/tmp/plain/docs",)
 
 
-def test_file_mutation_service_creates_directory(tmp_path) -> None:
-    service = LiveFileMutationService()
+def test_file_mutation_service_reports_partial_delete_failures() -> None:
+    adapter = StubFileOperationAdapter(failing_paths={"/tmp/plain/src"})
+    service = LiveFileMutationService(adapter=adapter)
 
     result = service.execute(
-        CreatePathRequest(
-            parent_dir=str(tmp_path),
-            name="drafts",
-            kind="dir",
-        )
+        TrashDeleteRequest(paths=("/tmp/plain/docs", "/tmp/plain/src"))
     )
 
-    assert result.path == str(tmp_path / "drafts")
-    assert (tmp_path / "drafts").is_dir()
+    assert adapter.trashed_paths == ["/tmp/plain/docs"]
+    assert result.level == "warning"
+    assert result.removed_paths == ("/tmp/plain/docs",)
+
+
+def test_file_mutation_service_raises_when_all_deletes_fail() -> None:
+    adapter = StubFileOperationAdapter(failing_paths={"/tmp/plain/docs"})
+    service = LiveFileMutationService(adapter=adapter)
+
+    with pytest.raises(OSError, match="Failed to trash docs"):
+        service.execute(TrashDeleteRequest(paths=("/tmp/plain/docs",)))

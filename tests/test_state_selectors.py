@@ -4,6 +4,7 @@ from plain.models import PasteConflict, PasteRequest
 from plain.state import (
     BeginCreateInput,
     CutTargets,
+    DeleteConfirmationState,
     NotificationState,
     PaneState,
     PasteConflictState,
@@ -163,7 +164,8 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
     help_state = select_help_bar_state(state)
 
     assert help_state.text == (
-        "Space select | y copy | x cut | p paste | F2 rename | ctrl+n file | ctrl+shift+n dir"
+        "Space select | y copy | x cut | p paste | "
+        "F2 rename | ctrl+n file | ctrl+shift+n dir"
     )
 
 
@@ -205,3 +207,35 @@ def test_select_conflict_dialog_state_formats_first_conflict() -> None:
     assert dialog is not None
     assert dialog.title == "Paste Conflict"
     assert "o overwrite" in dialog.options
+
+
+def test_select_conflict_dialog_state_formats_delete_confirmation() -> None:
+    state = replace(
+        build_initial_app_state(),
+        delete_confirmation=DeleteConfirmationState(
+            paths=(
+                "/home/tadashi/develop/plain/docs",
+                "/home/tadashi/develop/plain/src",
+            )
+        ),
+    )
+
+    dialog = select_conflict_dialog_state(state)
+
+    assert dialog is not None
+    assert dialog.title == "Delete Confirmation"
+    assert dialog.options == ("enter confirm", "esc cancel")
+
+
+def test_select_help_bar_for_delete_confirmation() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        delete_confirmation=DeleteConfirmationState(
+            paths=("/home/tadashi/develop/plain/docs",),
+        ),
+    )
+
+    help_state = select_help_bar_state(state)
+
+    assert help_state.text == "enter confirm delete | esc cancel"

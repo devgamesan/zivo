@@ -72,6 +72,13 @@ class PasteConflictState:
 
 
 @dataclass(frozen=True)
+class DeleteConfirmationState:
+    """Pending confirmation dialog state for trash deletion."""
+
+    paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class HistoryState:
     """Back/forward navigation history."""
 
@@ -123,6 +130,7 @@ class AppState:
     notification: NotificationState | None = None
     pending_input: PendingInputState | None = None
     paste_conflict: PasteConflictState | None = None
+    delete_confirmation: DeleteConfirmationState | None = None
     post_reload_notification: NotificationState | None = None
     pending_browser_snapshot_request_id: int | None = None
     pending_child_pane_request_id: int | None = None

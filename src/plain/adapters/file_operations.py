@@ -5,6 +5,8 @@ from pathlib import Path
 from shutil import copy2, copytree, move, rmtree
 from typing import Protocol
 
+from send2trash import send2trash
+
 
 class FileOperationAdapter(Protocol):
     """Boundary for copy/move style filesystem mutations."""
@@ -24,6 +26,8 @@ class FileOperationAdapter(Protocol):
     def create_file(self, path: str) -> None: ...
 
     def create_directory(self, path: str) -> None: ...
+
+    def send_to_trash(self, path: str) -> None: ...
 
 
 @dataclass(frozen=True)
@@ -97,6 +101,13 @@ class LocalFileOperationAdapter:
             target.mkdir(exist_ok=False)
         except OSError as error:
             raise OSError(str(error) or "Directory creation failed") from error
+
+    def send_to_trash(self, path: str) -> None:
+        target = self._resolve(path)
+        try:
+            send2trash(str(target))
+        except OSError as error:
+            raise OSError(str(error) or "Trash failed") from error
 
     @staticmethod
     def _resolve(path: str) -> Path:

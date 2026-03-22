@@ -160,13 +160,13 @@ stateDiagram-v2
 補足:
 
 - `BROWSING`
-  - `Up`, `Down`, `Left`, `Right`, `Enter`, `Backspace`, `F5`, `Space`, `Esc`, `Ctrl+F`, `F2`, `Ctrl+N`, `Ctrl+Shift+N` を処理
+  - `Up`, `Down`, `Left`, `Right`, `Enter`, `Backspace`, `F5`, `Space`, `Esc`, `Ctrl+F`, `Delete`, `F2`, `Ctrl+N`, `Ctrl+Shift+N` を処理
 - `FILTER`
   - 文字入力、`Backspace`, `Space`, `Enter`, `Esc` を処理
 - `RENAME`, `CREATE`
   - 入力バーで名前編集し、`Enter` で rename/create を実行、`Esc` で cancel
 - `CONFIRM`
-  - paste conflict の解決を受け付ける
+  - paste conflict の解決、または複数対象削除の confirm/cancel を受け付ける
 - `BUSY`
   - 非同期の directory load / file mutation 中は入力を抑止する
 
@@ -180,6 +180,7 @@ stateDiagram-v2
 - 選択トグルと全解除
 - フィルタ入力と再帰フラグ切り替え
 - 単一対象の rename
+- ゴミ箱への削除
 - 新規ファイル / ディレクトリ作成
 - モード別キー解釈
 - 入力バーによる rename/create 編集
@@ -189,7 +190,7 @@ stateDiagram-v2
 
 ### まだできないこと
 
-- ファイル open / delete
+- ファイル open
 - 履歴移動や sort 切り替えの UI 操作
 
 ## 7. 今後の拡張ポイント

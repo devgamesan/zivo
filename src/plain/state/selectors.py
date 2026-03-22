@@ -99,6 +99,8 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
     """Return the single-line help content for the active mode."""
 
     if state.ui_mode == "CONFIRM":
+        if state.delete_confirmation is not None:
+            return HelpBarState("enter confirm delete | esc cancel")
         return HelpBarState("o overwrite | s skip | r rename | esc cancel")
     if state.ui_mode == "FILTER":
         return HelpBarState("type filter | space recursive | enter apply | esc cancel")
@@ -109,7 +111,8 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
     if state.ui_mode == "BUSY":
         return HelpBarState("processing...")
     return HelpBarState(
-        "Space select | y copy | x cut | p paste | F2 rename | ctrl+n file | ctrl+shift+n dir"
+        "Space select | y copy | x cut | p paste | "
+        "F2 rename | ctrl+n file | ctrl+shift+n dir"
     )
 
 
@@ -132,6 +135,22 @@ def select_input_bar_state(state: AppState) -> InputBarState | None:
 
 def select_conflict_dialog_state(state: AppState) -> ConflictDialogState | None:
     """Return dialog content when the app is waiting on conflict input."""
+
+    if state.delete_confirmation is not None:
+        target_count = len(state.delete_confirmation.paths)
+        first_name = Path(state.delete_confirmation.paths[0]).name
+        noun = "item" if target_count == 1 else "items"
+        message = f"Move {target_count} {noun} to trash?"
+        if target_count > 1:
+            message = (
+                f"Move {target_count} items to trash? "
+                f"The first target is {first_name}."
+            )
+        return ConflictDialogState(
+            title="Delete Confirmation",
+            message=message,
+            options=("enter confirm", "esc cancel"),
+        )
 
     if state.paste_conflict is None:
         return None

@@ -58,6 +58,13 @@ class BeginRenameInput:
 
 
 @dataclass(frozen=True)
+class BeginDeleteTargets:
+    """Begin deleting the supplied target paths."""
+
+    paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class BeginCreateInput:
     """Enter create input mode for a new file or directory."""
 
@@ -160,6 +167,16 @@ class ResolvePasteConflict:
 @dataclass(frozen=True)
 class CancelPasteConflict:
     """Dismiss the pending paste conflict dialog."""
+
+
+@dataclass(frozen=True)
+class ConfirmDeleteTargets:
+    """Confirm the pending delete request."""
+
+
+@dataclass(frozen=True)
+class CancelDeleteConfirmation:
+    """Dismiss the pending delete confirmation dialog."""
 
 
 @dataclass(frozen=True)

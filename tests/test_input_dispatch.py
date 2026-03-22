@@ -2,15 +2,19 @@ from dataclasses import replace
 
 from plain.state import (
     BeginCreateInput,
+    BeginDeleteTargets,
     BeginFilterInput,
     BeginRenameInput,
+    CancelDeleteConfirmation,
     CancelFilterInput,
     CancelPasteConflict,
     CancelPendingInput,
     ClearSelection,
+    ConfirmDeleteTargets,
     ConfirmFilterInput,
     CopyTargets,
     CutTargets,
+    DeleteConfirmationState,
     EnterCursorDirectory,
     GoToParentDirectory,
     MoveCursor,
@@ -214,6 +218,31 @@ def test_browsing_ctrl_shift_n_begins_directory_create_mode() -> None:
     assert actions == (SetNotification(None), BeginCreateInput("dir"))
 
 
+def test_browsing_delete_dispatches_delete_targets() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="delete")
+
+    assert actions == (
+        SetNotification(None),
+        BeginDeleteTargets(("/home/tadashi/develop/plain/docs",)),
+    )
+
+
+def test_browsing_delete_warns_when_no_target_exists() -> None:
+    state = build_initial_app_state()
+    state = replace(
+        state,
+        current_pane=replace(state.current_pane, entries=(), cursor_path=None),
+    )
+
+    actions = dispatch_key_input(state, key="delete")
+
+    assert actions == (
+        SetNotification(NotificationState(level="warning", message="Nothing to delete")),
+    )
+
+
 def test_filter_character_dispatches_query_update() -> None:
     state = build_initial_app_state()
     state = replace(state, ui_mode="FILTER")
@@ -278,6 +307,37 @@ def test_confirm_o_selects_overwrite_resolution() -> None:
     actions = dispatch_key_input(state, key="o", character="o")
 
     assert actions == (SetNotification(None), ResolvePasteConflict("overwrite"))
+
+
+def test_delete_confirm_enter_dispatches_confirmation() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        delete_confirmation=DeleteConfirmationState(
+            paths=(
+                "/home/tadashi/develop/plain/docs",
+                "/home/tadashi/develop/plain/src",
+            )
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="enter")
+
+    assert actions == (SetNotification(None), ConfirmDeleteTargets())
+
+
+def test_delete_confirm_escape_cancels_confirmation() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        delete_confirmation=DeleteConfirmationState(
+            paths=("/home/tadashi/develop/plain/docs",),
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="escape")
+
+    assert actions == (SetNotification(None), CancelDeleteConfirmation())
 
 
 def test_rename_character_dispatches_input_update() -> None:

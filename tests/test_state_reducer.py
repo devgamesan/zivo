@@ -7,14 +7,17 @@ from plain.models import (
     PasteRequest,
     PasteSummary,
     RenameRequest,
+    TrashDeleteRequest,
 )
 from plain.state import (
     BeginCreateInput,
+    BeginDeleteTargets,
     BeginFilterInput,
     BeginRenameInput,
     BrowserSnapshot,
     BrowserSnapshotFailed,
     BrowserSnapshotLoaded,
+    CancelDeleteConfirmation,
     CancelFilterInput,
     CancelPasteConflict,
     CancelPendingInput,
@@ -23,9 +26,11 @@ from plain.state import (
     ClearSelection,
     ClipboardPasteCompleted,
     ClipboardPasteNeedsResolution,
+    ConfirmDeleteTargets,
     ConfirmFilterInput,
     CopyTargets,
     CutTargets,
+    DeleteConfirmationState,
     DirectoryEntryState,
     EnterCursorDirectory,
     FileMutationCompleted,
@@ -244,6 +249,45 @@ def test_begin_create_input_sets_mode_and_kind() -> None:
     )
 
 
+def test_begin_delete_targets_single_runs_file_mutation() -> None:
+    state = build_initial_app_state()
+
+    result = reduce_app_state(
+        state,
+        BeginDeleteTargets(("/home/tadashi/develop/plain/docs",)),
+    )
+
+    assert result.state.ui_mode == "BUSY"
+    assert result.effects == (
+        RunFileMutationEffect(
+            request_id=1,
+            request=TrashDeleteRequest(paths=("/home/tadashi/develop/plain/docs",)),
+        ),
+    )
+
+
+def test_begin_delete_targets_multiple_enters_confirm_mode() -> None:
+    state = build_initial_app_state()
+
+    next_state = _reduce_state(
+        state,
+        BeginDeleteTargets(
+            (
+                "/home/tadashi/develop/plain/docs",
+                "/home/tadashi/develop/plain/src",
+            )
+        ),
+    )
+
+    assert next_state.ui_mode == "CONFIRM"
+    assert next_state.delete_confirmation == DeleteConfirmationState(
+        paths=(
+            "/home/tadashi/develop/plain/docs",
+            "/home/tadashi/develop/plain/src",
+        )
+    )
+
+
 def test_cancel_pending_input_returns_to_browsing() -> None:
     state = replace(
         build_initial_app_state(),
@@ -255,6 +299,50 @@ def test_cancel_pending_input_returns_to_browsing() -> None:
 
     assert next_state.ui_mode == "BROWSING"
     assert next_state.pending_input is None
+
+
+def test_confirm_delete_targets_runs_file_mutation() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        delete_confirmation=DeleteConfirmationState(
+            paths=(
+                "/home/tadashi/develop/plain/docs",
+                "/home/tadashi/develop/plain/src",
+            )
+        ),
+        next_request_id=4,
+    )
+
+    result = reduce_app_state(state, ConfirmDeleteTargets())
+
+    assert result.state.ui_mode == "BUSY"
+    assert result.effects == (
+        RunFileMutationEffect(
+            request_id=4,
+            request=TrashDeleteRequest(
+                paths=(
+                    "/home/tadashi/develop/plain/docs",
+                    "/home/tadashi/develop/plain/src",
+                )
+            ),
+        ),
+    )
+
+
+def test_cancel_delete_confirmation_returns_to_browsing_with_warning() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        delete_confirmation=DeleteConfirmationState(
+            paths=("/home/tadashi/develop/plain/docs",),
+        ),
+    )
+
+    next_state = _reduce_state(state, CancelDeleteConfirmation())
+
+    assert next_state.ui_mode == "BROWSING"
+    assert next_state.notification == NotificationState(level="warning", message="Delete cancelled")
 
 
 def test_set_pending_input_value_updates_current_value() -> None:
@@ -540,6 +628,40 @@ def test_file_mutation_completed_requests_reload_with_result_cursor() -> None:
     )
 
 
+def test_delete_file_mutation_completed_requests_reload_without_deleted_cursor() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="BUSY",
+        pending_file_mutation_request_id=7,
+        current_pane=replace(
+            build_initial_app_state().current_pane,
+            cursor_path="/home/tadashi/develop/plain/docs",
+        ),
+    )
+
+    result = reduce_app_state(
+        state,
+        FileMutationCompleted(
+            request_id=7,
+            result=FileMutationResult(
+                path=None,
+                message="Trashed 1 item",
+                removed_paths=("/home/tadashi/develop/plain/docs",),
+            ),
+        ),
+    )
+
+    assert result.state.ui_mode == "BROWSING"
+    assert result.effects == (
+        LoadBrowserSnapshotEffect(
+            request_id=1,
+            path="/home/tadashi/develop/plain",
+            cursor_path="/home/tadashi/develop/plain/src",
+            blocking=False,
+        ),
+    )
+
+
 def test_file_mutation_failed_keeps_input_value_and_returns_error() -> None:
     state = replace(
         build_initial_app_state(),
@@ -554,11 +676,28 @@ def test_file_mutation_failed_keeps_input_value_and_returns_error() -> None:
 
     next_state = _reduce_state(state, FileMutationFailed(request_id=3, message="permission denied"))
 
+    assert next_state.ui_mode == "RENAME"
     assert next_state.pending_input is not None
     assert next_state.pending_input.value == "docs copy"
     assert next_state.notification == NotificationState(
         level="error",
         message="permission denied",
+    )
+
+
+def test_delete_file_mutation_failed_returns_to_browsing() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="BUSY",
+        pending_file_mutation_request_id=5,
+    )
+
+    next_state = _reduce_state(state, FileMutationFailed(request_id=5, message="trash failed"))
+
+    assert next_state.ui_mode == "BROWSING"
+    assert next_state.notification == NotificationState(
+        level="error",
+        message="trash failed",
     )
 
 
