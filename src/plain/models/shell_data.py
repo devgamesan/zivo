@@ -30,6 +30,7 @@ class StatusBarState:
     selected_count: int
     sort_label: str
     filter_label: str
+    message: str | None = None
 
 
 @dataclass(frozen=True)
@@ -70,5 +71,6 @@ def build_dummy_shell_data() -> ThreePaneShellData:
             selected_count=0,
             sort_label="name asc",
             filter_label="none",
+            message=None,
         ),
     )

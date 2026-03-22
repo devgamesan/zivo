@@ -2,7 +2,10 @@
 
 from .actions import (
     Action,
+    BeginFilterInput,
+    CancelFilterInput,
     ClearSelection,
+    ConfirmFilterInput,
     InitializeState,
     MoveCursor,
     SetCursorPath,
@@ -12,7 +15,9 @@ from .actions import (
     SetStatusMessage,
     SetUiMode,
     ToggleSelection,
+    ToggleSelectionAndAdvance,
 )
+from .input import dispatch_key_input
 from .models import (
     AppState,
     ClipboardState,
@@ -37,8 +42,11 @@ from .selectors import (
 __all__ = [
     "Action",
     "AppState",
+    "BeginFilterInput",
+    "CancelFilterInput",
     "ClearSelection",
     "ClipboardState",
+    "ConfirmFilterInput",
     "DirectoryEntryState",
     "FilterState",
     "HistoryState",
@@ -53,8 +61,10 @@ __all__ = [
     "SetUiMode",
     "SortState",
     "ToggleSelection",
+    "ToggleSelectionAndAdvance",
     "UiMode",
     "build_initial_app_state",
+    "dispatch_key_input",
     "reduce_app_state",
     "select_child_entries",
     "select_current_entries",

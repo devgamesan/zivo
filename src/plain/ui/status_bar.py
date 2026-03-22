@@ -21,10 +21,13 @@ class StatusBar(Static):
     @staticmethod
     def format_state(state: StatusBarState) -> str:
         """Build the visible status line."""
-        return (
+        summary = (
             f"{state.path} | "
             f"{state.item_count} items | "
             f"{state.selected_count} selected | "
             f"sort: {state.sort_label} | "
             f"filter: {state.filter_label}"
         )
+        if state.message:
+            return f"{summary} | message: {state.message}"
+        return summary

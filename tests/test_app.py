@@ -2,6 +2,7 @@ import pytest
 from textual.widgets import DataTable, Label, ListView
 
 from plain import create_app
+from plain.state import SetUiMode, reduce_app_state
 from plain.ui import StatusBar
 
 
@@ -41,3 +42,56 @@ async def test_app_can_start_in_narrow_headless_mode() -> None:
 
     async with app.run_test(size=(72, 20)):
         assert app.query_one("#body")
+
+
+@pytest.mark.asyncio
+async def test_app_keyboard_input_updates_selection_and_cursor() -> None:
+    app = create_app()
+
+    async with app.run_test() as pilot:
+        await pilot.press("space")
+
+        status_bar = app.query_one("#status-bar", StatusBar)
+
+        assert app.app_state.current_pane.selected_paths == {
+            "/home/tadashi/develop/plain/docs"
+        }
+        assert app.app_state.current_pane.cursor_path == "/home/tadashi/develop/plain/src"
+        assert str(status_bar.renderable) == (
+            "/home/tadashi/develop/plain | 5 items | 1 selected | "
+            "sort: name asc | filter: none"
+        )
+
+
+@pytest.mark.asyncio
+async def test_app_keyboard_input_handles_filter_mode() -> None:
+    app = create_app()
+
+    async with app.run_test() as pilot:
+        await pilot.press("ctrl+f", "r", "e", "a", "d", "enter")
+
+        status_bar = app.query_one("#status-bar", StatusBar)
+
+        assert app.app_state.ui_mode == "BROWSING"
+        assert app.app_state.filter.query == "read"
+        assert app.app_state.filter.active is True
+        assert str(status_bar.renderable) == (
+            "/home/tadashi/develop/plain | 1 items | 0 selected | "
+            "sort: name asc | filter: read"
+        )
+
+
+@pytest.mark.asyncio
+async def test_app_keyboard_input_shows_busy_warning() -> None:
+    app = create_app()
+
+    async with app.run_test() as pilot:
+        app._app_state = reduce_app_state(app.app_state, SetUiMode("BUSY"))
+        await pilot.press("x")
+
+        status_bar = app.query_one("#status-bar", StatusBar)
+
+        assert str(status_bar.renderable) == (
+            "/home/tadashi/develop/plain | 5 items | 0 selected | "
+            "sort: name asc | filter: none | message: 処理中のため入力を無視しました"
+        )

@@ -4,6 +4,8 @@
 
 Core application code lives under `src/plain/`. Keep UI concerns in `src/plain/ui/`, state and reducers in `src/plain/state/`, side-effect orchestration in `src/plain/services/`, external integrations in `src/plain/adapters/`, and shared data models in `src/plain/models/`. Tests live in `tests/`. Product and MVP notes belong in `docs/`. CI is defined in `.github/workflows/python-ci.yml`.
 
+Current input handling is centralized in `src/plain/state/input.py`. Keep key interpretation in the dispatcher and reducer-facing actions rather than embedding per-widget branching in `src/plain/ui/`.
+
 ## Build, Test, and Development Commands
 
 - `uv sync --python 3.12 --dev`: create or refresh the local environment with dev dependencies.
@@ -21,6 +23,8 @@ Target Python 3.12 and follow PEP 8 with 4-space indentation. Use `snake_case` f
 ## Testing Guidelines
 
 Use `pytest` for all tests and `pytest-asyncio` for async or Textual headless cases. Name test files `test_*.py` and test functions `test_*`. Add or update tests with every behavior change. New UI bootstrap or state transitions should have at least one smoke-level test proving the app can start or the reducer path works.
+
+The current app supports three-pane rendering backed by a dummy `AppState`, plus keyboard handling for core browsing/filter flows. Covered interactions include cursor movement with `Up` / `Down`, selection toggle with `Space`, selection clear with `Esc`, entering filter mode with `Ctrl+F`, and filter editing/confirm/cancel while in `FILTER` mode. Real filesystem navigation and file operations such as open, copy, delete, rename, create, and paste are still not implemented; keep AGENTS/README in sync when that changes.
 
 ## Commit & Pull Request Guidelines
 

@@ -4,7 +4,10 @@ from dataclasses import replace
 
 from .actions import (
     Action,
+    BeginFilterInput,
+    CancelFilterInput,
     ClearSelection,
+    ConfirmFilterInput,
     InitializeState,
     MoveCursor,
     SetCursorPath,
@@ -14,6 +17,7 @@ from .actions import (
     SetStatusMessage,
     SetUiMode,
     ToggleSelection,
+    ToggleSelectionAndAdvance,
 )
 from .models import AppState
 
@@ -26,6 +30,20 @@ def reduce_app_state(state: AppState, action: Action) -> AppState:
 
     if isinstance(action, SetUiMode):
         return replace(state, ui_mode=action.mode)
+
+    if isinstance(action, BeginFilterInput):
+        return replace(state, ui_mode="FILTER", status_message=None)
+
+    if isinstance(action, ConfirmFilterInput):
+        return replace(state, ui_mode="BROWSING", status_message=None)
+
+    if isinstance(action, CancelFilterInput):
+        return replace(
+            state,
+            ui_mode="BROWSING",
+            filter=replace(state.filter, query="", recursive=False, active=False),
+            status_message=None,
+        )
 
     if isinstance(action, MoveCursor):
         cursor_path = _move_cursor(
@@ -58,6 +76,24 @@ def reduce_app_state(state: AppState, action: Action) -> AppState:
             state,
             current_pane=replace(
                 state.current_pane,
+                selected_paths=frozenset(selected_paths),
+            ),
+        )
+
+    if isinstance(action, ToggleSelectionAndAdvance):
+        if action.path not in _current_entry_paths(state):
+            return state
+        selected_paths = set(state.current_pane.selected_paths)
+        if action.path in selected_paths:
+            selected_paths.remove(action.path)
+        else:
+            selected_paths.add(action.path)
+        cursor_path = _move_cursor(action.path, action.visible_paths, 1)
+        return replace(
+            state,
+            current_pane=replace(
+                state.current_pane,
+                cursor_path=cursor_path,
                 selected_paths=frozenset(selected_paths),
             ),
         )

@@ -20,6 +20,21 @@ class SetUiMode:
 
 
 @dataclass(frozen=True)
+class BeginFilterInput:
+    """Enter filter input mode."""
+
+
+@dataclass(frozen=True)
+class ConfirmFilterInput:
+    """Commit the current filter query and return to browsing mode."""
+
+
+@dataclass(frozen=True)
+class CancelFilterInput:
+    """Discard the current filter input and return to browsing mode."""
+
+
+@dataclass(frozen=True)
 class MoveCursor:
     """Move the cursor within a caller-provided visible path list."""
 
@@ -39,6 +54,14 @@ class ToggleSelection:
     """Toggle selection for an entry in the current pane."""
 
     path: str
+
+
+@dataclass(frozen=True)
+class ToggleSelectionAndAdvance:
+    """Toggle selection and advance the cursor within the visible path list."""
+
+    path: str
+    visible_paths: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -80,9 +103,13 @@ class SetStatusMessage:
 Action = (
     InitializeState
     | SetUiMode
+    | BeginFilterInput
+    | ConfirmFilterInput
+    | CancelFilterInput
     | MoveCursor
     | SetCursorPath
     | ToggleSelection
+    | ToggleSelectionAndAdvance
     | ClearSelection
     | SetFilterQuery
     | SetFilterRecursive

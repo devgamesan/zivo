@@ -1,10 +1,14 @@
 from plain.state import (
+    BeginFilterInput,
+    CancelFilterInput,
     ClearSelection,
+    ConfirmFilterInput,
     SetCursorPath,
     SetFilterQuery,
     SetSort,
     SetUiMode,
     ToggleSelection,
+    ToggleSelectionAndAdvance,
     build_initial_app_state,
     reduce_app_state,
 )
@@ -76,3 +80,54 @@ def test_set_cursor_path_ignores_unknown_path() -> None:
     next_state = reduce_app_state(state, SetCursorPath("/missing"))
 
     assert next_state == state
+
+
+def test_begin_filter_input_switches_mode_without_mutating_query() -> None:
+    state = build_initial_app_state()
+
+    next_state = reduce_app_state(state, BeginFilterInput())
+
+    assert next_state.ui_mode == "FILTER"
+    assert next_state.filter == state.filter
+
+
+def test_confirm_filter_input_returns_to_browsing() -> None:
+    state = build_initial_app_state()
+    state = reduce_app_state(state, SetUiMode("FILTER"))
+
+    next_state = reduce_app_state(state, ConfirmFilterInput())
+
+    assert next_state.ui_mode == "BROWSING"
+
+
+def test_cancel_filter_input_clears_query_and_recursive_flag() -> None:
+    state = build_initial_app_state()
+    state = reduce_app_state(state, SetUiMode("FILTER"))
+    state = reduce_app_state(state, SetFilterQuery("readme"))
+
+    next_state = reduce_app_state(state, CancelFilterInput())
+
+    assert next_state.ui_mode == "BROWSING"
+    assert next_state.filter.query == ""
+    assert next_state.filter.active is False
+    assert next_state.filter.recursive is False
+
+
+def test_toggle_selection_and_advance_moves_cursor_to_next_visible_entry() -> None:
+    state = build_initial_app_state()
+    current_path = "/home/tadashi/develop/plain/docs"
+    visible_paths = (
+        "/home/tadashi/develop/plain/docs",
+        "/home/tadashi/develop/plain/src",
+        "/home/tadashi/develop/plain/tests",
+        "/home/tadashi/develop/plain/README.md",
+        "/home/tadashi/develop/plain/pyproject.toml",
+    )
+
+    next_state = reduce_app_state(
+        state,
+        ToggleSelectionAndAdvance(path=current_path, visible_paths=visible_paths),
+    )
+
+    assert next_state.current_pane.selected_paths == frozenset({current_path})
+    assert next_state.current_pane.cursor_path == "/home/tadashi/develop/plain/src"
