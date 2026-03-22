@@ -1,9 +1,12 @@
 from dataclasses import replace
 
 from plain.state import (
+    BeginCreateInput,
     BeginFilterInput,
+    BeginRenameInput,
     CancelFilterInput,
     CancelPasteConflict,
+    CancelPendingInput,
     ClearSelection,
     ConfirmFilterInput,
     CopyTargets,
@@ -13,11 +16,14 @@ from plain.state import (
     MoveCursor,
     NotificationState,
     PasteClipboard,
+    PendingInputState,
     ReloadDirectory,
     ResolvePasteConflict,
     SetFilterQuery,
     SetFilterRecursive,
     SetNotification,
+    SetPendingInputValue,
+    SubmitPendingInput,
     ToggleSelectionAndAdvance,
     build_initial_app_state,
     dispatch_key_input,
@@ -157,6 +163,57 @@ def test_browsing_f5_reloads_current_directory() -> None:
     assert actions == (SetNotification(None), ReloadDirectory())
 
 
+def test_browsing_f2_begins_rename_for_single_target() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="f2")
+
+    assert actions == (
+        SetNotification(None),
+        BeginRenameInput("/home/tadashi/develop/plain/docs"),
+    )
+
+
+def test_browsing_f2_warns_for_multiple_targets() -> None:
+    state = build_initial_app_state()
+    state = replace(
+        state,
+        current_pane=replace(
+            state.current_pane,
+            selected_paths=frozenset(
+                {
+                    "/home/tadashi/develop/plain/docs",
+                    "/home/tadashi/develop/plain/src",
+                }
+            ),
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="f2")
+
+    assert actions == (
+        SetNotification(
+            NotificationState(level="warning", message="Rename requires a single target")
+        ),
+    )
+
+
+def test_browsing_ctrl_n_begins_file_create_mode() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="ctrl+n")
+
+    assert actions == (SetNotification(None), BeginCreateInput("file"))
+
+
+def test_browsing_ctrl_shift_n_begins_directory_create_mode() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="ctrl+shift+n")
+
+    assert actions == (SetNotification(None), BeginCreateInput("dir"))
+
+
 def test_filter_character_dispatches_query_update() -> None:
     state = build_initial_app_state()
     state = replace(state, ui_mode="FILTER")
@@ -221,6 +278,61 @@ def test_confirm_o_selects_overwrite_resolution() -> None:
     actions = dispatch_key_input(state, key="o", character="o")
 
     assert actions == (SetNotification(None), ResolvePasteConflict("overwrite"))
+
+
+def test_rename_character_dispatches_input_update() -> None:
+    state = build_initial_app_state()
+    state = replace(
+        state,
+        ui_mode="RENAME",
+        pending_input=PendingInputState(prompt="Rename: ", value="doc"),
+    )
+
+    actions = dispatch_key_input(state, key="s", character="s")
+
+    assert actions == (SetNotification(None), SetPendingInputValue("docs"))
+
+
+def test_create_space_dispatches_input_update() -> None:
+    state = build_initial_app_state()
+    state = replace(
+        state,
+        ui_mode="CREATE",
+        pending_input=PendingInputState(prompt="New file: ", value="new", create_kind="file"),
+    )
+
+    actions = dispatch_key_input(state, key="space", character=" ")
+
+    assert actions == (SetNotification(None), SetPendingInputValue("new "))
+
+
+def test_pending_input_backspace_updates_value() -> None:
+    state = build_initial_app_state()
+    state = replace(
+        state,
+        ui_mode="RENAME",
+        pending_input=PendingInputState(prompt="Rename: ", value="docs"),
+    )
+
+    actions = dispatch_key_input(state, key="backspace")
+
+    assert actions == (SetNotification(None), SetPendingInputValue("doc"))
+
+
+def test_pending_input_enter_submits() -> None:
+    state = replace(build_initial_app_state(), ui_mode="RENAME")
+
+    actions = dispatch_key_input(state, key="enter")
+
+    assert actions == (SetNotification(None), SubmitPendingInput())
+
+
+def test_pending_input_escape_cancels() -> None:
+    state = replace(build_initial_app_state(), ui_mode="RENAME")
+
+    actions = dispatch_key_input(state, key="escape")
+
+    assert actions == (SetNotification(None), CancelPendingInput())
 
 
 def test_busy_key_shows_warning_message() -> None:

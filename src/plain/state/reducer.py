@@ -3,15 +3,18 @@
 from dataclasses import replace
 from pathlib import Path
 
-from plain.models import PasteRequest, PasteSummary
+from plain.models import CreatePathRequest, PasteRequest, PasteSummary, RenameRequest
 
 from .actions import (
     Action,
+    BeginCreateInput,
     BeginFilterInput,
+    BeginRenameInput,
     BrowserSnapshotFailed,
     BrowserSnapshotLoaded,
     CancelFilterInput,
     CancelPasteConflict,
+    CancelPendingInput,
     ChildPaneSnapshotFailed,
     ChildPaneSnapshotLoaded,
     ClearSelection,
@@ -22,6 +25,8 @@ from .actions import (
     CopyTargets,
     CutTargets,
     EnterCursorDirectory,
+    FileMutationCompleted,
+    FileMutationFailed,
     GoToParentDirectory,
     InitializeState,
     MoveCursor,
@@ -33,8 +38,10 @@ from .actions import (
     SetFilterQuery,
     SetFilterRecursive,
     SetNotification,
+    SetPendingInputValue,
     SetSort,
     SetUiMode,
+    SubmitPendingInput,
     ToggleSelection,
     ToggleSelectionAndAdvance,
 )
@@ -44,6 +51,7 @@ from .effects import (
     LoadChildPaneSnapshotEffect,
     ReduceResult,
     RunClipboardPasteEffect,
+    RunFileMutationEffect,
 )
 from .models import (
     AppState,
@@ -52,6 +60,7 @@ from .models import (
     NotificationState,
     PaneState,
     PasteConflictState,
+    PendingInputState,
 )
 
 
@@ -68,7 +77,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
         return done(replace(state, ui_mode=action.mode))
 
     if isinstance(action, BeginFilterInput):
-        return done(replace(state, ui_mode="FILTER", notification=None))
+        return done(replace(state, ui_mode="FILTER", notification=None, pending_input=None))
 
     if isinstance(action, ConfirmFilterInput):
         return done(replace(state, ui_mode="BROWSING", notification=None))
@@ -80,8 +89,87 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 ui_mode="BROWSING",
                 filter=replace(state.filter, query="", recursive=False, active=False),
                 notification=None,
+                pending_input=None,
             )
         )
+
+    if isinstance(action, BeginRenameInput):
+        entry = _current_entry_for_path(state, action.path)
+        if entry is None:
+            return done(state)
+        return done(
+            replace(
+                state,
+                ui_mode="RENAME",
+                notification=None,
+                pending_input=PendingInputState(
+                    prompt="Rename: ",
+                    value=entry.name,
+                    target_path=entry.path,
+                ),
+            )
+        )
+
+    if isinstance(action, BeginCreateInput):
+        prompt = "New file: " if action.kind == "file" else "New directory: "
+        return done(
+            replace(
+                state,
+                ui_mode="CREATE",
+                notification=None,
+                pending_input=PendingInputState(
+                    prompt=prompt,
+                    create_kind=action.kind,
+                ),
+            )
+        )
+
+    if isinstance(action, SetPendingInputValue):
+        if state.pending_input is None:
+            return done(state)
+        return done(
+            replace(
+                state,
+                pending_input=replace(state.pending_input, value=action.value),
+            )
+        )
+
+    if isinstance(action, CancelPendingInput):
+        return done(
+            replace(
+                state,
+                ui_mode="BROWSING",
+                notification=None,
+                pending_input=None,
+            )
+        )
+
+    if isinstance(action, SubmitPendingInput):
+        if state.pending_input is None:
+            return done(state)
+        validation_error = _validate_pending_input(state)
+        if validation_error is not None:
+            return done(
+                replace(
+                    state,
+                    notification=NotificationState(level="error", message=validation_error),
+                )
+            )
+        request = _build_file_mutation_request(state)
+        if request is None:
+            return done(state)
+        if isinstance(request, RenameRequest):
+            current_name = Path(request.source_path).name
+            if current_name == request.new_name:
+                return done(
+                    replace(
+                        state,
+                        ui_mode="BROWSING",
+                        pending_input=None,
+                        notification=NotificationState(level="info", message="Name unchanged"),
+                    )
+                )
+        return _run_file_mutation_request(state, request)
 
     if isinstance(action, MoveCursor):
         cursor_path = _move_cursor(
@@ -442,6 +530,33 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             )
         )
 
+    if isinstance(action, FileMutationCompleted):
+        if action.request_id != state.pending_file_mutation_request_id:
+            return done(state)
+        next_state = replace(
+            state,
+            notification=None,
+            pending_input=None,
+            pending_file_mutation_request_id=None,
+            post_reload_notification=NotificationState(
+                level="info",
+                message=action.result.message,
+            ),
+            ui_mode="BROWSING",
+        )
+        return _request_snapshot_refresh(next_state, cursor_path=action.result.path)
+
+    if isinstance(action, FileMutationFailed):
+        if action.request_id != state.pending_file_mutation_request_id:
+            return done(state)
+        return done(
+            replace(
+                state,
+                notification=NotificationState(level="error", message=action.message),
+                pending_file_mutation_request_id=None,
+            )
+        )
+
     return done(state)
 
 
@@ -490,7 +605,29 @@ def _run_paste_request(state: AppState, request: PasteRequest) -> ReduceResult:
     )
 
 
-def _request_snapshot_refresh(state: AppState) -> ReduceResult:
+def _run_file_mutation_request(
+    state: AppState,
+    request: RenameRequest | CreatePathRequest,
+) -> ReduceResult:
+    request_id = state.next_request_id
+    next_state = replace(
+        state,
+        notification=None,
+        pending_file_mutation_request_id=request_id,
+        next_request_id=request_id + 1,
+        ui_mode="BUSY",
+    )
+    return ReduceResult(
+        state=next_state,
+        effects=(RunFileMutationEffect(request_id=request_id, request=request),),
+    )
+
+
+def _request_snapshot_refresh(
+    state: AppState,
+    *,
+    cursor_path: str | None = None,
+) -> ReduceResult:
     request_id = state.next_request_id
     next_state = replace(
         state,
@@ -504,7 +641,7 @@ def _request_snapshot_refresh(state: AppState) -> ReduceResult:
             LoadBrowserSnapshotEffect(
                 request_id=request_id,
                 path=state.current_path,
-                cursor_path=state.current_pane.cursor_path,
+                cursor_path=cursor_path or state.current_pane.cursor_path,
                 blocking=False,
             ),
         ),
@@ -556,6 +693,59 @@ def _current_entry_for_path(
         if entry.path == path:
             return entry
     return None
+
+
+def _validate_pending_input(state: AppState) -> str | None:
+    if state.pending_input is None:
+        return "No input is active"
+
+    name = state.pending_input.value
+    if not name:
+        return "Name cannot be empty"
+    if name in {".", ".."}:
+        return "'.' and '..' are not valid names"
+    if "/" in name or "\\" in name:
+        return "Names cannot include path separators"
+
+    parent_path, current_target_path = _pending_input_parent_and_target(state)
+    if parent_path is None:
+        return "Unable to resolve target directory"
+
+    candidate_path = str(Path(parent_path) / name)
+    existing_paths = _current_entry_paths(state)
+    if candidate_path in existing_paths and candidate_path != current_target_path:
+        return f"An entry named '{name}' already exists"
+    return None
+
+
+def _build_file_mutation_request(
+    state: AppState,
+) -> RenameRequest | CreatePathRequest | None:
+    if state.pending_input is None:
+        return None
+    if state.ui_mode == "RENAME" and state.pending_input.target_path is not None:
+        return RenameRequest(
+            source_path=state.pending_input.target_path,
+            new_name=state.pending_input.value,
+        )
+    if state.ui_mode == "CREATE" and state.pending_input.create_kind is not None:
+        return CreatePathRequest(
+            parent_dir=state.current_pane.directory_path,
+            name=state.pending_input.value,
+            kind=state.pending_input.create_kind,
+        )
+    return None
+
+
+def _pending_input_parent_and_target(state: AppState) -> tuple[str | None, str | None]:
+    if state.pending_input is None:
+        return (None, None)
+    if state.ui_mode == "RENAME" and state.pending_input.target_path is not None:
+        target_path = Path(state.pending_input.target_path)
+        return (str(target_path.parent), str(target_path))
+    if state.ui_mode == "CREATE":
+        return (state.current_pane.directory_path, None)
+    return (None, None)
 
 
 def _format_clipboard_message(prefix: str, paths: tuple[str, ...]) -> str:

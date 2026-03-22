@@ -1,10 +1,11 @@
-"""Shared models for clipboard-driven file operations."""
+"""Shared models for filesystem mutations."""
 
 from dataclasses import dataclass
 from typing import Literal
 
 ClipboardOperationMode = Literal["copy", "cut"]
 ConflictResolution = Literal["overwrite", "skip", "rename"]
+CreateKind = Literal["file", "dir"]
 
 
 @dataclass(frozen=True)
@@ -66,3 +67,31 @@ class PasteExecutionResult:
     """Completed execution payload returned from the clipboard service."""
 
     summary: PasteSummary
+
+
+@dataclass(frozen=True)
+class RenameRequest:
+    """A request to rename a single path within its current directory."""
+
+    source_path: str
+    new_name: str
+
+
+@dataclass(frozen=True)
+class CreatePathRequest:
+    """A request to create a file or directory in a parent directory."""
+
+    parent_dir: str
+    name: str
+    kind: CreateKind
+
+
+FileMutationRequest = RenameRequest | CreatePathRequest
+
+
+@dataclass(frozen=True)
+class FileMutationResult:
+    """Completed execution payload returned from the file mutation service."""
+
+    path: str
+    message: str

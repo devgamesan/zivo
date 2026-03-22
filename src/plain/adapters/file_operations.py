@@ -21,6 +21,10 @@ class FileOperationAdapter(Protocol):
 
     def generate_renamed_path(self, destination: str) -> str: ...
 
+    def create_file(self, path: str) -> None: ...
+
+    def create_directory(self, path: str) -> None: ...
+
 
 @dataclass(frozen=True)
 class LocalFileOperationAdapter:
@@ -54,7 +58,10 @@ class LocalFileOperationAdapter:
         destination_path = self._resolve(destination)
         if source_path == destination_path:
             raise OSError("Source and destination are the same path")
-        move(str(source_path), str(destination_path))
+        try:
+            move(str(source_path), str(destination_path))
+        except OSError as error:
+            raise OSError(str(error) or "Rename failed") from error
 
     def generate_renamed_path(self, destination: str) -> str:
         destination_path = self._resolve(destination)
@@ -76,6 +83,20 @@ class LocalFileOperationAdapter:
                 return str(candidate)
 
         raise OSError(f"Could not generate renamed path for {destination_path}")
+
+    def create_file(self, path: str) -> None:
+        target = self._resolve(path)
+        try:
+            target.touch(exist_ok=False)
+        except OSError as error:
+            raise OSError(str(error) or "File creation failed") from error
+
+    def create_directory(self, path: str) -> None:
+        target = self._resolve(path)
+        try:
+            target.mkdir(exist_ok=False)
+        except OSError as error:
+            raise OSError(str(error) or "Directory creation failed") from error
 
     @staticmethod
     def _resolve(path: str) -> Path:

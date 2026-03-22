@@ -11,12 +11,19 @@ from textual.containers import Horizontal
 from textual.css.query import NoMatches
 from textual.worker import Worker, WorkerState
 
-from plain.models import PasteConflictPrompt, PasteExecutionResult, ThreePaneShellData
+from plain.models import (
+    FileMutationResult,
+    PasteConflictPrompt,
+    PasteExecutionResult,
+    ThreePaneShellData,
+)
 from plain.services import (
     BrowserSnapshotLoader,
     ClipboardOperationService,
+    FileMutationService,
     LiveBrowserSnapshotLoader,
     LiveClipboardOperationService,
+    LiveFileMutationService,
 )
 from plain.state import (
     Action,
@@ -29,18 +36,29 @@ from plain.state import (
     ClipboardPasteFailed,
     ClipboardPasteNeedsResolution,
     Effect,
+    FileMutationCompleted,
+    FileMutationFailed,
     LoadBrowserSnapshotEffect,
     LoadChildPaneSnapshotEffect,
     ReduceResult,
     RequestBrowserSnapshot,
     RunClipboardPasteEffect,
+    RunFileMutationEffect,
     build_placeholder_app_state,
     dispatch_key_input,
     iter_bound_keys,
     reduce_app_state,
     select_shell_data,
 )
-from plain.ui import ConflictDialog, CurrentPathBar, HelpBar, MainPane, SidePane, StatusBar
+from plain.ui import (
+    ConflictDialog,
+    CurrentPathBar,
+    HelpBar,
+    InputBar,
+    MainPane,
+    SidePane,
+    StatusBar,
+)
 
 
 class PlainApp(App[None]):
@@ -97,6 +115,7 @@ class PlainApp(App[None]):
 
     #current-path-bar,
     #help-bar,
+    #input-bar,
     #status-bar {
         height: 1;
         padding: 0 1;
@@ -111,6 +130,13 @@ class PlainApp(App[None]):
     #help-bar {
         background: $panel;
         color: $text-muted;
+    }
+
+    #input-bar {
+        display: none;
+        background: $panel;
+        color: $text;
+        text-style: bold;
     }
 
     #status-bar {
@@ -145,6 +171,7 @@ class PlainApp(App[None]):
         self,
         snapshot_loader: BrowserSnapshotLoader | None = None,
         clipboard_service: ClipboardOperationService | None = None,
+        file_mutation_service: FileMutationService | None = None,
         *,
         initial_path: str | Path | None = None,
     ) -> None:
@@ -153,6 +180,7 @@ class PlainApp(App[None]):
         self._app_state: AppState = build_placeholder_app_state(self._initial_path)
         self._snapshot_loader = snapshot_loader or LiveBrowserSnapshotLoader()
         self._clipboard_service = clipboard_service or LiveClipboardOperationService()
+        self._file_mutation_service = file_mutation_service or LiveFileMutationService()
         self._pending_workers: dict[str, Effect] = {}
 
     @property
@@ -166,6 +194,7 @@ class PlainApp(App[None]):
         yield CurrentPathBar(shell.current_path, id="current-path-bar")
         yield self._build_body(shell)
         yield HelpBar(shell.help, id="help-bar")
+        yield InputBar(shell.input_bar, id="input-bar")
         yield StatusBar(shell.status, id="status-bar")
         yield ConflictDialog(shell.conflict_dialog, id="conflict-dialog")
 
@@ -185,7 +214,13 @@ class PlainApp(App[None]):
     async def action_dispatch_bound_key(self, key: str) -> None:
         """Handle priority key bindings through the central dispatcher."""
 
-        await self._dispatch_key_press(key)
+        character = None
+        if self._app_state.ui_mode in {"RENAME", "CREATE"}:
+            if key == "space":
+                character = " "
+            elif len(key) == 1 and key.isprintable():
+                character = key
+        await self._dispatch_key_press(key, character=character)
 
     def _build_body(self, shell: ThreePaneShellData) -> Horizontal:
         return Horizontal(
@@ -259,6 +294,8 @@ class PlainApp(App[None]):
                 self._schedule_child_pane_snapshot(effect)
             elif isinstance(effect, RunClipboardPasteEffect):
                 self._schedule_clipboard_paste(effect)
+            elif isinstance(effect, RunFileMutationEffect):
+                self._schedule_file_mutation(effect)
 
     def _schedule_browser_snapshot(self, effect: LoadBrowserSnapshotEffect) -> None:
         worker = self.run_worker(
@@ -298,6 +335,18 @@ class PlainApp(App[None]):
             name=f"clipboard-paste:{effect.request_id}",
             group="clipboard-paste",
             description=effect.request.destination_dir,
+            exit_on_error=False,
+            exclusive=True,
+            thread=True,
+        )
+        self._pending_workers[worker.name] = effect
+
+    def _schedule_file_mutation(self, effect: RunFileMutationEffect) -> None:
+        worker = self.run_worker(
+            partial(self._file_mutation_service.execute, effect.request),
+            name=f"file-mutation:{effect.request_id}",
+            group="file-mutation",
+            description=str(effect.request),
             exit_on_error=False,
             exclusive=True,
             thread=True,
@@ -367,6 +416,17 @@ class PlainApp(App[None]):
                 )
                 return
 
+            if isinstance(result, FileMutationResult):
+                await self.dispatch_actions(
+                    (
+                        FileMutationCompleted(
+                            request_id=effect.request_id,
+                            result=result,
+                        ),
+                    )
+                )
+                return
+
         message = str(event.worker.error) or "Operation failed"
         if isinstance(effect, LoadBrowserSnapshotEffect):
             await self.dispatch_actions(
@@ -391,6 +451,17 @@ class PlainApp(App[None]):
             )
             return
 
+        if isinstance(effect, RunFileMutationEffect):
+            await self.dispatch_actions(
+                (
+                    FileMutationFailed(
+                        request_id=effect.request_id,
+                        message=message,
+                    ),
+                )
+            )
+            return
+
         await self.dispatch_actions(
             (
                 ClipboardPasteFailed(
@@ -408,6 +479,7 @@ class PlainApp(App[None]):
             current_pane = self.query_one("#current-pane", MainPane)
             child_pane = self.query_one("#child-pane", SidePane)
             help_bar = self.query_one("#help-bar", HelpBar)
+            input_bar = self.query_one("#input-bar", InputBar)
             status_bar = self.query_one("#status-bar", StatusBar)
             conflict_dialog = self.query_one("#conflict-dialog", ConflictDialog)
         except NoMatches:
@@ -415,6 +487,7 @@ class PlainApp(App[None]):
                 "#current-path-bar",
                 "#body",
                 "#help-bar",
+                "#input-bar",
                 "#status-bar",
                 "#conflict-dialog",
             )
@@ -426,6 +499,7 @@ class PlainApp(App[None]):
             await self.mount(CurrentPathBar(shell.current_path, id="current-path-bar"))
             await self.mount(self._build_body(shell))
             await self.mount(HelpBar(shell.help, id="help-bar"))
+            await self.mount(InputBar(shell.input_bar, id="input-bar"))
             await self.mount(StatusBar(shell.status, id="status-bar"))
             await self.mount(ConflictDialog(shell.conflict_dialog, id="conflict-dialog"))
             return
@@ -435,6 +509,7 @@ class PlainApp(App[None]):
         current_pane.set_entries(shell.current_entries, shell.current_cursor_index)
         await child_pane.set_entries(shell.child_entries)
         help_bar.set_state(shell.help)
+        input_bar.set_state(shell.input_bar)
         status_bar.set_state(shell.status)
         conflict_dialog.set_state(shell.conflict_dialog)
 
@@ -442,6 +517,7 @@ class PlainApp(App[None]):
 def create_app(
     snapshot_loader: BrowserSnapshotLoader | None = None,
     clipboard_service: ClipboardOperationService | None = None,
+    file_mutation_service: FileMutationService | None = None,
     *,
     initial_path: str | Path | None = None,
 ) -> PlainApp:
@@ -450,5 +526,6 @@ def create_app(
     return PlainApp(
         snapshot_loader=snapshot_loader,
         clipboard_service=clipboard_service,
+        file_mutation_service=file_mutation_service,
         initial_path=initial_path,
     )
