@@ -2,9 +2,11 @@ from dataclasses import replace
 
 from plain.models import PasteConflict, PasteRequest
 from plain.state import (
+    BeginCreateInput,
     NotificationState,
     PaneState,
     PasteConflictState,
+    PendingInputState,
     SetCursorPath,
     SetFilterQuery,
     SetFilterRecursive,
@@ -17,6 +19,7 @@ from plain.state import (
     select_conflict_dialog_state,
     select_current_entries,
     select_help_bar_state,
+    select_input_bar_state,
     select_shell_data,
     select_status_bar_state,
     select_target_paths,
@@ -147,7 +150,22 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
 
     help_state = select_help_bar_state(state)
 
-    assert help_state.text == "Space select | y copy | x cut | p paste | enter open dir"
+    assert help_state.text == "Space select | y copy | x cut | p paste"
+
+
+def test_select_input_bar_state_for_create_mode() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCreateInput("file"))
+    state = replace(
+        state,
+        pending_input=PendingInputState(prompt="New file: ", value="notes.txt", create_kind="file"),
+    )
+
+    input_bar = select_input_bar_state(state)
+
+    assert input_bar is not None
+    assert input_bar.mode_label == "NEW FILE"
+    assert input_bar.prompt == "New file: "
+    assert input_bar.value == "notes.txt"
 
 
 def test_select_conflict_dialog_state_formats_first_conflict() -> None:

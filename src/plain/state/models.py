@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from plain.models import ConflictResolution, PasteConflict, PasteRequest
+from plain.models import ConflictResolution, CreateKind, PasteConflict, PasteRequest
 from plain.models.shell_data import EntryKind, NotificationLevel
 
 UiMode = Literal["BROWSING", "FILTER", "RENAME", "CREATE", "CONFIRM", "BUSY"]
@@ -88,6 +88,16 @@ class NotificationState:
 
 
 @dataclass(frozen=True)
+class PendingInputState:
+    """Transient text input state used by rename/create flows."""
+
+    prompt: str
+    value: str = ""
+    target_path: str | None = None
+    create_kind: CreateKind | None = None
+
+
+@dataclass(frozen=True)
 class BrowserSnapshot:
     """Pane snapshot payload returned from async loaders."""
 
@@ -111,11 +121,13 @@ class AppState:
     history: HistoryState = HistoryState()
     ui_mode: UiMode = "BROWSING"
     notification: NotificationState | None = None
+    pending_input: PendingInputState | None = None
     paste_conflict: PasteConflictState | None = None
     post_reload_notification: NotificationState | None = None
     pending_browser_snapshot_request_id: int | None = None
     pending_child_pane_request_id: int | None = None
     pending_paste_request_id: int | None = None
+    pending_file_mutation_request_id: int | None = None
     next_request_id: int = 1
 
 

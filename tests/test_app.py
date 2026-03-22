@@ -14,9 +14,12 @@ from plain.models import (
     PasteRequest,
     PasteSummary,
 )
-from plain.services import FakeBrowserSnapshotLoader, FakeClipboardOperationService
+from plain.services import (
+    FakeBrowserSnapshotLoader,
+    FakeClipboardOperationService,
+)
 from plain.state import BrowserSnapshot, DirectoryEntryState, PaneState
-from plain.ui import ConflictDialog, CurrentPathBar, HelpBar, StatusBar
+from plain.ui import ConflictDialog, CurrentPathBar, HelpBar, InputBar, StatusBar
 
 
 def _build_snapshot(
@@ -67,6 +70,17 @@ async def _wait_for_current_path_bar(app, timeout: float = 0.5) -> CurrentPathBa
     while True:
         try:
             return app.query_one("#current-path-bar", CurrentPathBar)
+        except NoMatches:
+            if asyncio.get_running_loop().time() >= deadline:
+                raise
+            await asyncio.sleep(0.01)
+
+
+async def _wait_for_input_bar(app, timeout: float = 0.5) -> InputBar:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
+        try:
+            return app.query_one("#input-bar", InputBar)
         except NoMatches:
             if asyncio.get_running_loop().time() >= deadline:
                 raise
@@ -802,8 +816,58 @@ async def test_app_displays_browsing_help_bar() -> None:
         await asyncio.sleep(0.05)
         help_bar = app.query_one("#help-bar", HelpBar)
 
-        assert str(help_bar.renderable) == (
-            "Space select | y copy | x cut | p paste | enter open dir"
+        assert str(help_bar.renderable) == "Space select | y copy | x cut | p paste"
+
+
+@pytest.mark.asyncio
+async def test_app_rename_mode_shows_input_bar_and_updates_help() -> None:
+    path = "/tmp/plain-rename-mode"
+    docs = f"{path}/docs"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (DirectoryEntryState(docs, "docs", "dir"),),
+                child_path=docs,
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("f2")
+        await asyncio.sleep(0.05)
+
+        help_bar = app.query_one("#help-bar", HelpBar)
+        input_bar = await _wait_for_input_bar(app)
+
+        assert app.app_state.ui_mode == "RENAME"
+        assert str(help_bar.renderable) == "type name | enter apply | esc cancel"
+        assert input_bar.display is True
+        assert str(input_bar.renderable) == "[RENAME] Rename: docs  enter apply | esc cancel"
+
+
+@pytest.mark.asyncio
+async def test_app_rename_round_trip_updates_status_bar(tmp_path) -> None:
+    (tmp_path / "docs").mkdir()
+    app = create_app(initial_path=tmp_path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, str(tmp_path))
+        await pilot.press("f2")
+        await asyncio.sleep(0.05)
+        for _ in range(4):
+            await pilot.press("backspace")
+        await pilot.press("m", "a", "n", "u", "a", "l", "s", "enter")
+        await asyncio.sleep(0.1)
+
+        status_bar = await _wait_for_status_bar(app)
+
+        assert (tmp_path / "manuals").is_dir()
+        assert app.app_state.ui_mode == "BROWSING"
+        assert str(status_bar.renderable) == (
+            "1 items | 0 selected | sort: name asc | filter: none | info: Renamed to manuals"
         )
 
 

@@ -114,7 +114,7 @@ sequenceDiagram
 ### `src/plain/state/input.py`
 
 - `ui_mode` ごとに同じキーの意味を切り替える
-- `BROWSING`, `FILTER`, `CONFIRM`, `BUSY` の入力を現在サポート
+- `BROWSING`, `FILTER`, `RENAME`, `CREATE`, `CONFIRM`, `BUSY` の入力をサポート
 - 未サポート入力は warning message に変換する
 
 ### `src/plain/state/reducer.py`
@@ -128,7 +128,7 @@ sequenceDiagram
 
 - `AppState` を UI 用の `ThreePaneShellData` に変換する
 - フィルタとソートをここで適用する
-- ステータスバー表示文字列の元データもここで組み立てる
+- ステータスバー、ヘルプ行、入力バーの表示文字列をここで組み立てる
 
 ### `src/plain/models/`
 
@@ -143,11 +143,16 @@ sequenceDiagram
 stateDiagram-v2
     [*] --> BROWSING
     BROWSING --> FILTER: Ctrl+F
+    BROWSING --> RENAME: F2
+    BROWSING --> CREATE: Ctrl+N / Ctrl+Shift+N
     FILTER --> BROWSING: Enter
     FILTER --> BROWSING: Esc
-    CONFIRM --> BROWSING: Esc / Enter
+    RENAME --> BUSY: Enter
+    CREATE --> BUSY: Enter
     RENAME --> BROWSING: Esc
     CREATE --> BROWSING: Esc
+    CONFIRM --> BROWSING: Esc / Enter
+    BUSY --> BROWSING: 完了時
 
     BUSY --> BUSY: 任意キーは無視
 ```
@@ -155,13 +160,15 @@ stateDiagram-v2
 補足:
 
 - `BROWSING`
-  - `Up`, `Down`, `Left`, `Right`, `Enter`, `Backspace`, `F5`, `Space`, `Esc`, `Ctrl+F` を処理
+  - `Up`, `Down`, `Left`, `Right`, `Enter`, `Backspace`, `F5`, `Space`, `Esc`, `Ctrl+F`, `F2`, `Ctrl+N`, `Ctrl+Shift+N` を処理
 - `FILTER`
   - 文字入力、`Backspace`, `Space`, `Enter`, `Esc` を処理
-- `CONFIRM`, `BUSY`
-  - 土台だけあり、通常フローからはまだ本格利用していない
 - `RENAME`, `CREATE`
-  - 型と退避先はあるが、まだ本実装前
+  - 入力バーで名前編集し、`Enter` で rename/create を実行、`Esc` で cancel
+- `CONFIRM`
+  - paste conflict の解決を受け付ける
+- `BUSY`
+  - 非同期の directory load / file mutation 中は入力を抑止する
 
 ## 6. 現在できること / まだできないこと
 
@@ -172,14 +179,17 @@ stateDiagram-v2
 - 親/子ディレクトリへの移動と再読み込み
 - 選択トグルと全解除
 - フィルタ入力と再帰フラグ切り替え
+- 単一対象の rename
+- 新規ファイル / ディレクトリ作成
 - モード別キー解釈
+- 入力バーによる rename/create 編集
 - 画面上部へのカレントパス表示
 - ステータスバーへの warning / error 通知表示
 - child pane の必要時のみ再取得
 
 ### まだできないこと
 
-- ファイル open / copy / cut / paste / rename / delete / create
+- ファイル open / delete
 - 履歴移動や sort 切り替えの UI 操作
 
 ## 7. 今後の拡張ポイント

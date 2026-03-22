@@ -5,6 +5,7 @@ from pathlib import Path
 from plain.models import (
     ConflictDialogState,
     HelpBarState,
+    InputBarState,
     PaneEntry,
     StatusBarState,
     ThreePaneShellData,
@@ -33,6 +34,7 @@ def select_shell_data(state: AppState) -> ThreePaneShellData:
             state.current_pane.cursor_path,
         ),
         help=select_help_bar_state(state),
+        input_bar=select_input_bar_state(state),
         status=select_status_bar_state(state),
         conflict_dialog=select_conflict_dialog_state(state),
     )
@@ -88,9 +90,30 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
         return HelpBarState("o overwrite | s skip | r rename | esc cancel")
     if state.ui_mode == "FILTER":
         return HelpBarState("type filter | space recursive | enter apply | esc cancel")
+    if state.ui_mode == "RENAME":
+        return HelpBarState("type name | enter apply | esc cancel")
+    if state.ui_mode == "CREATE":
+        return HelpBarState("type name | enter apply | esc cancel")
     if state.ui_mode == "BUSY":
         return HelpBarState("processing...")
-    return HelpBarState("Space select | y copy | x cut | p paste | enter open dir")
+    return HelpBarState("Space select | y copy | x cut | p paste")
+
+
+def select_input_bar_state(state: AppState) -> InputBarState | None:
+    """Return the rename/create input bar state for the active mode."""
+
+    if state.ui_mode not in {"RENAME", "CREATE"}:
+        return None
+    if state.pending_input is None:
+        return None
+    mode_label = "RENAME"
+    if state.ui_mode == "CREATE":
+        mode_label = "NEW FILE" if state.pending_input.create_kind == "file" else "NEW DIR"
+    return InputBarState(
+        mode_label=mode_label,
+        prompt=state.pending_input.prompt,
+        value=state.pending_input.value,
+    )
 
 
 def select_conflict_dialog_state(state: AppState) -> ConflictDialogState | None:

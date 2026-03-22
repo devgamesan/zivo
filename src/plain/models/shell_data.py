@@ -50,6 +50,15 @@ class HelpBarState:
 
 
 @dataclass(frozen=True)
+class InputBarState:
+    """Single-line prompt and value rendered for rename/create."""
+
+    mode_label: str
+    prompt: str
+    value: str
+
+
+@dataclass(frozen=True)
 class ConflictDialogState:
     """Display data for the paste conflict dialog."""
 
@@ -68,6 +77,7 @@ class ThreePaneShellData:
     child_entries: tuple[PaneEntry, ...]
     current_cursor_index: int | None
     help: HelpBarState
+    input_bar: InputBarState | None
     status: StatusBarState
     conflict_dialog: ConflictDialogState | None = None
 
@@ -98,6 +108,7 @@ def build_dummy_shell_data() -> ThreePaneShellData:
         ),
         current_cursor_index=0,
         help=HelpBarState("Space select | y copy | x cut | p paste"),
+        input_bar=None,
         status=StatusBarState(
             item_count=len(current_entries),
             selected_count=0,

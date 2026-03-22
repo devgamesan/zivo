@@ -2,7 +2,14 @@
 
 from dataclasses import dataclass
 
-from plain.models import ConflictResolution, PasteConflict, PasteRequest, PasteSummary
+from plain.models import (
+    ConflictResolution,
+    CreateKind,
+    FileMutationResult,
+    PasteConflict,
+    PasteRequest,
+    PasteSummary,
+)
 
 from .models import (
     AppState,
@@ -41,6 +48,37 @@ class ConfirmFilterInput:
 @dataclass(frozen=True)
 class CancelFilterInput:
     """Discard the current filter input and return to browsing mode."""
+
+
+@dataclass(frozen=True)
+class BeginRenameInput:
+    """Enter rename input mode for a single path."""
+
+    path: str
+
+
+@dataclass(frozen=True)
+class BeginCreateInput:
+    """Enter create input mode for a new file or directory."""
+
+    kind: CreateKind
+
+
+@dataclass(frozen=True)
+class SetPendingInputValue:
+    """Update the rename/create text input value."""
+
+    value: str
+
+
+@dataclass(frozen=True)
+class SubmitPendingInput:
+    """Submit the active rename/create text input."""
+
+
+@dataclass(frozen=True)
+class CancelPendingInput:
+    """Cancel the active rename/create text input."""
 
 
 @dataclass(frozen=True)
@@ -223,12 +261,33 @@ class ClipboardPasteFailed:
     message: str
 
 
+@dataclass(frozen=True)
+class FileMutationCompleted:
+    """Apply a completed rename/create operation."""
+
+    request_id: int
+    result: FileMutationResult
+
+
+@dataclass(frozen=True)
+class FileMutationFailed:
+    """Apply a terminal rename/create operation failure."""
+
+    request_id: int
+    message: str
+
+
 Action = (
     InitializeState
     | SetUiMode
     | BeginFilterInput
     | ConfirmFilterInput
     | CancelFilterInput
+    | BeginRenameInput
+    | BeginCreateInput
+    | SetPendingInputValue
+    | SubmitPendingInput
+    | CancelPendingInput
     | MoveCursor
     | SetCursorPath
     | EnterCursorDirectory
@@ -254,4 +313,6 @@ Action = (
     | ClipboardPasteNeedsResolution
     | ClipboardPasteCompleted
     | ClipboardPasteFailed
+    | FileMutationCompleted
+    | FileMutationFailed
 )

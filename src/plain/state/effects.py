@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from plain.models import PasteRequest
+from plain.models import CreatePathRequest, PasteRequest, RenameRequest
 
 from .models import AppState
 
@@ -33,7 +33,20 @@ class RunClipboardPasteEffect:
     request: PasteRequest
 
 
-Effect = LoadBrowserSnapshotEffect | LoadChildPaneSnapshotEffect | RunClipboardPasteEffect
+@dataclass(frozen=True)
+class RunFileMutationEffect:
+    """Execute a rename/create mutation outside the reducer."""
+
+    request_id: int
+    request: RenameRequest | CreatePathRequest
+
+
+Effect = (
+    LoadBrowserSnapshotEffect
+    | LoadChildPaneSnapshotEffect
+    | RunClipboardPasteEffect
+    | RunFileMutationEffect
+)
 
 
 @dataclass(frozen=True)

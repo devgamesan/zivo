@@ -1,13 +1,23 @@
 from dataclasses import replace
 
-from plain.models import PasteConflict, PasteRequest, PasteSummary
+from plain.models import (
+    CreatePathRequest,
+    FileMutationResult,
+    PasteConflict,
+    PasteRequest,
+    PasteSummary,
+    RenameRequest,
+)
 from plain.state import (
+    BeginCreateInput,
     BeginFilterInput,
+    BeginRenameInput,
     BrowserSnapshot,
     BrowserSnapshotFailed,
     BrowserSnapshotLoaded,
     CancelFilterInput,
     CancelPasteConflict,
+    CancelPendingInput,
     ChildPaneSnapshotFailed,
     ChildPaneSnapshotLoaded,
     ClearSelection,
@@ -18,6 +28,8 @@ from plain.state import (
     CutTargets,
     DirectoryEntryState,
     EnterCursorDirectory,
+    FileMutationCompleted,
+    FileMutationFailed,
     GoToParentDirectory,
     LoadBrowserSnapshotEffect,
     LoadChildPaneSnapshotEffect,
@@ -26,14 +38,18 @@ from plain.state import (
     PaneState,
     PasteClipboard,
     PasteConflictState,
+    PendingInputState,
     ReloadDirectory,
     RequestBrowserSnapshot,
     ResolvePasteConflict,
     RunClipboardPasteEffect,
+    RunFileMutationEffect,
     SetCursorPath,
     SetFilterQuery,
+    SetPendingInputValue,
     SetSort,
     SetUiMode,
+    SubmitPendingInput,
     ToggleSelection,
     ToggleSelectionAndAdvance,
     build_initial_app_state,
@@ -202,6 +218,148 @@ def test_begin_filter_input_switches_mode_without_mutating_query() -> None:
     assert next_state.filter == state.filter
 
 
+def test_begin_rename_input_sets_initial_value_from_target_name() -> None:
+    state = build_initial_app_state()
+
+    next_state = _reduce_state(state, BeginRenameInput("/home/tadashi/develop/plain/docs"))
+
+    assert next_state.ui_mode == "RENAME"
+    assert next_state.pending_input == PendingInputState(
+        prompt="Rename: ",
+        value="docs",
+        target_path="/home/tadashi/develop/plain/docs",
+    )
+
+
+def test_begin_create_input_sets_mode_and_kind() -> None:
+    state = build_initial_app_state()
+
+    next_state = _reduce_state(state, BeginCreateInput("dir"))
+
+    assert next_state.ui_mode == "CREATE"
+    assert next_state.pending_input == PendingInputState(
+        prompt="New directory: ",
+        value="",
+        create_kind="dir",
+    )
+
+
+def test_cancel_pending_input_returns_to_browsing() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="RENAME",
+        pending_input=PendingInputState(prompt="Rename: ", value="docs"),
+    )
+
+    next_state = _reduce_state(state, CancelPendingInput())
+
+    assert next_state.ui_mode == "BROWSING"
+    assert next_state.pending_input is None
+
+
+def test_set_pending_input_value_updates_current_value() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CREATE",
+        pending_input=PendingInputState(prompt="New file: ", value="", create_kind="file"),
+    )
+
+    next_state = _reduce_state(state, SetPendingInputValue("notes.txt"))
+
+    assert next_state.pending_input is not None
+    assert next_state.pending_input.value == "notes.txt"
+
+
+def test_submit_pending_input_rejects_duplicate_name() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CREATE",
+        pending_input=PendingInputState(
+            prompt="New file: ",
+            value="README.md",
+            create_kind="file",
+        ),
+    )
+
+    next_state = _reduce_state(state, SubmitPendingInput())
+
+    assert next_state.ui_mode == "CREATE"
+    assert next_state.pending_input is not None
+    assert next_state.notification == NotificationState(
+        level="error",
+        message="An entry named 'README.md' already exists",
+    )
+
+
+def test_submit_pending_input_treats_unchanged_rename_as_noop() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="RENAME",
+        pending_input=PendingInputState(
+            prompt="Rename: ",
+            value="docs",
+            target_path="/home/tadashi/develop/plain/docs",
+        ),
+    )
+
+    next_state = _reduce_state(state, SubmitPendingInput())
+
+    assert next_state.ui_mode == "BROWSING"
+    assert next_state.pending_input is None
+    assert next_state.notification == NotificationState(level="info", message="Name unchanged")
+
+
+def test_submit_pending_input_emits_file_mutation_effect() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="RENAME",
+        pending_input=PendingInputState(
+            prompt="Rename: ",
+            value="manuals",
+            target_path="/home/tadashi/develop/plain/docs",
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitPendingInput())
+
+    assert result.state.ui_mode == "BUSY"
+    assert result.state.pending_file_mutation_request_id == 1
+    assert result.effects == (
+        RunFileMutationEffect(
+            request_id=1,
+            request=RenameRequest(
+                source_path="/home/tadashi/develop/plain/docs",
+                new_name="manuals",
+            ),
+        ),
+    )
+
+
+def test_submit_pending_input_emits_create_effect() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CREATE",
+        pending_input=PendingInputState(
+            prompt="New file: ",
+            value="notes.txt",
+            create_kind="file",
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitPendingInput())
+
+    assert result.effects == (
+        RunFileMutationEffect(
+            request_id=1,
+            request=CreatePathRequest(
+                parent_dir="/home/tadashi/develop/plain",
+                name="notes.txt",
+                kind="file",
+            ),
+        ),
+    )
+
+
 def test_confirm_filter_input_returns_to_browsing() -> None:
     state = build_initial_app_state()
     state = _reduce_state(state, SetUiMode("FILTER"))
@@ -344,6 +502,64 @@ def test_clipboard_paste_completed_for_cut_clears_clipboard_and_requests_reload(
 
     assert result.state.clipboard.mode == "none"
     assert result.state.pending_browser_snapshot_request_id == 1
+
+
+def test_file_mutation_completed_requests_reload_with_result_cursor() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="BUSY",
+        pending_file_mutation_request_id=4,
+        pending_input=PendingInputState(
+            prompt="New file: ",
+            value="notes.txt",
+            create_kind="file",
+        ),
+    )
+
+    result = reduce_app_state(
+        state,
+        FileMutationCompleted(
+            request_id=4,
+            result=FileMutationResult(
+                path="/home/tadashi/develop/plain/notes.txt",
+                message="Created file notes.txt",
+            ),
+        ),
+    )
+
+    assert result.state.ui_mode == "BROWSING"
+    assert result.state.pending_input is None
+    assert result.state.pending_browser_snapshot_request_id == 1
+    assert result.effects == (
+        LoadBrowserSnapshotEffect(
+            request_id=1,
+            path="/home/tadashi/develop/plain",
+            cursor_path="/home/tadashi/develop/plain/notes.txt",
+            blocking=False,
+        ),
+    )
+
+
+def test_file_mutation_failed_keeps_input_value_and_returns_error() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="BUSY",
+        pending_file_mutation_request_id=3,
+        pending_input=PendingInputState(
+            prompt="Rename: ",
+            value="docs copy",
+            target_path="/home/tadashi/develop/plain/docs",
+        ),
+    )
+
+    next_state = _reduce_state(state, FileMutationFailed(request_id=3, message="permission denied"))
+
+    assert next_state.pending_input is not None
+    assert next_state.pending_input.value == "docs copy"
+    assert next_state.notification == NotificationState(
+        level="error",
+        message="permission denied",
+    )
 
 
 def test_cancel_paste_conflict_returns_to_browsing_with_warning() -> None:

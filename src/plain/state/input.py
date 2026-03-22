@@ -2,9 +2,12 @@
 
 from .actions import (
     Action,
+    BeginCreateInput,
     BeginFilterInput,
+    BeginRenameInput,
     CancelFilterInput,
     CancelPasteConflict,
+    CancelPendingInput,
     ClearSelection,
     ConfirmFilterInput,
     CopyTargets,
@@ -18,7 +21,8 @@ from .actions import (
     SetFilterQuery,
     SetFilterRecursive,
     SetNotification,
-    SetUiMode,
+    SetPendingInputValue,
+    SubmitPendingInput,
     ToggleSelectionAndAdvance,
 )
 from .models import AppState, DirectoryEntryState, NotificationState
@@ -36,6 +40,9 @@ BROWSING_KEYMAP = {
     "backspace": "go_to_parent",
     "ctrl+h": "go_to_parent",
     "f5": "reload_directory",
+    "f2": "begin_rename",
+    "ctrl+n": "begin_create_file",
+    "ctrl+shift+n": "begin_create_dir",
     "right": "enter_or_open",
     "enter": "enter_or_open",
     "y": "copy_targets",
@@ -75,7 +82,7 @@ def dispatch_key_input(
         return _warn("Input ignored while processing")
 
     if state.ui_mode in {"RENAME", "CREATE"}:
-        return _dispatch_unwired_input_mode(state.ui_mode, key)
+        return _dispatch_pending_input(state, key=key, character=character)
 
     return _dispatch_browsing_input(state, key)
 
@@ -119,6 +126,19 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
 
     if key == "f5":
         return _supported(ReloadDirectory())
+
+    if key == "f2":
+        if not target_paths:
+            return _warn("Nothing to rename")
+        if len(target_paths) != 1:
+            return _warn("Rename requires a single target")
+        return _supported(BeginRenameInput(target_paths[0]))
+
+    if key == "ctrl+n":
+        return _supported(BeginCreateInput("file"))
+
+    if key == "ctrl+shift+n":
+        return _supported(BeginCreateInput("dir"))
 
     if key in {"right", "enter"}:
         if cursor_entry is not None and cursor_entry.kind == "dir":
@@ -169,10 +189,27 @@ def _dispatch_confirm_input(key: str) -> DispatchedActions:
     return _warn("Use o, s, r, or Esc while resolving paste conflicts")
 
 
-def _dispatch_unwired_input_mode(mode: str, key: str) -> DispatchedActions:
+def _dispatch_pending_input(
+    state: AppState,
+    *,
+    key: str,
+    character: str | None,
+) -> DispatchedActions:
     if key == "escape":
-        return _supported(SetUiMode("BROWSING"))
-    return _warn(f"Input handling for {mode} mode is not implemented yet")
+        return _supported(CancelPendingInput())
+
+    if key == "enter":
+        return _supported(SubmitPendingInput())
+
+    if key == "backspace":
+        current_value = state.pending_input.value if state.pending_input is not None else ""
+        return _supported(SetPendingInputValue(current_value[:-1]))
+
+    if character and character.isprintable():
+        current_value = state.pending_input.value if state.pending_input is not None else ""
+        return _supported(SetPendingInputValue(f"{current_value}{character}"))
+
+    return _warn("Use Enter to apply or Esc to cancel")
 
 
 def _visible_paths(state: AppState) -> tuple[str, ...]:
