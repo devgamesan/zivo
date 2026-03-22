@@ -1,8 +1,13 @@
 from plain.state import (
     BeginFilterInput,
+    BrowserSnapshot,
+    BrowserSnapshotFailed,
+    BrowserSnapshotLoaded,
     CancelFilterInput,
     ClearSelection,
     ConfirmFilterInput,
+    NotificationState,
+    RequestBrowserSnapshot,
     SetCursorPath,
     SetFilterQuery,
     SetSort,
@@ -14,10 +19,14 @@ from plain.state import (
 )
 
 
+def _reduce_state(state, action):
+    return reduce_app_state(state, action).state
+
+
 def test_set_ui_mode_updates_only_mode() -> None:
     state = build_initial_app_state()
 
-    next_state = reduce_app_state(state, SetUiMode("FILTER"))
+    next_state = _reduce_state(state, SetUiMode("FILTER"))
 
     assert next_state.ui_mode == "FILTER"
     assert next_state.current_pane == state.current_pane
@@ -28,8 +37,8 @@ def test_toggle_selection_uses_absolute_paths() -> None:
     state = build_initial_app_state()
     path = "/home/tadashi/develop/plain/README.md"
 
-    selected_state = reduce_app_state(state, ToggleSelection(path))
-    cleared_state = reduce_app_state(selected_state, ToggleSelection(path))
+    selected_state = _reduce_state(state, ToggleSelection(path))
+    cleared_state = _reduce_state(selected_state, ToggleSelection(path))
 
     assert selected_state.current_pane.selected_paths == frozenset({path})
     assert cleared_state.current_pane.selected_paths == frozenset()
@@ -37,12 +46,12 @@ def test_toggle_selection_uses_absolute_paths() -> None:
 
 def test_clear_selection_empties_selection() -> None:
     state = build_initial_app_state()
-    selected_state = reduce_app_state(
+    selected_state = _reduce_state(
         state,
         ToggleSelection("/home/tadashi/develop/plain/README.md"),
     )
 
-    next_state = reduce_app_state(selected_state, ClearSelection())
+    next_state = _reduce_state(selected_state, ClearSelection())
 
     assert next_state.current_pane.selected_paths == frozenset()
 
@@ -50,7 +59,7 @@ def test_clear_selection_empties_selection() -> None:
 def test_set_filter_query_returns_new_state_without_mutating_input() -> None:
     state = build_initial_app_state()
 
-    next_state = reduce_app_state(state, SetFilterQuery("readme"))
+    next_state = _reduce_state(state, SetFilterQuery("readme"))
 
     assert next_state.filter.query == "readme"
     assert next_state.filter.active is True
@@ -61,7 +70,7 @@ def test_set_filter_query_returns_new_state_without_mutating_input() -> None:
 def test_set_sort_returns_new_state_without_mutating_input() -> None:
     state = build_initial_app_state()
 
-    next_state = reduce_app_state(
+    next_state = _reduce_state(
         state,
         SetSort(field="modified", descending=True, directories_first=False),
     )
@@ -77,7 +86,7 @@ def test_set_sort_returns_new_state_without_mutating_input() -> None:
 def test_set_cursor_path_ignores_unknown_path() -> None:
     state = build_initial_app_state()
 
-    next_state = reduce_app_state(state, SetCursorPath("/missing"))
+    next_state = _reduce_state(state, SetCursorPath("/missing"))
 
     assert next_state == state
 
@@ -85,7 +94,7 @@ def test_set_cursor_path_ignores_unknown_path() -> None:
 def test_begin_filter_input_switches_mode_without_mutating_query() -> None:
     state = build_initial_app_state()
 
-    next_state = reduce_app_state(state, BeginFilterInput())
+    next_state = _reduce_state(state, BeginFilterInput())
 
     assert next_state.ui_mode == "FILTER"
     assert next_state.filter == state.filter
@@ -93,19 +102,19 @@ def test_begin_filter_input_switches_mode_without_mutating_query() -> None:
 
 def test_confirm_filter_input_returns_to_browsing() -> None:
     state = build_initial_app_state()
-    state = reduce_app_state(state, SetUiMode("FILTER"))
+    state = _reduce_state(state, SetUiMode("FILTER"))
 
-    next_state = reduce_app_state(state, ConfirmFilterInput())
+    next_state = _reduce_state(state, ConfirmFilterInput())
 
     assert next_state.ui_mode == "BROWSING"
 
 
 def test_cancel_filter_input_clears_query_and_recursive_flag() -> None:
     state = build_initial_app_state()
-    state = reduce_app_state(state, SetUiMode("FILTER"))
-    state = reduce_app_state(state, SetFilterQuery("readme"))
+    state = _reduce_state(state, SetUiMode("FILTER"))
+    state = _reduce_state(state, SetFilterQuery("readme"))
 
-    next_state = reduce_app_state(state, CancelFilterInput())
+    next_state = _reduce_state(state, CancelFilterInput())
 
     assert next_state.ui_mode == "BROWSING"
     assert next_state.filter.query == ""
@@ -124,10 +133,81 @@ def test_toggle_selection_and_advance_moves_cursor_to_next_visible_entry() -> No
         "/home/tadashi/develop/plain/pyproject.toml",
     )
 
-    next_state = reduce_app_state(
+    next_state = _reduce_state(
         state,
         ToggleSelectionAndAdvance(path=current_path, visible_paths=visible_paths),
     )
 
     assert next_state.current_pane.selected_paths == frozenset({current_path})
     assert next_state.current_pane.cursor_path == "/home/tadashi/develop/plain/src"
+
+
+def test_request_browser_snapshot_returns_effect_and_updates_pending_request() -> None:
+    state = build_initial_app_state()
+
+    result = reduce_app_state(state, RequestBrowserSnapshot("/tmp/example"))
+
+    assert result.state.pending_browser_snapshot_request_id == 1
+    assert result.state.next_request_id == 2
+    assert len(result.effects) == 1
+    assert result.effects[0].path == "/tmp/example"
+    assert result.effects[0].request_id == 1
+
+
+def test_browser_snapshot_loaded_ignores_stale_request() -> None:
+    state = build_initial_app_state()
+    state = _reduce_state(state, RequestBrowserSnapshot("/tmp/example"))
+    snapshot = BrowserSnapshot(
+        current_path="/tmp/new",
+        parent_pane=state.parent_pane,
+        current_pane=state.current_pane,
+        child_pane=state.child_pane,
+    )
+
+    next_state = _reduce_state(
+        state,
+        BrowserSnapshotLoaded(request_id=99, snapshot=snapshot),
+    )
+
+    assert next_state == state
+
+
+def test_browser_snapshot_loaded_applies_snapshot_and_clears_error() -> None:
+    state = build_initial_app_state()
+    requested = reduce_app_state(state, RequestBrowserSnapshot("/tmp/example")).state
+    requested = _reduce_state(
+        requested,
+        BrowserSnapshotFailed(request_id=1, message="boom"),
+    )
+    snapshot = BrowserSnapshot(
+        current_path="/tmp/example",
+        parent_pane=requested.parent_pane,
+        current_pane=requested.current_pane,
+        child_pane=requested.child_pane,
+    )
+    requested = _reduce_state(requested, RequestBrowserSnapshot("/tmp/example"))
+
+    next_state = _reduce_state(
+        requested,
+        BrowserSnapshotLoaded(request_id=2, snapshot=snapshot),
+    )
+
+    assert next_state.current_path == "/tmp/example"
+    assert next_state.notification is None
+    assert next_state.pending_browser_snapshot_request_id is None
+
+
+def test_browser_snapshot_failed_sets_error_notification() -> None:
+    state = build_initial_app_state()
+    requested = reduce_app_state(state, RequestBrowserSnapshot("/tmp/example")).state
+
+    next_state = _reduce_state(
+        requested,
+        BrowserSnapshotFailed(request_id=1, message="load failed"),
+    )
+
+    assert next_state.notification == NotificationState(
+        level="error",
+        message="load failed",
+    )
+    assert next_state.pending_browser_snapshot_request_id is None

@@ -9,6 +9,7 @@ from plain.models.shell_data import EntryKind
 UiMode = Literal["BROWSING", "FILTER", "RENAME", "CREATE", "CONFIRM", "BUSY"]
 SortField = Literal["name", "modified", "size"]
 ClipboardMode = Literal["copy", "cut", "none"]
+NotificationLevel = Literal["info", "warning", "error"]
 
 
 @dataclass(frozen=True)
@@ -68,6 +69,24 @@ class HistoryState:
 
 
 @dataclass(frozen=True)
+class NotificationState:
+    """Transient notification rendered by the UI shell."""
+
+    level: NotificationLevel
+    message: str
+
+
+@dataclass(frozen=True)
+class BrowserSnapshot:
+    """Pane snapshot payload returned from async loaders."""
+
+    current_path: str
+    parent_pane: PaneState
+    current_pane: PaneState
+    child_pane: PaneState
+
+
+@dataclass(frozen=True)
 class AppState:
     """Single source of truth for reducer-managed application state."""
 
@@ -80,7 +99,9 @@ class AppState:
     clipboard: ClipboardState = ClipboardState()
     history: HistoryState = HistoryState()
     ui_mode: UiMode = "BROWSING"
-    status_message: str | None = None
+    notification: NotificationState | None = None
+    pending_browser_snapshot_request_id: int | None = None
+    next_request_id: int = 1
 
 
 def build_initial_app_state() -> AppState:

@@ -1,15 +1,23 @@
 """Application assembly for Plain."""
 
 from collections.abc import Sequence
+from functools import partial
 
 from textual import events
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
+from textual.worker import Worker, WorkerState
 
 from plain.models import ThreePaneShellData
+from plain.services import BrowserSnapshotLoader, FakeBrowserSnapshotLoader
 from plain.state import (
     Action,
     AppState,
+    BrowserSnapshotFailed,
+    BrowserSnapshotLoaded,
+    Effect,
+    LoadBrowserSnapshotEffect,
+    ReduceResult,
     build_initial_app_state,
     dispatch_key_input,
     reduce_app_state,
@@ -74,9 +82,11 @@ class PlainApp(App[None]):
     }
     """
 
-    def __init__(self) -> None:
+    def __init__(self, snapshot_loader: BrowserSnapshotLoader | None = None) -> None:
         super().__init__()
         self._app_state: AppState = build_initial_app_state()
+        self._snapshot_loader = snapshot_loader or FakeBrowserSnapshotLoader()
+        self._pending_workers: dict[str, LoadBrowserSnapshotEffect] = {}
 
     @property
     def app_state(self) -> AppState:
@@ -103,8 +113,7 @@ class PlainApp(App[None]):
         event.stop()
         event.prevent_default()
 
-        if self._apply_actions(actions):
-            await self._refresh_shell()
+        await self.dispatch_actions(actions)
 
     def _build_body(self, shell: ThreePaneShellData) -> Horizontal:
         return Horizontal(
@@ -129,18 +138,90 @@ class PlainApp(App[None]):
             id="body",
         )
 
-    def _apply_actions(self, actions: Sequence[Action]) -> bool:
+    async def dispatch_actions(self, actions: Sequence[Action]) -> None:
+        """Apply reducer actions, refresh the UI, and schedule any effects."""
+
+        changed, effects = self._apply_actions(actions)
+        if changed:
+            await self._refresh_shell()
+        self._schedule_effects(effects)
+
+    def _apply_actions(self, actions: Sequence[Action]) -> tuple[bool, tuple[Effect, ...]]:
         state = self._app_state
         changed = False
+        effects: list[Effect] = []
 
         for action in actions:
-            next_state = reduce_app_state(state, action)
+            result: ReduceResult = reduce_app_state(state, action)
+            next_state = result.state
             if next_state != state:
                 changed = True
             state = next_state
+            effects.extend(result.effects)
 
         self._app_state = state
-        return changed
+        return changed, tuple(effects)
+
+    def _schedule_effects(self, effects: Sequence[Effect]) -> None:
+        for effect in effects:
+            if isinstance(effect, LoadBrowserSnapshotEffect):
+                self._schedule_browser_snapshot(effect)
+
+    def _schedule_browser_snapshot(self, effect: LoadBrowserSnapshotEffect) -> None:
+        worker_name = f"browser-snapshot:{effect.request_id}"
+        worker = self.run_worker(
+            partial(
+                self._snapshot_loader.load_browser_snapshot,
+                effect.path,
+                effect.cursor_path,
+            ),
+            name=worker_name,
+            group="browser-snapshot",
+            description=effect.path,
+            exit_on_error=False,
+            exclusive=True,
+            thread=True,
+        )
+        self._pending_workers[worker.name] = effect
+
+    async def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
+        """Convert worker completion back into reducer actions."""
+
+        effect = self._pending_workers.get(event.worker.name)
+        if effect is None:
+            return
+
+        if event.state in {WorkerState.PENDING, WorkerState.RUNNING}:
+            return
+
+        self._pending_workers.pop(event.worker.name, None)
+
+        if event.state == WorkerState.CANCELLED:
+            return
+
+        if event.state == WorkerState.SUCCESS:
+            await self.dispatch_actions(
+                (
+                    BrowserSnapshotLoaded(
+                        request_id=effect.request_id,
+                        snapshot=event.worker.result,
+                        blocking=effect.blocking,
+                    ),
+                )
+            )
+            return
+
+        if event.state == WorkerState.ERROR:
+            message = str(event.worker.error) or "ディレクトリ読み込みに失敗しました"
+            await self.dispatch_actions(
+                (
+                    BrowserSnapshotFailed(
+                        request_id=effect.request_id,
+                        message=message,
+                        blocking=effect.blocking,
+                    ),
+                )
+            )
 
     async def _refresh_shell(self) -> None:
         shell = select_shell_data(self._app_state)
@@ -150,6 +231,6 @@ class PlainApp(App[None]):
         await self.mount(StatusBar(shell.status, id="status-bar"))
 
 
-def create_app() -> PlainApp:
+def create_app(snapshot_loader: BrowserSnapshotLoader | None = None) -> PlainApp:
     """Create the application instance."""
-    return PlainApp()
+    return PlainApp(snapshot_loader=snapshot_loader)

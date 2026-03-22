@@ -43,7 +43,7 @@ uv run python -m plain
 | `FILTER` | `Enter` | フィルタを確定して `BROWSING` に戻る |
 | `FILTER` | `Esc` | フィルタを解除して `BROWSING` に戻る |
 | `CONFIRM` | `Esc` | 確認モードを抜けて `BROWSING` に戻る |
-| `BUSY` | 任意 | 入力を無視し、ステータスバーへ警告を表示 |
+| `BUSY` | 任意 | 入力を無視し、ステータスバーへ `warning` 通知を表示 |
 
 `←` / `→` / `Enter` による実ディレクトリ移動やオープンは、Action の拡張ポイントを残しつつ後続 Issue で実装します。
 
@@ -70,6 +70,8 @@ tests/       スモークテスト
 
 - UI とロジックを分離する
 - 状態更新責務を一箇所に寄せる
+- reducer は `ReduceResult(state, effects)` を返し、副作用要求を純粋な effect 記述として扱う
 - キー入力は app 側で Action に正規化し、widget 側に分岐を持たせない
-- OS 依存処理やファイル操作は adapter/service 側へ隔離する
+- OS 依存処理やファイル操作は adapter/service 側へ隔離し、非同期実行は Textual worker で app へ戻す
+- 一時通知は `NotificationState` で管理し、現状はステータスバーへ描画する
 - まずはプレースホルダ起動、lint、test が安定して通る土台を優先する

@@ -112,9 +112,9 @@ sequenceDiagram
 
 ### `src/plain/state/reducer.py`
 
-- `AppState` を純粋関数で更新する
-- 副作用を直接持たない
-- 現在はダミー状態の遷移に集中している
+- `AppState` を純粋関数で更新し、`ReduceResult(state, effects)` を返す
+- effect は純粋な記述として返し、実行自体は app / services 側に委ねる
+- browser snapshot の request / success / failure を action として state に戻す
 
 ### `src/plain/state/selectors.py`
 
@@ -125,7 +125,13 @@ sequenceDiagram
 ### `src/plain/models/`
 
 - `shell_data.py` は描画専用モデル
-- `state/models.py` は reducer 管理対象のアプリ状態
+- `state/models.py` は reducer 管理対象のアプリ状態と notification / snapshot 契約を持つ
+
+### `src/plain/services/`
+
+- `BrowserSnapshotLoader` で非同期読み込み境界を切る
+- 現在は `FakeBrowserSnapshotLoader` が delay / failure を含むテスト用ロードを担う
+- 実ファイルシステム実装は後続 Issue で差し替える
 
 ## 5. 現在のモードと入力境界
 
@@ -162,7 +168,9 @@ stateDiagram-v2
 - 選択トグルと全解除
 - フィルタ入力と再帰フラグ切り替え
 - モード別キー解釈
-- ステータスバーへの warning message 表示
+- Textual worker を使った非同期 effect 実行
+- 古い browser snapshot 結果の破棄
+- ステータスバーへの warning / error 通知表示
 
 ### まだできないこと
 
@@ -170,7 +178,7 @@ stateDiagram-v2
 - 実ディレクトリ移動
 - ファイル open / copy / cut / paste / rename / delete / create
 - 履歴移動や sort 切り替えの UI 操作
-- services / adapters を使った副作用実行
+- popup ベースの通知 UI
 
 ## 7. 今後の拡張ポイント
 
@@ -181,9 +189,12 @@ flowchart TD
     Key["新しいキー操作"] --> Input["input.py に dispatch 追加"]
     Input --> Action["Action 追加"]
     Action --> Reducer["reducer に状態遷移追加"]
+    Reducer --> Effect["ReduceResult.effects に effect 追加"]
     Reducer --> Selector["必要なら selector 更新"]
-    Reducer --> Service["副作用が必要なら services へ委譲"]
+    Effect --> Service["app が Textual worker 経由で services を実行"]
     Service --> Adapter["OS/FS 操作は adapters へ委譲"]
+    Service --> ActionBack["完了時は action に戻す"]
+    ActionBack --> Reducer
     Selector --> UI["UI は表示更新だけ行う"]
 ```
 

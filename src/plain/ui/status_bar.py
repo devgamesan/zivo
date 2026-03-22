@@ -29,5 +29,6 @@ class StatusBar(Static):
             f"filter: {state.filter_label}"
         )
         if state.message:
-            return f"{summary} | message: {state.message}"
+            label = state.message_level or "message"
+            return f"{summary} | {label}: {state.message}"
         return summary
