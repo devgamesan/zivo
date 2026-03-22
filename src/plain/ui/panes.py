@@ -31,11 +31,13 @@ class SidePane(Vertical):
 
     def compose(self) -> ComposeResult:
         yield Label(self._title, classes="pane-title")
-        yield ListView(
+        list_view = ListView(
             *self._build_items(self._entries),
             id=self.list_view_id,
             classes="pane-list",
         )
+        list_view.can_focus = False
+        yield list_view
 
     async def set_entries(self, entries: Sequence[PaneEntry]) -> None:
         """Replace the rendered entries without remounting the pane."""

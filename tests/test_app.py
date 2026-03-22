@@ -215,6 +215,47 @@ async def test_app_can_start_in_narrow_headless_mode() -> None:
 
 
 @pytest.mark.asyncio
+async def test_app_tab_keeps_focus_on_current_pane() -> None:
+    path = "/tmp/plain-tab-focus"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (
+                    DirectoryEntryState(f"{path}/docs", "docs", "dir"),
+                    DirectoryEntryState(
+                        f"{path}/README.md",
+                        "README.md",
+                        "file",
+                        size_bytes=120,
+                    ),
+                ),
+                child_path=f"{path}/docs",
+                child_entries=(DirectoryEntryState(f"{path}/docs/spec.md", "spec.md", "file"),),
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await _wait_for_row_count(app, 2)
+
+        parent_list = app.query_one("#parent-pane-list", ListView)
+        current_table = app.query_one("#current-pane-table", DataTable)
+        child_list = app.query_one("#child-pane-list", ListView)
+
+        assert parent_list.can_focus is False
+        assert child_list.can_focus is False
+        assert app.focused is current_table
+
+        await pilot.press("tab", "tab")
+        await asyncio.sleep(0.05)
+
+        assert app.focused is current_table
+
+
+@pytest.mark.asyncio
 async def test_app_keyboard_input_updates_selection_and_child_pane() -> None:
     path = "/tmp/plain-keyboard"
     current_entries = (
