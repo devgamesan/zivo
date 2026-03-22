@@ -3,15 +3,24 @@
 from dataclasses import replace
 from pathlib import Path
 
-from plain.models import CreatePathRequest, PasteRequest, PasteSummary, RenameRequest
+from plain.models import (
+    CreatePathRequest,
+    FileMutationResult,
+    PasteRequest,
+    PasteSummary,
+    RenameRequest,
+    TrashDeleteRequest,
+)
 
 from .actions import (
     Action,
     BeginCreateInput,
+    BeginDeleteTargets,
     BeginFilterInput,
     BeginRenameInput,
     BrowserSnapshotFailed,
     BrowserSnapshotLoaded,
+    CancelDeleteConfirmation,
     CancelFilterInput,
     CancelPasteConflict,
     CancelPendingInput,
@@ -21,6 +30,7 @@ from .actions import (
     ClipboardPasteCompleted,
     ClipboardPasteFailed,
     ClipboardPasteNeedsResolution,
+    ConfirmDeleteTargets,
     ConfirmFilterInput,
     CopyTargets,
     CutTargets,
@@ -56,6 +66,7 @@ from .effects import (
 from .models import (
     AppState,
     ClipboardState,
+    DeleteConfirmationState,
     DirectoryEntryState,
     NotificationState,
     PaneState,
@@ -77,7 +88,15 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
         return done(replace(state, ui_mode=action.mode))
 
     if isinstance(action, BeginFilterInput):
-        return done(replace(state, ui_mode="FILTER", notification=None, pending_input=None))
+        return done(
+            replace(
+                state,
+                ui_mode="FILTER",
+                notification=None,
+                pending_input=None,
+                delete_confirmation=None,
+            )
+        )
 
     if isinstance(action, ConfirmFilterInput):
         return done(replace(state, ui_mode="BROWSING", notification=None))
@@ -90,6 +109,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 filter=replace(state.filter, query="", recursive=False, active=False),
                 notification=None,
                 pending_input=None,
+                delete_confirmation=None,
             )
         )
 
@@ -107,7 +127,32 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                     value=entry.name,
                     target_path=entry.path,
                 ),
+                delete_confirmation=None,
             )
+        )
+
+    if isinstance(action, BeginDeleteTargets):
+        if not action.paths:
+            return done(state)
+        if len(action.paths) > 1:
+            return done(
+                replace(
+                    state,
+                    ui_mode="CONFIRM",
+                    notification=None,
+                    pending_input=None,
+                    paste_conflict=None,
+                    delete_confirmation=DeleteConfirmationState(paths=action.paths),
+                )
+            )
+        return _run_file_mutation_request(
+            replace(
+                state,
+                notification=None,
+                paste_conflict=None,
+                delete_confirmation=None,
+            ),
+            TrashDeleteRequest(paths=action.paths),
         )
 
     if isinstance(action, BeginCreateInput):
@@ -121,6 +166,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                     prompt=prompt,
                     create_kind=action.kind,
                 ),
+                delete_confirmation=None,
             )
         )
 
@@ -141,6 +187,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 ui_mode="BROWSING",
                 notification=None,
                 pending_input=None,
+                delete_confirmation=None,
             )
         )
 
@@ -345,6 +392,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             replace(
                 state,
                 paste_conflict=None,
+                delete_confirmation=None,
                 ui_mode="BROWSING",
                 notification=None,
             ),
@@ -356,8 +404,32 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             replace(
                 state,
                 paste_conflict=None,
+                delete_confirmation=None,
                 ui_mode="BROWSING",
                 notification=NotificationState(level="warning", message="Paste cancelled"),
+            )
+        )
+
+    if isinstance(action, ConfirmDeleteTargets):
+        if state.delete_confirmation is None:
+            return done(state)
+        return _run_file_mutation_request(
+            replace(
+                state,
+                delete_confirmation=None,
+                paste_conflict=None,
+                notification=None,
+            ),
+            TrashDeleteRequest(paths=state.delete_confirmation.paths),
+        )
+
+    if isinstance(action, CancelDeleteConfirmation):
+        return done(
+            replace(
+                state,
+                delete_confirmation=None,
+                ui_mode="BROWSING",
+                notification=NotificationState(level="warning", message="Delete cancelled"),
             )
         )
 
@@ -493,6 +565,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                     conflicts=action.conflicts,
                     first_conflict=action.conflicts[0],
                 ),
+                delete_confirmation=None,
                 pending_paste_request_id=None,
                 ui_mode="CONFIRM",
             )
@@ -511,6 +584,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             clipboard=next_clipboard,
             notification=None,
             paste_conflict=None,
+            delete_confirmation=None,
             post_reload_notification=_notification_for_paste_summary(action.summary),
             pending_paste_request_id=None,
             ui_mode="BROWSING",
@@ -525,6 +599,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 state,
                 notification=NotificationState(level="error", message=action.message),
                 paste_conflict=None,
+                delete_confirmation=None,
                 pending_paste_request_id=None,
                 ui_mode="BROWSING",
             )
@@ -533,18 +608,29 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
     if isinstance(action, FileMutationCompleted):
         if action.request_id != state.pending_file_mutation_request_id:
             return done(state)
+        selected_paths = state.current_pane.selected_paths
+        if action.result.removed_paths:
+            selected_paths = frozenset(
+                path for path in selected_paths if path not in action.result.removed_paths
+            )
         next_state = replace(
             state,
             notification=None,
+            current_pane=replace(state.current_pane, selected_paths=selected_paths),
             pending_input=None,
+            delete_confirmation=None,
             pending_file_mutation_request_id=None,
             post_reload_notification=NotificationState(
-                level="info",
+                level=action.result.level,
                 message=action.result.message,
             ),
             ui_mode="BROWSING",
         )
-        return _request_snapshot_refresh(next_state, cursor_path=action.result.path)
+        return _request_snapshot_refresh(
+            next_state,
+            cursor_path=_cursor_path_after_file_mutation(state, action.result),
+            keep_current_cursor=not bool(action.result.removed_paths),
+        )
 
     if isinstance(action, FileMutationFailed):
         if action.request_id != state.pending_file_mutation_request_id:
@@ -554,6 +640,8 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 state,
                 notification=NotificationState(level="error", message=action.message),
                 pending_file_mutation_request_id=None,
+                delete_confirmation=None,
+                ui_mode=_restore_ui_mode_after_file_mutation_failure(state),
             )
         )
 
@@ -595,6 +683,7 @@ def _run_paste_request(state: AppState, request: PasteRequest) -> ReduceResult:
         state,
         notification=None,
         paste_conflict=None,
+        delete_confirmation=None,
         pending_paste_request_id=request_id,
         next_request_id=request_id + 1,
         ui_mode="BUSY",
@@ -607,12 +696,13 @@ def _run_paste_request(state: AppState, request: PasteRequest) -> ReduceResult:
 
 def _run_file_mutation_request(
     state: AppState,
-    request: RenameRequest | CreatePathRequest,
+    request: RenameRequest | CreatePathRequest | TrashDeleteRequest,
 ) -> ReduceResult:
     request_id = state.next_request_id
     next_state = replace(
         state,
         notification=None,
+        delete_confirmation=None,
         pending_file_mutation_request_id=request_id,
         next_request_id=request_id + 1,
         ui_mode="BUSY",
@@ -623,10 +713,43 @@ def _run_file_mutation_request(
     )
 
 
+def _cursor_path_after_file_mutation(
+    state: AppState,
+    result: FileMutationResult,
+) -> str | None:
+    if result.removed_paths:
+        remaining_paths = [
+            entry.path
+            for entry in state.current_pane.entries
+            if entry.path not in result.removed_paths
+        ]
+        if not remaining_paths:
+            return None
+        current_cursor = state.current_pane.cursor_path
+        if current_cursor is not None and current_cursor not in result.removed_paths:
+            return current_cursor
+        original_paths = [entry.path for entry in state.current_pane.entries]
+        if current_cursor in original_paths:
+            current_index = original_paths.index(current_cursor)
+            if current_index < len(remaining_paths):
+                return remaining_paths[current_index]
+        return remaining_paths[-1]
+    return result.path
+
+
+def _restore_ui_mode_after_file_mutation_failure(state: AppState) -> str:
+    if state.pending_input is None:
+        return "BROWSING"
+    if state.pending_input.create_kind is not None:
+        return "CREATE"
+    return "RENAME"
+
+
 def _request_snapshot_refresh(
     state: AppState,
     *,
     cursor_path: str | None = None,
+    keep_current_cursor: bool = True,
 ) -> ReduceResult:
     request_id = state.next_request_id
     next_state = replace(
@@ -641,7 +764,11 @@ def _request_snapshot_refresh(
             LoadBrowserSnapshotEffect(
                 request_id=request_id,
                 path=state.current_path,
-                cursor_path=cursor_path or state.current_pane.cursor_path,
+                cursor_path=(
+                    state.current_pane.cursor_path
+                    if keep_current_cursor and cursor_path is None
+                    else cursor_path
+                ),
                 blocking=False,
             ),
         ),

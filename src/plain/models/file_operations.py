@@ -6,6 +6,7 @@ from typing import Literal
 ClipboardOperationMode = Literal["copy", "cut"]
 ConflictResolution = Literal["overwrite", "skip", "rename"]
 CreateKind = Literal["file", "dir"]
+MutationResultLevel = Literal["info", "warning", "error"]
 
 
 @dataclass(frozen=True)
@@ -86,12 +87,21 @@ class CreatePathRequest:
     kind: CreateKind
 
 
-FileMutationRequest = RenameRequest | CreatePathRequest
+@dataclass(frozen=True)
+class TrashDeleteRequest:
+    """A request to move one or more paths into the OS trash."""
+
+    paths: tuple[str, ...]
+
+
+FileMutationRequest = RenameRequest | CreatePathRequest | TrashDeleteRequest
 
 
 @dataclass(frozen=True)
 class FileMutationResult:
     """Completed execution payload returned from the file mutation service."""
 
-    path: str
+    path: str | None
     message: str
+    level: MutationResultLevel = "info"
+    removed_paths: tuple[str, ...] = ()

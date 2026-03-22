@@ -4,7 +4,9 @@ from .file_operations import (
     ConflictResolution,
     CreateKind,
     CreatePathRequest,
+    FileMutationRequest,
     FileMutationResult,
+    MutationResultLevel,
     PasteConflict,
     PasteConflictPrompt,
     PasteExecutionResult,
@@ -12,6 +14,7 @@ from .file_operations import (
     PasteRequest,
     PasteSummary,
     RenameRequest,
+    TrashDeleteRequest,
 )
 from .shell_data import (
     ConflictDialogState,
@@ -29,8 +32,10 @@ __all__ = [
     "CreateKind",
     "CreatePathRequest",
     "FileMutationResult",
+    "FileMutationRequest",
     "HelpBarState",
     "InputBarState",
+    "MutationResultLevel",
     "PaneEntry",
     "PasteConflict",
     "PasteConflictPrompt",
@@ -41,5 +46,6 @@ __all__ = [
     "RenameRequest",
     "StatusBarState",
     "ThreePaneShellData",
+    "TrashDeleteRequest",
     "build_dummy_shell_data",
 ]

@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from plain.models import CreatePathRequest, PasteRequest, RenameRequest
+from plain.models import CreatePathRequest, PasteRequest, RenameRequest, TrashDeleteRequest
 
 from .models import AppState
 
@@ -38,7 +38,7 @@ class RunFileMutationEffect:
     """Execute a rename/create mutation outside the reducer."""
 
     request_id: int
-    request: RenameRequest | CreatePathRequest
+    request: RenameRequest | CreatePathRequest | TrashDeleteRequest
 
 
 Effect = (

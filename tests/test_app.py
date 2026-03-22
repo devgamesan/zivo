@@ -8,15 +8,18 @@ from textual.widgets import DataTable, Label, ListView
 
 from plain import create_app
 from plain.models import (
+    FileMutationResult,
     PasteConflict,
     PasteConflictPrompt,
     PasteExecutionResult,
     PasteRequest,
     PasteSummary,
+    TrashDeleteRequest,
 )
 from plain.services import (
     FakeBrowserSnapshotLoader,
     FakeClipboardOperationService,
+    FakeFileMutationService,
 )
 from plain.state import BrowserSnapshot, DirectoryEntryState, PaneState
 from plain.ui import ConflictDialog, CurrentPathBar, HelpBar, InputBar, StatusBar
@@ -850,7 +853,8 @@ async def test_app_displays_browsing_help_bar() -> None:
         help_bar = app.query_one("#help-bar", HelpBar)
 
         assert str(help_bar.renderable) == (
-            "Space select | y copy | x cut | p paste | F2 rename | ctrl+n file | ctrl+shift+n dir"
+            "Space select | y copy | x cut | p paste | "
+            "F2 rename | ctrl+n file | ctrl+shift+n dir"
         )
 
 
@@ -973,4 +977,61 @@ async def test_app_paste_conflict_dialog_round_trip() -> None:
         assert app.app_state.ui_mode == "BROWSING"
         assert str(status_bar.renderable) == (
             "1 items | 0 selected | sort: name asc | filter: none | info: Copied 1 item(s)"
+        )
+
+
+@pytest.mark.asyncio
+async def test_app_delete_confirmation_round_trip() -> None:
+    path = "/tmp/plain-delete-confirm"
+    docs = f"{path}/docs"
+    src = f"{path}/src"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (
+                    DirectoryEntryState(docs, "docs", "dir"),
+                    DirectoryEntryState(src, "src", "dir"),
+                ),
+                child_path=docs,
+            )
+        }
+    )
+    delete_request = TrashDeleteRequest(paths=(docs, src))
+    mutation_service = FakeFileMutationService(
+        results={
+            delete_request: FileMutationResult(
+                path=None,
+                message="Trashed 2 items",
+                removed_paths=(docs, src),
+            )
+        }
+    )
+    app = create_app(
+        snapshot_loader=loader,
+        file_mutation_service=mutation_service,
+        initial_path=path,
+    )
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("space")
+        await pilot.press("space")
+        await pilot.press("delete")
+        await asyncio.sleep(0.05)
+
+        help_bar = app.query_one("#help-bar", HelpBar)
+        dialog = app.query_one("#conflict-dialog", ConflictDialog)
+
+        assert app.app_state.ui_mode == "CONFIRM"
+        assert str(help_bar.renderable) == "enter confirm delete | esc cancel"
+        assert dialog.display is True
+
+        await pilot.press("enter")
+        await asyncio.sleep(0.05)
+
+        status_bar = await _wait_for_status_bar(app)
+        assert app.app_state.ui_mode == "BROWSING"
+        assert str(status_bar.renderable) == (
+            "2 items | 0 selected | sort: name asc | filter: none | info: Trashed 2 items"
         )

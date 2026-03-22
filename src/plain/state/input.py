@@ -3,12 +3,15 @@
 from .actions import (
     Action,
     BeginCreateInput,
+    BeginDeleteTargets,
     BeginFilterInput,
     BeginRenameInput,
+    CancelDeleteConfirmation,
     CancelFilterInput,
     CancelPasteConflict,
     CancelPendingInput,
     ClearSelection,
+    ConfirmDeleteTargets,
     ConfirmFilterInput,
     CopyTargets,
     CutTargets,
@@ -43,6 +46,7 @@ BROWSING_KEYMAP = {
     "f2": "begin_rename",
     "ctrl+n": "begin_create_file",
     "ctrl+shift+n": "begin_create_dir",
+    "delete": "delete_targets",
     "right": "enter_or_open",
     "enter": "enter_or_open",
     "y": "copy_targets",
@@ -76,7 +80,7 @@ def dispatch_key_input(
         return _dispatch_filter_input(state, key=key, character=character)
 
     if state.ui_mode == "CONFIRM":
-        return _dispatch_confirm_input(key)
+        return _dispatch_confirm_input(state, key)
 
     if state.ui_mode == "BUSY":
         return _warn("Input ignored while processing")
@@ -140,6 +144,11 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
     if key == "ctrl+shift+n":
         return _supported(BeginCreateInput("dir"))
 
+    if key == "delete":
+        if not target_paths:
+            return _warn("Nothing to delete")
+        return _supported(BeginDeleteTargets(target_paths))
+
     if key in {"right", "enter"}:
         if cursor_entry is not None and cursor_entry.kind == "dir":
             return _supported(EnterCursorDirectory())
@@ -173,7 +182,14 @@ def _dispatch_filter_input(
     return _warn("This key is unavailable while editing the filter")
 
 
-def _dispatch_confirm_input(key: str) -> DispatchedActions:
+def _dispatch_confirm_input(state: AppState, key: str) -> DispatchedActions:
+    if state.delete_confirmation is not None:
+        if key == "escape":
+            return _supported(CancelDeleteConfirmation())
+        if key == "enter":
+            return _supported(ConfirmDeleteTargets())
+        return _warn("Use Enter to confirm delete or Esc to cancel")
+
     if key == "escape":
         return _supported(CancelPasteConflict())
 
