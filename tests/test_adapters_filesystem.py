@@ -28,3 +28,16 @@ def test_local_filesystem_adapter_lists_entries_with_metadata(tmp_path) -> None:
 
     assert readme_entry.kind == "file"
     assert readme_entry.size_bytes == len("plain\n")
+
+
+def test_local_filesystem_adapter_skips_broken_symlink_entries(tmp_path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    broken = tmp_path / "broken-link"
+    broken.symlink_to(tmp_path / "missing-target")
+
+    adapter = LocalFilesystemAdapter()
+
+    entries = adapter.list_directory(str(tmp_path))
+
+    assert [entry.name for entry in entries] == ["docs"]

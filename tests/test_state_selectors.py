@@ -10,6 +10,7 @@ from plain.state import (
     reduce_app_state,
     select_child_entries,
     select_current_entries,
+    select_shell_data,
     select_status_bar_state,
 )
 
@@ -47,6 +48,15 @@ def test_select_child_entries_is_empty_when_cursor_is_file() -> None:
     state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/plain/README.md"))
 
     assert select_child_entries(state) == ()
+
+
+def test_select_shell_data_exposes_visible_cursor_index() -> None:
+    state = build_initial_app_state()
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/plain/tests"))
+
+    shell = select_shell_data(state)
+
+    assert shell.current_cursor_index == 2
 
 
 def test_select_status_bar_keeps_existing_format() -> None:

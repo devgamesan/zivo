@@ -6,14 +6,17 @@ from .actions import (
     CancelFilterInput,
     ClearSelection,
     ConfirmFilterInput,
+    EnterCursorDirectory,
+    GoToParentDirectory,
     MoveCursor,
+    ReloadDirectory,
     SetFilterQuery,
     SetFilterRecursive,
     SetNotification,
     SetUiMode,
     ToggleSelectionAndAdvance,
 )
-from .models import AppState, NotificationState
+from .models import AppState, DirectoryEntryState, NotificationState
 from .selectors import select_visible_current_entry_states
 
 DispatchedActions = tuple[Action, ...]
@@ -44,6 +47,7 @@ def dispatch_key_input(
 
 def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
     visible_paths = _visible_paths(state)
+    cursor_entry = _current_entry(state)
 
     if key == "up":
         return _supported(MoveCursor(delta=-1, visible_paths=visible_paths))
@@ -65,8 +69,16 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
     if key == "ctrl+f":
         return _supported(BeginFilterInput())
 
-    if key in {"left", "right", "enter", "backspace"}:
-        return _warn("ディレクトリ移動とオープン操作は未実装です")
+    if key in {"left", "backspace", "ctrl+h"}:
+        return _supported(GoToParentDirectory())
+
+    if key == "f5":
+        return _supported(ReloadDirectory())
+
+    if key in {"right", "enter"}:
+        if cursor_entry is not None and cursor_entry.kind == "dir":
+            return _supported(EnterCursorDirectory())
+        return _warn("ファイルオープンは未実装です")
 
     return ()
 
@@ -119,6 +131,14 @@ def _dispatch_unwired_input_mode(mode: str, key: str) -> DispatchedActions:
 
 def _visible_paths(state: AppState) -> tuple[str, ...]:
     return tuple(entry.path for entry in select_visible_current_entry_states(state))
+
+
+def _current_entry(state: AppState) -> DirectoryEntryState | None:
+    cursor_path = state.current_pane.cursor_path
+    for entry in state.current_pane.entries:
+        if entry.path == cursor_path:
+            return entry
+    return None
 
 
 def _supported(*actions: Action) -> DispatchedActions:

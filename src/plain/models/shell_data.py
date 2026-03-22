@@ -42,6 +42,7 @@ class ThreePaneShellData:
     parent_entries: tuple[PaneEntry, ...]
     current_entries: tuple[PaneEntry, ...]
     child_entries: tuple[PaneEntry, ...]
+    current_cursor_index: int | None
     status: StatusBarState
 
 
@@ -67,6 +68,7 @@ def build_dummy_shell_data() -> ThreePaneShellData:
             PaneEntry("notes.md", "file"),
             PaneEntry("wireframes", "dir"),
         ),
+        current_cursor_index=0,
         status=StatusBarState(
             path="/home/tadashi/develop/plain",
             item_count=len(current_entries),

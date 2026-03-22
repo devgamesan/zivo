@@ -8,9 +8,13 @@ from plain.state import (
     ChildPaneSnapshotLoaded,
     ClearSelection,
     ConfirmFilterInput,
+    EnterCursorDirectory,
+    GoToParentDirectory,
+    LoadBrowserSnapshotEffect,
     LoadChildPaneSnapshotEffect,
     MoveCursor,
     NotificationState,
+    ReloadDirectory,
     RequestBrowserSnapshot,
     SetCursorPath,
     SetFilterQuery,
@@ -93,6 +97,86 @@ def test_set_cursor_path_ignores_unknown_path() -> None:
     next_state = _reduce_state(state, SetCursorPath("/missing"))
 
     assert next_state == state
+
+
+def test_enter_cursor_directory_requests_blocking_snapshot() -> None:
+    state = build_initial_app_state()
+
+    result = reduce_app_state(state, EnterCursorDirectory())
+
+    assert result.state.pending_browser_snapshot_request_id == 1
+    assert result.state.ui_mode == "BUSY"
+    assert result.effects == (
+        LoadBrowserSnapshotEffect(
+            request_id=1,
+            path="/home/tadashi/develop/plain/docs",
+            cursor_path=None,
+            blocking=True,
+        ),
+    )
+
+
+def test_go_to_parent_directory_restores_cursor_to_previous_child() -> None:
+    state = build_initial_app_state()
+
+    result = reduce_app_state(state, GoToParentDirectory())
+
+    assert result.state.pending_browser_snapshot_request_id == 1
+    assert result.state.ui_mode == "BUSY"
+    assert len(result.effects) == 1
+    assert result.effects[0].path == "/home/tadashi/develop"
+    assert result.effects[0].cursor_path == "/home/tadashi/develop/plain"
+    assert result.effects[0].blocking is True
+
+
+def test_go_to_parent_directory_uses_current_path_parent() -> None:
+    state = build_initial_app_state()
+    state = _reduce_state(
+        state,
+        BrowserSnapshotLoaded(
+            request_id=99,
+            snapshot=BrowserSnapshot(
+                current_path="/tmp/work/project",
+                parent_pane=state.parent_pane,
+                current_pane=state.current_pane,
+                child_pane=state.child_pane,
+            ),
+        ),
+    )
+    state = _reduce_state(state, RequestBrowserSnapshot("/tmp/work/project"))
+    state = _reduce_state(
+        state,
+        BrowserSnapshotLoaded(
+            request_id=1,
+            snapshot=BrowserSnapshot(
+                current_path="/tmp/work/project",
+                parent_pane=state.parent_pane,
+                current_pane=state.current_pane,
+                child_pane=state.child_pane,
+            ),
+            blocking=True,
+        ),
+    )
+
+    result = reduce_app_state(state, GoToParentDirectory())
+
+    assert len(result.effects) == 1
+    assert result.effects[0].path == "/tmp/work"
+    assert result.effects[0].cursor_path == "/tmp/work/project"
+
+
+def test_reload_directory_requests_snapshot_with_current_cursor() -> None:
+    state = build_initial_app_state()
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/plain/src"))
+
+    result = reduce_app_state(state, ReloadDirectory())
+
+    assert result.state.pending_browser_snapshot_request_id == 2
+    assert result.state.ui_mode == "BUSY"
+    assert len(result.effects) == 1
+    assert result.effects[0].path == "/home/tadashi/develop/plain"
+    assert result.effects[0].cursor_path == "/home/tadashi/develop/plain/src"
+    assert result.effects[0].blocking is True
 
 
 def test_begin_filter_input_switches_mode_without_mutating_query() -> None:

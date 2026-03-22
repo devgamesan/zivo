@@ -68,6 +68,7 @@ class MainPane(Vertical):
         self,
         title: str,
         entries: Sequence[PaneEntry],
+        cursor_index: int | None = None,
         *,
         id: str | None = None,
         classes: str | None = None,
@@ -75,6 +76,7 @@ class MainPane(Vertical):
         super().__init__(id=id, classes=classes)
         self._title = title
         self._entries = tuple(entries)
+        self._cursor_index = cursor_index
 
     @property
     def table_id(self) -> str | None:
@@ -89,18 +91,24 @@ class MainPane(Vertical):
         """Populate the table after the widget is attached to an app."""
         table = self.query_one(DataTable)
         table.cursor_type = "row"
+        table.show_cursor = True
         table.zebra_stripes = True
         table.add_columns(*self.COLUMN_LABELS)
-        self.set_entries(self._entries)
+        self.set_entries(self._entries, self._cursor_index)
 
-    def set_entries(self, entries: Sequence[PaneEntry]) -> None:
+    def set_entries(
+        self,
+        entries: Sequence[PaneEntry],
+        cursor_index: int | None = None,
+    ) -> None:
         """Replace the rendered rows without remounting the pane."""
 
         next_entries = tuple(entries)
-        if next_entries == self._entries:
+        if next_entries == self._entries and cursor_index == self._cursor_index:
             return
 
         self._entries = next_entries
+        self._cursor_index = cursor_index
         table = self.query_one(DataTable)
         table.clear()
         for entry in self._entries:
@@ -110,3 +118,10 @@ class MainPane(Vertical):
                 entry.size_label,
                 entry.modified_label,
             )
+        self._sync_cursor(table)
+
+    def _sync_cursor(self, table: DataTable) -> None:
+        if not self._entries or self._cursor_index is None:
+            return
+        clamped_index = max(0, min(len(self._entries) - 1, self._cursor_index))
+        table.move_cursor(row=clamped_index, animate=False, scroll=True)

@@ -82,6 +82,19 @@ async def _wait_for_row_count(app, expected_count: int, timeout: float = 0.5) ->
         await asyncio.sleep(0.01)
 
 
+async def _wait_for_path(app, expected_path: str, timeout: float = 0.5) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
+        if (
+            app.app_state.current_path == expected_path
+            and app.app_state.pending_browser_snapshot_request_id is None
+        ):
+            return
+        if asyncio.get_running_loop().time() >= deadline:
+            raise AssertionError(f"path did not become {expected_path}")
+        await asyncio.sleep(0.01)
+
+
 def test_create_app_returns_plain_app() -> None:
     app = create_app()
 
@@ -232,6 +245,217 @@ async def test_app_keyboard_input_updates_selection_and_child_pane() -> None:
         assert str(status_bar.renderable) == (
             f"{path} | 3 items | 1 selected | sort: name asc | filter: none"
         )
+
+
+@pytest.mark.asyncio
+async def test_app_right_enters_directory_and_backspace_returns_to_parent() -> None:
+    root = "/tmp/plain-nav"
+    docs = f"{root}/docs"
+    root_entries = (
+        DirectoryEntryState(docs, "docs", "dir"),
+        DirectoryEntryState(f"{root}/README.md", "README.md", "file", size_bytes=120),
+    )
+    docs_entries = (
+        DirectoryEntryState(f"{docs}/guide.md", "guide.md", "file", size_bytes=42),
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            root: _build_snapshot(
+                root,
+                root_entries,
+                child_path=docs,
+                child_entries=docs_entries,
+            ),
+            docs: BrowserSnapshot(
+                current_path=docs,
+                parent_pane=PaneState(
+                    directory_path=root,
+                    entries=root_entries,
+                    cursor_path=docs,
+                ),
+                current_pane=PaneState(
+                    directory_path=docs,
+                    entries=docs_entries,
+                    cursor_path=f"{docs}/guide.md",
+                ),
+                child_pane=PaneState(directory_path=docs, entries=()),
+            ),
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=root)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, root)
+        await pilot.press("right")
+        await _wait_for_path(app, docs)
+
+        current_table = app.query_one("#current-pane-table", DataTable)
+        assert app.app_state.current_path == docs
+        assert current_table.cursor_row == 0
+
+        await pilot.press("backspace")
+        await _wait_for_path(app, root)
+
+        assert app.app_state.current_path == root
+        assert app.app_state.current_pane.cursor_path == docs
+        assert current_table.cursor_row == 0
+
+
+@pytest.mark.asyncio
+async def test_app_backspace_can_move_above_initial_directory() -> None:
+    initial_path = "/tmp/plain-nav/deeper"
+    parent_path = "/tmp/plain-nav"
+    grandparent_path = "/tmp"
+    parent_entries = (
+        DirectoryEntryState(initial_path, "deeper", "dir"),
+        DirectoryEntryState(f"{parent_path}/sibling", "sibling", "dir"),
+    )
+    grandparent_entries = (
+        DirectoryEntryState(parent_path, "plain-nav", "dir"),
+        DirectoryEntryState("/tmp/other", "other", "dir"),
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            initial_path: BrowserSnapshot(
+                current_path=initial_path,
+                parent_pane=PaneState(
+                    directory_path=parent_path,
+                    entries=parent_entries,
+                    cursor_path=initial_path,
+                ),
+                current_pane=PaneState(
+                    directory_path=initial_path,
+                    entries=(DirectoryEntryState(f"{initial_path}/file.txt", "file.txt", "file"),),
+                    cursor_path=f"{initial_path}/file.txt",
+                ),
+                child_pane=PaneState(directory_path=initial_path, entries=()),
+            ),
+            parent_path: BrowserSnapshot(
+                current_path=parent_path,
+                parent_pane=PaneState(
+                    directory_path=grandparent_path,
+                    entries=grandparent_entries,
+                    cursor_path=parent_path,
+                ),
+                current_pane=PaneState(
+                    directory_path=parent_path,
+                    entries=parent_entries,
+                    cursor_path=initial_path,
+                ),
+                child_pane=PaneState(directory_path=initial_path, entries=()),
+            ),
+            grandparent_path: BrowserSnapshot(
+                current_path=grandparent_path,
+                parent_pane=PaneState(
+                    directory_path="/",
+                    entries=(DirectoryEntryState("/tmp", "tmp", "dir"),),
+                    cursor_path=grandparent_path,
+                ),
+                current_pane=PaneState(
+                    directory_path=grandparent_path,
+                    entries=grandparent_entries,
+                    cursor_path=parent_path,
+                ),
+                child_pane=PaneState(directory_path=parent_path, entries=()),
+            ),
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=initial_path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, initial_path)
+        await pilot.press("backspace")
+        await _wait_for_path(app, parent_path)
+        await pilot.press("left")
+        await _wait_for_path(app, grandparent_path)
+
+        assert app.app_state.current_pane.cursor_path == parent_path
+
+
+@pytest.mark.asyncio
+async def test_app_f5_keeps_cursor_when_entry_still_exists() -> None:
+    path = "/tmp/plain-reload"
+    initial_entries = (
+        DirectoryEntryState(f"{path}/docs", "docs", "dir"),
+        DirectoryEntryState(f"{path}/src", "src", "dir"),
+    )
+    reloaded_entries = (
+        DirectoryEntryState(f"{path}/docs", "docs", "dir"),
+        DirectoryEntryState(f"{path}/src", "src", "dir"),
+        DirectoryEntryState(f"{path}/tests", "tests", "dir"),
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                initial_entries,
+                child_path=f"{path}/docs",
+                child_entries=(DirectoryEntryState(f"{path}/docs/spec.md", "spec.md", "file"),),
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("down")
+        await asyncio.sleep(0.05)
+
+        loader.snapshots[path] = _build_snapshot(
+            path,
+            reloaded_entries,
+            child_path=f"{path}/src",
+            child_entries=(DirectoryEntryState(f"{path}/src/main.py", "main.py", "file"),),
+        )
+
+        await pilot.press("f5")
+        await _wait_for_snapshot_loaded(app, path)
+
+        current_table = app.query_one("#current-pane-table", DataTable)
+        assert app.app_state.current_pane.cursor_path == f"{path}/src"
+        assert current_table.cursor_row == 1
+
+
+@pytest.mark.asyncio
+async def test_app_f5_falls_back_to_first_row_when_cursor_disappears() -> None:
+    path = "/tmp/plain-reload-fallback"
+    initial_entries = (
+        DirectoryEntryState(f"{path}/docs", "docs", "dir"),
+        DirectoryEntryState(f"{path}/src", "src", "dir"),
+    )
+    reloaded_entries = (
+        DirectoryEntryState(f"{path}/docs", "docs", "dir"),
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                initial_entries,
+                child_path=f"{path}/docs",
+                child_entries=(DirectoryEntryState(f"{path}/docs/spec.md", "spec.md", "file"),),
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("down")
+        await asyncio.sleep(0.05)
+
+        loader.snapshots[path] = _build_snapshot(
+            path,
+            reloaded_entries,
+            child_path=f"{path}/docs",
+            child_entries=(DirectoryEntryState(f"{path}/docs/spec.md", "spec.md", "file"),),
+        )
+
+        await pilot.press("f5")
+        await _wait_for_snapshot_loaded(app, path)
+
+        current_table = app.query_one("#current-pane-table", DataTable)
+        assert app.app_state.current_pane.cursor_path == f"{path}/docs"
+        assert current_table.cursor_row == 0
 
 
 @pytest.mark.asyncio

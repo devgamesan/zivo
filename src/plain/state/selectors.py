@@ -8,10 +8,15 @@ from .models import AppState, DirectoryEntryState, SortState
 def select_shell_data(state: AppState) -> ThreePaneShellData:
     """Build the display shell data consumed by the UI layer."""
 
+    current_entries = select_visible_current_entry_states(state)
     return ThreePaneShellData(
         parent_entries=select_parent_entries(state),
-        current_entries=select_current_entries(state),
+        current_entries=tuple(_to_pane_entry(entry) for entry in current_entries),
         child_entries=select_child_entries(state),
+        current_cursor_index=_find_current_cursor_index(
+            current_entries,
+            state.current_pane.cursor_path,
+        ),
         status=select_status_bar_state(state),
     )
 
@@ -141,6 +146,18 @@ def _to_pane_entry(entry: DirectoryEntryState) -> PaneEntry:
         size_label=_format_size_label(entry.size_bytes),
         modified_label=_format_modified_label(entry),
     )
+
+
+def _find_current_cursor_index(
+    entries: tuple[DirectoryEntryState, ...],
+    cursor_path: str | None,
+) -> int | None:
+    if cursor_path is None:
+        return None
+    for index, entry in enumerate(entries):
+        if entry.path == cursor_path:
+            return index
+    return None
 
 
 def _format_size_label(size_bytes: int | None) -> str:

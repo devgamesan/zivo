@@ -57,6 +57,21 @@ class SetCursorPath:
 
 
 @dataclass(frozen=True)
+class EnterCursorDirectory:
+    """Navigate into the directory currently under the cursor."""
+
+
+@dataclass(frozen=True)
+class GoToParentDirectory:
+    """Navigate to the parent directory of the current path."""
+
+
+@dataclass(frozen=True)
+class ReloadDirectory:
+    """Reload the current directory snapshot."""
+
+
+@dataclass(frozen=True)
 class ToggleSelection:
     """Toggle selection for an entry in the current pane."""
 
@@ -158,6 +173,9 @@ Action = (
     | CancelFilterInput
     | MoveCursor
     | SetCursorPath
+    | EnterCursorDirectory
+    | GoToParentDirectory
+    | ReloadDirectory
     | ToggleSelection
     | ToggleSelectionAndAdvance
     | ClearSelection

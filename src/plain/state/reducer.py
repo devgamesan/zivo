@@ -1,6 +1,7 @@
 """Pure reducer for AppState transitions."""
 
 from dataclasses import replace
+from pathlib import Path
 
 from .actions import (
     Action,
@@ -12,8 +13,11 @@ from .actions import (
     ChildPaneSnapshotLoaded,
     ClearSelection,
     ConfirmFilterInput,
+    EnterCursorDirectory,
+    GoToParentDirectory,
     InitializeState,
     MoveCursor,
+    ReloadDirectory,
     RequestBrowserSnapshot,
     SetCursorPath,
     SetFilterQuery,
@@ -78,6 +82,36 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             notification=None,
         )
         return _sync_child_pane(next_state, action.path)
+
+    if isinstance(action, EnterCursorDirectory):
+        entry = _current_entry_for_path(state, state.current_pane.cursor_path)
+        if entry is None or entry.kind != "dir":
+            return done(state)
+        return reduce_app_state(
+            state,
+            RequestBrowserSnapshot(entry.path, blocking=True),
+        )
+
+    if isinstance(action, GoToParentDirectory):
+        parent_path = str(Path(state.current_path).parent)
+        return reduce_app_state(
+            state,
+            RequestBrowserSnapshot(
+                parent_path,
+                cursor_path=state.current_path,
+                blocking=True,
+            ),
+        )
+
+    if isinstance(action, ReloadDirectory):
+        return reduce_app_state(
+            state,
+            RequestBrowserSnapshot(
+                state.current_path,
+                cursor_path=state.current_pane.cursor_path,
+                blocking=True,
+            ),
+        )
 
     if isinstance(action, ToggleSelection):
         if action.path not in _current_entry_paths(state):

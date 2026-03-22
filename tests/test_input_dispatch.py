@@ -5,8 +5,11 @@ from plain.state import (
     CancelFilterInput,
     ClearSelection,
     ConfirmFilterInput,
+    EnterCursorDirectory,
+    GoToParentDirectory,
     MoveCursor,
     NotificationState,
+    ReloadDirectory,
     SetFilterQuery,
     SetFilterRecursive,
     SetNotification,
@@ -67,6 +70,55 @@ def test_browsing_ctrl_f_enters_filter_mode() -> None:
     actions = dispatch_key_input(state, key="ctrl+f")
 
     assert actions == (SetNotification(None), BeginFilterInput())
+
+
+def test_browsing_right_enters_directory() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="right")
+
+    assert actions == (SetNotification(None), EnterCursorDirectory())
+
+
+def test_browsing_enter_on_file_shows_warning() -> None:
+    state = build_initial_app_state()
+    state = replace(
+        state,
+        current_pane=replace(
+            state.current_pane,
+            cursor_path="/home/tadashi/develop/plain/README.md",
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="enter")
+
+    assert actions == (
+        SetNotification(NotificationState(level="warning", message="ファイルオープンは未実装です")),
+    )
+
+
+def test_browsing_backspace_goes_to_parent_directory() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="backspace")
+
+    assert actions == (SetNotification(None), GoToParentDirectory())
+
+
+def test_browsing_ctrl_h_goes_to_parent_directory() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="ctrl+h")
+
+    assert actions == (SetNotification(None), GoToParentDirectory())
+
+
+def test_browsing_f5_reloads_current_directory() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="f5")
+
+    assert actions == (SetNotification(None), ReloadDirectory())
 
 
 def test_filter_character_dispatches_query_update() -> None:

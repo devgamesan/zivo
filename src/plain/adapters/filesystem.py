@@ -20,13 +20,21 @@ class LocalFilesystemAdapter:
 
     def list_directory(self, path: str) -> tuple[DirectoryEntryState, ...]:
         directory = Path(path).expanduser().resolve()
-        entries = [_build_directory_entry(child) for child in directory.iterdir()]
+        entries: list[DirectoryEntryState] = []
+        for child in directory.iterdir():
+            entry = _build_directory_entry(child)
+            if entry is not None:
+                entries.append(entry)
         entries.sort(key=lambda entry: (entry.kind != "dir", entry.name.casefold()))
         return tuple(entries)
 
 
-def _build_directory_entry(path: Path) -> DirectoryEntryState:
-    stat_result = path.stat()
+def _build_directory_entry(path: Path) -> DirectoryEntryState | None:
+    try:
+        stat_result = path.stat()
+    except FileNotFoundError:
+        # Skip broken symlinks or entries removed during iteration.
+        return None
     kind = "dir" if path.is_dir() else "file"
     return DirectoryEntryState(
         path=str(path),

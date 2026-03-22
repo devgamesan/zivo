@@ -6,6 +6,7 @@ from pathlib import Path
 
 from textual import events
 from textual.app import App, ComposeResult
+from textual.binding import Binding
 from textual.containers import Horizontal
 from textual.css.query import NoMatches
 from textual.worker import Worker, WorkerState
@@ -37,6 +38,19 @@ class PlainApp(App[None]):
 
     TITLE = "Plain"
     SUB_TITLE = "Three-pane shell"
+    BINDINGS = [
+        Binding("up", "dispatch_bound_key('up')", show=False, priority=True),
+        Binding("down", "dispatch_bound_key('down')", show=False, priority=True),
+        Binding("left", "dispatch_bound_key('left')", show=False, priority=True),
+        Binding("right", "dispatch_bound_key('right')", show=False, priority=True),
+        Binding("enter", "dispatch_bound_key('enter')", show=False, priority=True),
+        Binding("backspace", "dispatch_bound_key('backspace')", show=False, priority=True),
+        Binding("ctrl+h", "dispatch_bound_key('ctrl+h')", show=False, priority=True),
+        Binding("space", "dispatch_bound_key('space')", show=False, priority=True),
+        Binding("escape", "dispatch_bound_key('escape')", show=False, priority=True),
+        Binding("ctrl+f", "dispatch_bound_key('ctrl+f')", show=False, priority=True),
+        Binding("f5", "dispatch_bound_key('f5')", show=False, priority=True),
+    ]
     CSS = """
     Screen {
         layout: vertical;
@@ -119,18 +133,15 @@ class PlainApp(App[None]):
     async def on_key(self, event: events.Key) -> None:
         """Normalize keyboard input into reducer actions."""
 
-        actions = dispatch_key_input(
-            self._app_state,
-            key=event.key,
-            character=event.character,
-        )
-        if not actions:
-            return
+        handled = await self._dispatch_key_press(event.key, character=event.character)
+        if handled:
+            event.stop()
+            event.prevent_default()
 
-        event.stop()
-        event.prevent_default()
+    async def action_dispatch_bound_key(self, key: str) -> None:
+        """Handle priority key bindings through the central dispatcher."""
 
-        await self.dispatch_actions(actions)
+        await self._dispatch_key_press(key)
 
     def _build_body(self, shell: ThreePaneShellData) -> Horizontal:
         return Horizontal(
@@ -143,6 +154,7 @@ class PlainApp(App[None]):
             MainPane(
                 "カレントディレクトリ",
                 shell.current_entries,
+                cursor_index=shell.current_cursor_index,
                 id="current-pane",
                 classes="pane main-pane",
             ),
@@ -154,6 +166,22 @@ class PlainApp(App[None]):
             ),
             id="body",
         )
+
+    async def _dispatch_key_press(
+        self,
+        key: str,
+        *,
+        character: str | None = None,
+    ) -> bool:
+        actions = dispatch_key_input(
+            self._app_state,
+            key=key,
+            character=character,
+        )
+        if not actions:
+            return False
+        await self.dispatch_actions(actions)
+        return True
 
     async def dispatch_actions(self, actions: Sequence[Action]) -> None:
         """Apply reducer actions, refresh the UI, and schedule any effects."""
@@ -299,7 +327,7 @@ class PlainApp(App[None]):
             return
 
         await parent_pane.set_entries(shell.parent_entries)
-        current_pane.set_entries(shell.current_entries)
+        current_pane.set_entries(shell.current_entries, shell.current_cursor_index)
         await child_pane.set_entries(shell.child_entries)
         status_bar.set_state(shell.status)
 

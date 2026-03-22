@@ -115,7 +115,7 @@ class FakeBrowserSnapshotLoader:
 
         snapshot = self.snapshots.get(path)
         if snapshot is not None:
-            return snapshot
+            return self._resolve_snapshot(snapshot, cursor_path)
 
         return _build_fallback_snapshot(path, cursor_path)
 
@@ -137,6 +137,29 @@ class FakeBrowserSnapshotLoader:
             return pane
 
         return PaneState(directory_path=current_path, entries=())
+
+    def _resolve_snapshot(
+        self,
+        snapshot: BrowserSnapshot,
+        cursor_path: str | None,
+    ) -> BrowserSnapshot:
+        if cursor_path is None or not _contains_path(snapshot.current_pane.entries, cursor_path):
+            return snapshot
+
+        current_pane = replace(snapshot.current_pane, cursor_path=cursor_path)
+        child_pane = snapshot.child_pane
+        if (snapshot.current_path, cursor_path) in self.child_panes:
+            child_pane = self.child_panes[(snapshot.current_path, cursor_path)]
+        elif child_pane.directory_path != cursor_path:
+            cursor_entry = next(
+                entry for entry in snapshot.current_pane.entries if entry.path == cursor_path
+            )
+            if cursor_entry.kind == "dir":
+                child_pane = PaneState(directory_path=cursor_path, entries=())
+            else:
+                child_pane = PaneState(directory_path=snapshot.current_path, entries=())
+
+        return replace(snapshot, current_pane=current_pane, child_pane=child_pane)
 
 
 def snapshot_from_app_state(state: AppState) -> BrowserSnapshot:

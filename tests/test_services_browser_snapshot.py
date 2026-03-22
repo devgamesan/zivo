@@ -2,8 +2,8 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from plain.services import LiveBrowserSnapshotLoader
-from plain.state import DirectoryEntryState
+from plain.services import FakeBrowserSnapshotLoader, LiveBrowserSnapshotLoader
+from plain.state import BrowserSnapshot, DirectoryEntryState, PaneState
 
 
 @dataclass
@@ -87,3 +87,31 @@ def test_live_browser_snapshot_loader_normalizes_permission_error() -> None:
 
     with pytest.raises(OSError, match="アクセスできません: /secret"):
         loader.load_browser_snapshot("/secret")
+
+
+def test_fake_browser_snapshot_loader_prefers_requested_cursor_path() -> None:
+    path = "/tmp/plain"
+    docs = f"{path}/docs"
+    src = f"{path}/src"
+    snapshot = BrowserSnapshot(
+        current_path=path,
+        parent_pane=PaneState(directory_path="/tmp", entries=()),
+        current_pane=PaneState(
+            directory_path=path,
+            entries=(
+                DirectoryEntryState(docs, "docs", "dir"),
+                DirectoryEntryState(src, "src", "dir"),
+            ),
+            cursor_path=docs,
+        ),
+        child_pane=PaneState(directory_path=docs, entries=()),
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={path: snapshot},
+        child_panes={(path, src): PaneState(directory_path=src, entries=())},
+    )
+
+    resolved = loader.load_browser_snapshot(path, cursor_path=src)
+
+    assert resolved.current_pane.cursor_path == src
+    assert resolved.child_pane.directory_path == src

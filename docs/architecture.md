@@ -155,7 +155,7 @@ stateDiagram-v2
 補足:
 
 - `BROWSING`
-  - `Up`, `Down`, `Space`, `Esc`, `Ctrl+F` を処理
+  - `Up`, `Down`, `Left`, `Right`, `Enter`, `Backspace`, `F5`, `Space`, `Esc`, `Ctrl+F` を処理
 - `FILTER`
   - 文字入力、`Backspace`, `Space`, `Enter`, `Esc` を処理
 - `CONFIRM`, `BUSY`
@@ -169,6 +169,7 @@ stateDiagram-v2
 
 - `CWD` を起点に実ファイルシステムの 3 ペイン UI を起動
 - 可視行のカーソル移動
+- 親/子ディレクトリへの移動と再読み込み
 - 選択トグルと全解除
 - フィルタ入力と再帰フラグ切り替え
 - モード別キー解釈
@@ -177,7 +178,6 @@ stateDiagram-v2
 
 ### まだできないこと
 
-- 実ディレクトリ移動
 - ファイル open / copy / cut / paste / rename / delete / create
 - 履歴移動や sort 切り替えの UI 操作
 
