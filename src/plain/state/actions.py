@@ -2,7 +2,14 @@
 
 from dataclasses import dataclass
 
-from .models import AppState, BrowserSnapshot, NotificationState, SortField, UiMode
+from .models import (
+    AppState,
+    BrowserSnapshot,
+    NotificationState,
+    PaneState,
+    SortField,
+    UiMode,
+)
 
 
 @dataclass(frozen=True)
@@ -127,6 +134,22 @@ class BrowserSnapshotFailed:
     blocking: bool = False
 
 
+@dataclass(frozen=True)
+class ChildPaneSnapshotLoaded:
+    """Apply a loaded child-pane snapshot to reducer state."""
+
+    request_id: int
+    pane: PaneState
+
+
+@dataclass(frozen=True)
+class ChildPaneSnapshotFailed:
+    """Apply an error raised while loading the child pane."""
+
+    request_id: int
+    message: str
+
+
 Action = (
     InitializeState
     | SetUiMode
@@ -145,4 +168,6 @@ Action = (
     | RequestBrowserSnapshot
     | BrowserSnapshotLoaded
     | BrowserSnapshotFailed
+    | ChildPaneSnapshotLoaded
+    | ChildPaneSnapshotFailed
 )

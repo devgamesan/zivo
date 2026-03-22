@@ -15,7 +15,16 @@ class LoadBrowserSnapshotEffect:
     blocking: bool = False
 
 
-Effect = LoadBrowserSnapshotEffect
+@dataclass(frozen=True)
+class LoadChildPaneSnapshotEffect:
+    """Request a child-pane load outside the reducer."""
+
+    request_id: int
+    current_path: str
+    cursor_path: str
+
+
+Effect = LoadBrowserSnapshotEffect | LoadChildPaneSnapshotEffect
 
 
 @dataclass(frozen=True)

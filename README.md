@@ -23,7 +23,7 @@ uv run plain
 uv run python -m plain
 ```
 
-現時点ではダミーデータ由来の `AppState` から selector を通して 3 ペイン + ステータスバーを描画します。状態更新は reducer に集約し、副作用や実ファイルシステム接続は後続 Issue で実装します。
+現在は起動時に `CWD` を実ファイルシステムから読み込み、親・中央・子の 3 ペインを非同期に初期化します。中央ペインは詳細表示、左右ペインは軽量表示で、カーソル移動時は必要なときだけ子ペインを再取得します。取得失敗はステータスバーの通知へ変換されます。
 
 実装構造の全体像は [docs/architecture.md](docs/architecture.md) にまとめています。
 
@@ -43,7 +43,7 @@ uv run python -m plain
 | `FILTER` | `Enter` | フィルタを確定して `BROWSING` に戻る |
 | `FILTER` | `Esc` | フィルタを解除して `BROWSING` に戻る |
 | `CONFIRM` | `Esc` | 確認モードを抜けて `BROWSING` に戻る |
-| `BUSY` | 任意 | 入力を無視し、ステータスバーへ `warning` 通知を表示 |
+| `BUSY` | 任意 | 入力を無視し、ステータスバーへ警告を表示 |
 
 `←` / `→` / `Enter` による実ディレクトリ移動やオープンは、Action の拡張ポイントを残しつつ後続 Issue で実装します。
 
@@ -70,8 +70,7 @@ tests/       スモークテスト
 
 - UI とロジックを分離する
 - 状態更新責務を一箇所に寄せる
-- reducer は `ReduceResult(state, effects)` を返し、副作用要求を純粋な effect 記述として扱う
 - キー入力は app 側で Action に正規化し、widget 側に分岐を持たせない
-- OS 依存処理やファイル操作は adapter/service 側へ隔離し、非同期実行は Textual worker で app へ戻す
-- 一時通知は `NotificationState` で管理し、現状はステータスバーへ描画する
-- まずはプレースホルダ起動、lint、test が安定して通る土台を優先する
+- OS 依存処理やファイル操作は adapter/service 側へ隔離する
+- 実ファイルシステムの読み込みは service / adapter 境界で扱い、UI から分離する
+- 子ペインはカーソル対象がディレクトリのときだけ更新し、不要な再取得を避ける

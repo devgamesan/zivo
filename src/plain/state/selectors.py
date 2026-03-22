@@ -43,15 +43,14 @@ def select_status_bar_state(state: AppState) -> StatusBarState:
     """Return a status bar model derived from app state."""
 
     visible_entries = select_visible_current_entry_states(state)
-    notification = state.notification
     return StatusBarState(
         path=state.current_path,
         item_count=len(visible_entries),
         selected_count=len(state.current_pane.selected_paths),
         sort_label=_format_sort_label(state.sort),
         filter_label=_format_filter_label(state),
-        message=notification.message if notification else None,
-        message_level=notification.level if notification else None,
+        message=state.notification.message if state.notification else None,
+        message_level=state.notification.level if state.notification else None,
     )
 
 

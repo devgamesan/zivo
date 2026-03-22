@@ -4,8 +4,12 @@ from plain.state import (
     BrowserSnapshotFailed,
     BrowserSnapshotLoaded,
     CancelFilterInput,
+    ChildPaneSnapshotFailed,
+    ChildPaneSnapshotLoaded,
     ClearSelection,
     ConfirmFilterInput,
+    LoadChildPaneSnapshotEffect,
+    MoveCursor,
     NotificationState,
     RequestBrowserSnapshot,
     SetCursorPath,
@@ -133,13 +137,21 @@ def test_toggle_selection_and_advance_moves_cursor_to_next_visible_entry() -> No
         "/home/tadashi/develop/plain/pyproject.toml",
     )
 
-    next_state = _reduce_state(
+    result = reduce_app_state(
         state,
         ToggleSelectionAndAdvance(path=current_path, visible_paths=visible_paths),
     )
 
-    assert next_state.current_pane.selected_paths == frozenset({current_path})
-    assert next_state.current_pane.cursor_path == "/home/tadashi/develop/plain/src"
+    assert result.state.current_pane.selected_paths == frozenset({current_path})
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/plain/src"
+    assert result.state.pending_child_pane_request_id == 1
+    assert result.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=1,
+            current_path="/home/tadashi/develop/plain",
+            cursor_path="/home/tadashi/develop/plain/src",
+        ),
+    )
 
 
 def test_request_browser_snapshot_returns_effect_and_updates_pending_request() -> None:
@@ -148,6 +160,7 @@ def test_request_browser_snapshot_returns_effect_and_updates_pending_request() -
     result = reduce_app_state(state, RequestBrowserSnapshot("/tmp/example"))
 
     assert result.state.pending_browser_snapshot_request_id == 1
+    assert result.state.pending_child_pane_request_id is None
     assert result.state.next_request_id == 2
     assert len(result.effects) == 1
     assert result.effects[0].path == "/tmp/example"
@@ -211,3 +224,79 @@ def test_browser_snapshot_failed_sets_error_notification() -> None:
         message="load failed",
     )
     assert next_state.pending_browser_snapshot_request_id is None
+
+
+def test_move_cursor_emits_child_snapshot_effect_only_when_target_changes() -> None:
+    state = build_initial_app_state()
+    visible_paths = (
+        "/home/tadashi/develop/plain/docs",
+        "/home/tadashi/develop/plain/src",
+        "/home/tadashi/develop/plain/tests",
+    )
+
+    result = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/plain/docs"))
+    assert result.effects == ()
+
+    moved = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/plain/src"))
+
+    assert moved.state.pending_child_pane_request_id == 1
+    assert moved.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=1,
+            current_path="/home/tadashi/develop/plain",
+            cursor_path="/home/tadashi/develop/plain/src",
+        ),
+    )
+
+    down = reduce_app_state(state, MoveCursor(delta=1, visible_paths=visible_paths))
+
+    assert down.state.current_pane.cursor_path == "/home/tadashi/develop/plain/src"
+    assert down.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=1,
+            current_path="/home/tadashi/develop/plain",
+            cursor_path="/home/tadashi/develop/plain/src",
+        ),
+    )
+
+
+def test_set_cursor_path_to_file_clears_child_pane_without_effect() -> None:
+    state = build_initial_app_state()
+
+    result = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/plain/README.md"))
+
+    assert result.state.child_pane.directory_path == "/home/tadashi/develop/plain"
+    assert result.state.child_pane.entries == ()
+    assert result.effects == ()
+
+
+def test_child_pane_snapshot_loaded_ignores_stale_request() -> None:
+    state = build_initial_app_state()
+    requested = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/plain/src")).state
+
+    next_state = _reduce_state(
+        requested,
+        ChildPaneSnapshotLoaded(
+            request_id=99,
+            pane=requested.child_pane,
+        ),
+    )
+
+    assert next_state == requested
+
+
+def test_child_pane_snapshot_failure_sets_error_and_clears_entries() -> None:
+    state = build_initial_app_state()
+    requested = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/plain/src")).state
+
+    next_state = _reduce_state(
+        requested,
+        ChildPaneSnapshotFailed(request_id=1, message="permission denied"),
+    )
+
+    assert next_state.child_pane.directory_path == "/home/tadashi/develop/plain"
+    assert next_state.child_pane.entries == ()
+    assert next_state.notification == NotificationState(
+        level="error",
+        message="permission denied",
+    )

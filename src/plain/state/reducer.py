@@ -8,6 +8,8 @@ from .actions import (
     BrowserSnapshotFailed,
     BrowserSnapshotLoaded,
     CancelFilterInput,
+    ChildPaneSnapshotFailed,
+    ChildPaneSnapshotLoaded,
     ClearSelection,
     ConfirmFilterInput,
     InitializeState,
@@ -22,14 +24,14 @@ from .actions import (
     ToggleSelection,
     ToggleSelectionAndAdvance,
 )
-from .effects import LoadBrowserSnapshotEffect, ReduceResult
-from .models import AppState, NotificationState
+from .effects import Effect, LoadBrowserSnapshotEffect, LoadChildPaneSnapshotEffect, ReduceResult
+from .models import AppState, DirectoryEntryState, NotificationState, PaneState
 
 
 def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
     """Return a new state after applying a reducer action."""
 
-    def done(next_state: AppState, *effects: LoadBrowserSnapshotEffect) -> ReduceResult:
+    def done(next_state: AppState, *effects: Effect) -> ReduceResult:
         return ReduceResult(state=next_state, effects=effects)
 
     if isinstance(action, InitializeState):
@@ -60,22 +62,22 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             action.visible_paths,
             action.delta,
         )
-        return done(
-            replace(
-                state,
-                current_pane=replace(state.current_pane, cursor_path=cursor_path),
-            )
+        next_state = replace(
+            state,
+            current_pane=replace(state.current_pane, cursor_path=cursor_path),
+            notification=None,
         )
+        return _sync_child_pane(next_state, cursor_path)
 
     if isinstance(action, SetCursorPath):
         if action.path is not None and action.path not in _current_entry_paths(state):
             return done(state)
-        return done(
-            replace(
-                state,
-                current_pane=replace(state.current_pane, cursor_path=action.path),
-            )
+        next_state = replace(
+            state,
+            current_pane=replace(state.current_pane, cursor_path=action.path),
+            notification=None,
         )
+        return _sync_child_pane(next_state, action.path)
 
     if isinstance(action, ToggleSelection):
         if action.path not in _current_entry_paths(state):
@@ -104,16 +106,16 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
         else:
             selected_paths.add(action.path)
         cursor_path = _move_cursor(action.path, action.visible_paths, 1)
-        return done(
-            replace(
-                state,
-                current_pane=replace(
-                    state.current_pane,
-                    cursor_path=cursor_path,
-                    selected_paths=frozenset(selected_paths),
-                ),
-            )
+        next_state = replace(
+            state,
+            current_pane=replace(
+                state.current_pane,
+                cursor_path=cursor_path,
+                selected_paths=frozenset(selected_paths),
+            ),
+            notification=None,
         )
+        return _sync_child_pane(next_state, cursor_path)
 
     if isinstance(action, ClearSelection):
         return done(
@@ -165,6 +167,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             state,
             notification=None,
             pending_browser_snapshot_request_id=request_id,
+            pending_child_pane_request_id=None,
             next_request_id=request_id + 1,
             ui_mode="BUSY" if action.blocking else state.ui_mode,
         )
@@ -181,30 +184,56 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
     if isinstance(action, BrowserSnapshotLoaded):
         if action.request_id != state.pending_browser_snapshot_request_id:
             return done(state)
-
-        next_state = replace(
-            state,
-            current_path=action.snapshot.current_path,
-            parent_pane=action.snapshot.parent_pane,
-            current_pane=action.snapshot.current_pane,
-            child_pane=action.snapshot.child_pane,
-            notification=None,
-            pending_browser_snapshot_request_id=None,
-            ui_mode="BROWSING" if action.blocking else state.ui_mode,
+        return done(
+            replace(
+                state,
+                current_path=action.snapshot.current_path,
+                parent_pane=action.snapshot.parent_pane,
+                current_pane=action.snapshot.current_pane,
+                child_pane=action.snapshot.child_pane,
+                notification=None,
+                pending_browser_snapshot_request_id=None,
+                pending_child_pane_request_id=None,
+                ui_mode="BROWSING" if action.blocking else state.ui_mode,
+            )
         )
-        return done(next_state)
 
     if isinstance(action, BrowserSnapshotFailed):
         if action.request_id != state.pending_browser_snapshot_request_id:
             return done(state)
-
-        next_state = replace(
-            state,
-            notification=NotificationState(level="error", message=action.message),
-            pending_browser_snapshot_request_id=None,
-            ui_mode="BROWSING" if action.blocking else state.ui_mode,
+        return done(
+            replace(
+                state,
+                notification=NotificationState(level="error", message=action.message),
+                pending_browser_snapshot_request_id=None,
+                pending_child_pane_request_id=None,
+                ui_mode="BROWSING" if action.blocking else state.ui_mode,
+            )
         )
-        return done(next_state)
+
+    if isinstance(action, ChildPaneSnapshotLoaded):
+        if action.request_id != state.pending_child_pane_request_id:
+            return done(state)
+        return done(
+            replace(
+                state,
+                child_pane=action.pane,
+                notification=None,
+                pending_child_pane_request_id=None,
+            )
+        )
+
+    if isinstance(action, ChildPaneSnapshotFailed):
+        if action.request_id != state.pending_child_pane_request_id:
+            return done(state)
+        return done(
+            replace(
+                state,
+                child_pane=PaneState(directory_path=state.current_path, entries=()),
+                notification=NotificationState(level="error", message=action.message),
+                pending_child_pane_request_id=None,
+            )
+        )
 
     return done(state)
 
@@ -228,3 +257,50 @@ def _move_cursor(
 
     next_index = max(0, min(len(visible_paths) - 1, current_index + delta))
     return visible_paths[next_index]
+
+
+def _sync_child_pane(state: AppState, cursor_path: str | None) -> ReduceResult:
+    entry = _current_entry_for_path(state, cursor_path)
+    if entry is None or entry.kind != "dir":
+        return ReduceResult(
+            state=replace(
+                state,
+                child_pane=PaneState(directory_path=state.current_path, entries=()),
+                pending_child_pane_request_id=None,
+            )
+        )
+
+    if (
+        entry.path == state.child_pane.directory_path
+        and state.pending_child_pane_request_id is None
+    ):
+        return ReduceResult(state=state)
+
+    request_id = state.next_request_id
+    next_state = replace(
+        state,
+        pending_child_pane_request_id=request_id,
+        next_request_id=request_id + 1,
+    )
+    return ReduceResult(
+        state=next_state,
+        effects=(
+            LoadChildPaneSnapshotEffect(
+                request_id=request_id,
+                current_path=state.current_path,
+                cursor_path=entry.path,
+            ),
+        ),
+    )
+
+
+def _current_entry_for_path(
+    state: AppState,
+    path: str | None,
+) -> DirectoryEntryState | None:
+    if path is None:
+        return None
+    for entry in state.current_pane.entries:
+        if entry.path == path:
+            return entry
+    return None

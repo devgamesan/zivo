@@ -32,3 +32,12 @@ class StatusBar(Static):
             label = state.message_level or "message"
             return f"{summary} | {label}: {state.message}"
         return summary
+
+    def set_state(self, state: StatusBarState) -> None:
+        """Update the rendered line without remounting the widget."""
+
+        if state == self.state:
+            return
+
+        self.state = state
+        self.update(self.format_state(state))
