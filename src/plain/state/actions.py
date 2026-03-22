@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from plain.models import ConflictResolution, PasteConflict, PasteRequest, PasteSummary
+
 from .models import (
     AppState,
     BrowserSnapshot,
@@ -92,6 +94,37 @@ class ClearSelection:
 
 
 @dataclass(frozen=True)
+class CopyTargets:
+    """Copy the current selection or cursor target into the clipboard."""
+
+    paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class CutTargets:
+    """Mark the current selection or cursor target for move."""
+
+    paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class PasteClipboard:
+    """Paste the current clipboard into the current directory."""
+
+
+@dataclass(frozen=True)
+class ResolvePasteConflict:
+    """Continue the pending paste with the chosen conflict resolution."""
+
+    resolution: ConflictResolution
+
+
+@dataclass(frozen=True)
+class CancelPasteConflict:
+    """Dismiss the pending paste conflict dialog."""
+
+
+@dataclass(frozen=True)
 class SetFilterQuery:
     """Update the active filter query."""
 
@@ -165,6 +198,31 @@ class ChildPaneSnapshotFailed:
     message: str
 
 
+@dataclass(frozen=True)
+class ClipboardPasteNeedsResolution:
+    """Store the pending paste request and its conflicts."""
+
+    request_id: int
+    request: PasteRequest
+    conflicts: tuple[PasteConflict, ...]
+
+
+@dataclass(frozen=True)
+class ClipboardPasteCompleted:
+    """Apply the completed paste result."""
+
+    request_id: int
+    summary: PasteSummary
+
+
+@dataclass(frozen=True)
+class ClipboardPasteFailed:
+    """Apply a terminal clipboard-operation failure."""
+
+    request_id: int
+    message: str
+
+
 Action = (
     InitializeState
     | SetUiMode
@@ -179,6 +237,11 @@ Action = (
     | ToggleSelection
     | ToggleSelectionAndAdvance
     | ClearSelection
+    | CopyTargets
+    | CutTargets
+    | PasteClipboard
+    | ResolvePasteConflict
+    | CancelPasteConflict
     | SetFilterQuery
     | SetFilterRecursive
     | SetSort
@@ -188,4 +251,7 @@ Action = (
     | BrowserSnapshotFailed
     | ChildPaneSnapshotLoaded
     | ChildPaneSnapshotFailed
+    | ClipboardPasteNeedsResolution
+    | ClipboardPasteCompleted
+    | ClipboardPasteFailed
 )

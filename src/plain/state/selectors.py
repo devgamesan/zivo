@@ -1,6 +1,14 @@
 """Selectors that convert AppState into display models."""
 
-from plain.models import PaneEntry, StatusBarState, ThreePaneShellData
+from pathlib import Path
+
+from plain.models import (
+    ConflictDialogState,
+    HelpBarState,
+    PaneEntry,
+    StatusBarState,
+    ThreePaneShellData,
+)
 
 from .models import AppState, DirectoryEntryState, SortState
 
@@ -24,7 +32,9 @@ def select_shell_data(state: AppState) -> ThreePaneShellData:
             current_entries,
             state.current_pane.cursor_path,
         ),
+        help=select_help_bar_state(state),
         status=select_status_bar_state(state),
+        conflict_dialog=select_conflict_dialog_state(state),
     )
 
 
@@ -68,6 +78,46 @@ def select_status_bar_state(state: AppState) -> StatusBarState:
         filter_label=_format_filter_label(state),
         message=state.notification.message if state.notification else None,
         message_level=state.notification.level if state.notification else None,
+    )
+
+
+def select_help_bar_state(state: AppState) -> HelpBarState:
+    """Return the single-line help content for the active mode."""
+
+    if state.ui_mode == "CONFIRM":
+        return HelpBarState("o overwrite | s skip | r rename | esc cancel")
+    if state.ui_mode == "FILTER":
+        return HelpBarState("type filter | space recursive | enter apply | esc cancel")
+    if state.ui_mode == "BUSY":
+        return HelpBarState("processing...")
+    return HelpBarState("Space select | y copy | x cut | p paste | enter open dir")
+
+
+def select_conflict_dialog_state(state: AppState) -> ConflictDialogState | None:
+    """Return dialog content when the app is waiting on conflict input."""
+
+    if state.paste_conflict is None:
+        return None
+
+    first_conflict = state.paste_conflict.first_conflict
+    conflict_count = len(state.paste_conflict.conflicts)
+    destination_name = Path(first_conflict.destination_path).name
+    source_name = Path(first_conflict.source_path).name
+    return ConflictDialogState(
+        title="Paste Conflict",
+        message=(
+            f"{destination_name} already exists for {source_name}. "
+            f"{conflict_count} conflict(s) pending."
+        ),
+        options=tuple(
+            {
+                "overwrite": "o overwrite",
+                "skip": "s skip",
+                "rename": "r rename",
+            }[resolution]
+            for resolution in state.paste_conflict.available_resolutions
+        )
+        + ("esc cancel",),
     )
 
 

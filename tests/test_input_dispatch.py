@@ -3,17 +3,21 @@ from dataclasses import replace
 from plain.state import (
     BeginFilterInput,
     CancelFilterInput,
+    CancelPasteConflict,
     ClearSelection,
     ConfirmFilterInput,
+    CopyTargets,
+    CutTargets,
     EnterCursorDirectory,
     GoToParentDirectory,
     MoveCursor,
     NotificationState,
+    PasteClipboard,
     ReloadDirectory,
+    ResolvePasteConflict,
     SetFilterQuery,
     SetFilterRecursive,
     SetNotification,
-    SetUiMode,
     ToggleSelectionAndAdvance,
     build_initial_app_state,
     dispatch_key_input,
@@ -70,6 +74,36 @@ def test_browsing_ctrl_f_enters_filter_mode() -> None:
     actions = dispatch_key_input(state, key="ctrl+f")
 
     assert actions == (SetNotification(None), BeginFilterInput())
+
+
+def test_browsing_y_dispatches_copy_targets() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="y", character="y")
+
+    assert actions == (
+        SetNotification(None),
+        CopyTargets(("/home/tadashi/develop/plain/docs",)),
+    )
+
+
+def test_browsing_x_dispatches_cut_targets() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="x", character="x")
+
+    assert actions == (
+        SetNotification(None),
+        CutTargets(("/home/tadashi/develop/plain/docs",)),
+    )
+
+
+def test_browsing_p_dispatches_paste_clipboard() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="p", character="p")
+
+    assert actions == (SetNotification(None), PasteClipboard())
 
 
 def test_browsing_right_enters_directory() -> None:
@@ -178,7 +212,15 @@ def test_confirm_escape_returns_to_browsing() -> None:
 
     actions = dispatch_key_input(state, key="escape")
 
-    assert actions == (SetNotification(None), SetUiMode("BROWSING"))
+    assert actions == (SetNotification(None), CancelPasteConflict())
+
+
+def test_confirm_o_selects_overwrite_resolution() -> None:
+    state = replace(build_initial_app_state(), ui_mode="CONFIRM")
+
+    actions = dispatch_key_input(state, key="o", character="o")
+
+    assert actions == (SetNotification(None), ResolvePasteConflict("overwrite"))
 
 
 def test_busy_key_shows_warning_message() -> None:

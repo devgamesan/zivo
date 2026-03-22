@@ -20,11 +20,13 @@ class PaneEntry:
     @property
     def kind_label(self) -> str:
         """Return the short label shown in the center table."""
+
         return "DIR" if self.kind == "dir" else "FILE"
 
     @property
     def selection_marker(self) -> str:
         """Return the marker shown for selected rows in the center table."""
+
         return "*" if self.selected else " "
 
 
@@ -41,19 +43,38 @@ class StatusBarState:
 
 
 @dataclass(frozen=True)
+class HelpBarState:
+    """A single-line help summary rendered above the status bar."""
+
+    text: str
+
+
+@dataclass(frozen=True)
+class ConflictDialogState:
+    """Display data for the paste conflict dialog."""
+
+    title: str
+    message: str
+    options: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ThreePaneShellData:
-    """Complete display state for the static shell UI."""
+    """Complete display state for the shell UI."""
 
     current_path: str
     parent_entries: tuple[PaneEntry, ...]
     current_entries: tuple[PaneEntry, ...]
     child_entries: tuple[PaneEntry, ...]
     current_cursor_index: int | None
+    help: HelpBarState
     status: StatusBarState
+    conflict_dialog: ConflictDialogState | None = None
 
 
 def build_dummy_shell_data() -> ThreePaneShellData:
     """Return static data for the initial three-pane shell."""
+
     current_entries = (
         PaneEntry("docs", "dir", "-", "2026-03-21 09:10"),
         PaneEntry("src", "dir", "-", "2026-03-20 19:42"),
@@ -76,6 +97,7 @@ def build_dummy_shell_data() -> ThreePaneShellData:
             PaneEntry("wireframes", "dir"),
         ),
         current_cursor_index=0,
+        help=HelpBarState("Space select | y copy | x cut | p paste"),
         status=StatusBarState(
             item_count=len(current_entries),
             selected_count=0,

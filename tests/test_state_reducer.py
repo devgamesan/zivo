@@ -1,13 +1,21 @@
+from dataclasses import replace
+
+from plain.models import PasteConflict, PasteRequest, PasteSummary
 from plain.state import (
     BeginFilterInput,
     BrowserSnapshot,
     BrowserSnapshotFailed,
     BrowserSnapshotLoaded,
     CancelFilterInput,
+    CancelPasteConflict,
     ChildPaneSnapshotFailed,
     ChildPaneSnapshotLoaded,
     ClearSelection,
+    ClipboardPasteCompleted,
+    ClipboardPasteNeedsResolution,
     ConfirmFilterInput,
+    CopyTargets,
+    CutTargets,
     DirectoryEntryState,
     EnterCursorDirectory,
     GoToParentDirectory,
@@ -16,8 +24,12 @@ from plain.state import (
     MoveCursor,
     NotificationState,
     PaneState,
+    PasteClipboard,
+    PasteConflictState,
     ReloadDirectory,
     RequestBrowserSnapshot,
+    ResolvePasteConflict,
+    RunClipboardPasteEffect,
     SetCursorPath,
     SetFilterQuery,
     SetSort,
@@ -210,6 +222,137 @@ def test_cancel_filter_input_clears_query_and_recursive_flag() -> None:
     assert next_state.filter.query == ""
     assert next_state.filter.active is False
     assert next_state.filter.recursive is False
+
+
+def test_copy_targets_updates_clipboard_state() -> None:
+    state = build_initial_app_state()
+
+    next_state = _reduce_state(state, CopyTargets(("/home/tadashi/develop/plain/docs",)))
+
+    assert next_state.clipboard.mode == "copy"
+    assert next_state.clipboard.paths == ("/home/tadashi/develop/plain/docs",)
+
+
+def test_paste_clipboard_emits_paste_effect_and_sets_busy() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        CopyTargets(("/home/tadashi/develop/plain/docs",)),
+    )
+
+    result = reduce_app_state(state, PasteClipboard())
+
+    assert result.state.ui_mode == "BUSY"
+    assert result.state.pending_paste_request_id == 1
+    assert result.effects == (
+        RunClipboardPasteEffect(
+            request_id=1,
+            request=result.effects[0].request,
+        ),
+    )
+    assert result.effects[0].request.destination_dir == "/home/tadashi/develop/plain"
+
+
+def test_paste_needs_resolution_enters_confirm_mode() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        CopyTargets(("/home/tadashi/develop/plain/docs",)),
+    )
+    requested = reduce_app_state(state, PasteClipboard()).state
+
+    conflict = PasteConflict(
+        source_path="/home/tadashi/develop/plain/docs",
+        destination_path="/home/tadashi/develop/plain/docs",
+    )
+    next_state = _reduce_state(
+        requested,
+        ClipboardPasteNeedsResolution(
+            request_id=1,
+            request=PasteRequest(
+                mode="copy",
+                source_paths=("/home/tadashi/develop/plain/docs",),
+                destination_dir="/home/tadashi/develop/plain",
+            ),
+            conflicts=(conflict,),
+        ),
+    )
+
+    assert next_state.ui_mode == "CONFIRM"
+    assert isinstance(next_state.paste_conflict, PasteConflictState)
+    assert next_state.paste_conflict.first_conflict == conflict
+
+
+def test_resolve_paste_conflict_restarts_paste_with_resolution() -> None:
+    conflict = PasteConflict(
+        source_path="/home/tadashi/develop/plain/docs",
+        destination_path="/home/tadashi/develop/plain/docs",
+    )
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        paste_conflict=PasteConflictState(
+            request=PasteRequest(
+                mode="copy",
+                source_paths=("/home/tadashi/develop/plain/docs",),
+                destination_dir="/home/tadashi/develop/plain",
+            ),
+            conflicts=(conflict,),
+            first_conflict=conflict,
+        ),
+        next_request_id=2,
+    )
+    state = replace(
+        state,
+        notification=None,
+    )
+
+    result = reduce_app_state(state, ResolvePasteConflict("rename"))
+
+    assert result.state.ui_mode == "BUSY"
+    assert result.effects == (
+        RunClipboardPasteEffect(
+            request_id=2,
+            request=PasteRequest(
+                mode="copy",
+                source_paths=("/home/tadashi/develop/plain/docs",),
+                destination_dir="/home/tadashi/develop/plain",
+                conflict_resolution="rename",
+            ),
+        ),
+    )
+
+
+def test_clipboard_paste_completed_for_cut_clears_clipboard_and_requests_reload() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        CutTargets(("/home/tadashi/develop/plain/docs",)),
+    )
+    state = replace(state, pending_paste_request_id=4)
+
+    result = reduce_app_state(
+        state,
+        ClipboardPasteCompleted(
+            request_id=4,
+            summary=PasteSummary(
+                mode="cut",
+                destination_dir="/home/tadashi/develop/plain",
+                total_count=1,
+                success_count=1,
+                skipped_count=0,
+            ),
+        ),
+    )
+
+    assert result.state.clipboard.mode == "none"
+    assert result.state.pending_browser_snapshot_request_id == 1
+
+
+def test_cancel_paste_conflict_returns_to_browsing_with_warning() -> None:
+    state = replace(build_initial_app_state(), ui_mode="CONFIRM")
+
+    next_state = _reduce_state(state, CancelPasteConflict())
+
+    assert next_state.ui_mode == "BROWSING"
+    assert next_state.notification == NotificationState(level="warning", message="Paste cancelled")
 
 
 def test_toggle_selection_and_advance_moves_cursor_to_next_visible_entry() -> None:

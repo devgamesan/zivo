@@ -6,10 +6,18 @@ from .browser_snapshot import (
     LiveBrowserSnapshotLoader,
     snapshot_from_app_state,
 )
+from .clipboard_operations import (
+    ClipboardOperationService,
+    FakeClipboardOperationService,
+    LiveClipboardOperationService,
+)
 
 __all__ = [
     "BrowserSnapshotLoader",
+    "ClipboardOperationService",
     "FakeBrowserSnapshotLoader",
+    "FakeClipboardOperationService",
+    "LiveClipboardOperationService",
     "LiveBrowserSnapshotLoader",
     "snapshot_from_app_state",
 ]

@@ -1,8 +1,10 @@
 from dataclasses import replace
 
+from plain.models import PasteConflict, PasteRequest
 from plain.state import (
     NotificationState,
     PaneState,
+    PasteConflictState,
     SetCursorPath,
     SetFilterQuery,
     SetFilterRecursive,
@@ -12,7 +14,9 @@ from plain.state import (
     build_initial_app_state,
     reduce_app_state,
     select_child_entries,
+    select_conflict_dialog_state,
     select_current_entries,
+    select_help_bar_state,
     select_shell_data,
     select_status_bar_state,
     select_target_paths,
@@ -136,3 +140,36 @@ def test_select_status_bar_exposes_notification_level() -> None:
 
     assert status.message == "load failed"
     assert status.message_level == "error"
+
+
+def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
+    state = build_initial_app_state()
+
+    help_state = select_help_bar_state(state)
+
+    assert help_state.text == "Space select | y copy | x cut | p paste | enter open dir"
+
+
+def test_select_conflict_dialog_state_formats_first_conflict() -> None:
+    conflict = PasteConflict(
+        source_path="/home/tadashi/develop/plain/docs",
+        destination_path="/home/tadashi/develop/plain/docs",
+    )
+    state = replace(
+        build_initial_app_state(),
+        paste_conflict=PasteConflictState(
+            request=PasteRequest(
+                mode="copy",
+                source_paths=("/home/tadashi/develop/plain/docs",),
+                destination_dir="/home/tadashi/develop/plain",
+            ),
+            conflicts=(conflict,),
+            first_conflict=conflict,
+        ),
+    )
+
+    dialog = select_conflict_dialog_state(state)
+
+    assert dialog is not None
+    assert dialog.title == "Paste Conflict"
+    assert "o overwrite" in dialog.options

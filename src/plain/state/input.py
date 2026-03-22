@@ -4,12 +4,17 @@ from .actions import (
     Action,
     BeginFilterInput,
     CancelFilterInput,
+    CancelPasteConflict,
     ClearSelection,
     ConfirmFilterInput,
+    CopyTargets,
+    CutTargets,
     EnterCursorDirectory,
     GoToParentDirectory,
     MoveCursor,
+    PasteClipboard,
     ReloadDirectory,
+    ResolvePasteConflict,
     SetFilterQuery,
     SetFilterRecursive,
     SetNotification,
@@ -17,9 +22,39 @@ from .actions import (
     ToggleSelectionAndAdvance,
 )
 from .models import AppState, DirectoryEntryState, NotificationState
-from .selectors import select_visible_current_entry_states
+from .selectors import select_target_paths, select_visible_current_entry_states
 
 DispatchedActions = tuple[Action, ...]
+
+BROWSING_KEYMAP = {
+    "up": "cursor_up",
+    "down": "cursor_down",
+    "space": "toggle_selection",
+    "escape": "clear_selection",
+    "ctrl+f": "begin_filter",
+    "left": "go_to_parent",
+    "backspace": "go_to_parent",
+    "ctrl+h": "go_to_parent",
+    "f5": "reload_directory",
+    "right": "enter_or_open",
+    "enter": "enter_or_open",
+    "y": "copy_targets",
+    "x": "cut_targets",
+    "p": "paste_clipboard",
+}
+
+CONFLICT_KEYMAP = {
+    "escape": "cancel_conflict",
+    "o": "overwrite",
+    "s": "skip",
+    "r": "rename",
+}
+
+
+def iter_bound_keys() -> tuple[str, ...]:
+    """Return the keys that should be installed as app bindings."""
+
+    return tuple(dict.fromkeys((*BROWSING_KEYMAP.keys(), *CONFLICT_KEYMAP.keys())))
 
 
 def dispatch_key_input(
@@ -48,6 +83,7 @@ def dispatch_key_input(
 def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
     visible_paths = _visible_paths(state)
     cursor_entry = _current_entry(state)
+    target_paths = select_target_paths(state)
 
     if key == "up":
         return _supported(MoveCursor(delta=-1, visible_paths=visible_paths))
@@ -68,6 +104,15 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
 
     if key == "ctrl+f":
         return _supported(BeginFilterInput())
+
+    if key == "y":
+        return _supported(CopyTargets(target_paths))
+
+    if key == "x":
+        return _supported(CutTargets(target_paths))
+
+    if key == "p":
+        return _supported(PasteClipboard())
 
     if key in {"left", "backspace", "ctrl+h"}:
         return _supported(GoToParentDirectory())
@@ -110,17 +155,18 @@ def _dispatch_filter_input(
 
 def _dispatch_confirm_input(key: str) -> DispatchedActions:
     if key == "escape":
-        return _supported(SetUiMode("BROWSING"))
+        return _supported(CancelPasteConflict())
 
-    if key == "enter":
-        return (
-            SetUiMode("BROWSING"),
-            SetNotification(
-                NotificationState(level="warning", message="Confirmation dialog is not wired yet")
-            ),
-        )
+    if key == "o":
+        return _supported(ResolvePasteConflict("overwrite"))
 
-    return _warn("This input is unavailable while waiting for confirmation")
+    if key == "s":
+        return _supported(ResolvePasteConflict("skip"))
+
+    if key == "r":
+        return _supported(ResolvePasteConflict("rename"))
+
+    return _warn("Use o, s, r, or Esc while resolving paste conflicts")
 
 
 def _dispatch_unwired_input_mode(mode: str, key: str) -> DispatchedActions:

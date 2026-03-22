@@ -1,0 +1,82 @@
+"""Filesystem adapter for mutating local files and directories."""
+
+from dataclasses import dataclass
+from pathlib import Path
+from shutil import copy2, copytree, move, rmtree
+from typing import Protocol
+
+
+class FileOperationAdapter(Protocol):
+    """Boundary for copy/move style filesystem mutations."""
+
+    def path_exists(self, path: str) -> bool: ...
+
+    def paths_are_same(self, source: str, destination: str) -> bool: ...
+
+    def remove_path(self, path: str) -> None: ...
+
+    def copy_path(self, source: str, destination: str) -> None: ...
+
+    def move_path(self, source: str, destination: str) -> None: ...
+
+    def generate_renamed_path(self, destination: str) -> str: ...
+
+
+@dataclass(frozen=True)
+class LocalFileOperationAdapter:
+    """Implement copy/move operations on the local filesystem."""
+
+    def path_exists(self, path: str) -> bool:
+        return self._resolve(path).exists()
+
+    def paths_are_same(self, source: str, destination: str) -> bool:
+        return self._resolve(source) == self._resolve(destination)
+
+    def remove_path(self, path: str) -> None:
+        target = self._resolve(path)
+        if target.is_dir() and not target.is_symlink():
+            rmtree(target)
+            return
+        target.unlink()
+
+    def copy_path(self, source: str, destination: str) -> None:
+        source_path = self._resolve(source)
+        destination_path = self._resolve(destination)
+        if source_path == destination_path:
+            raise OSError("Source and destination are the same path")
+        if source_path.is_dir():
+            copytree(source_path, destination_path)
+            return
+        copy2(source_path, destination_path)
+
+    def move_path(self, source: str, destination: str) -> None:
+        source_path = self._resolve(source)
+        destination_path = self._resolve(destination)
+        if source_path == destination_path:
+            raise OSError("Source and destination are the same path")
+        move(str(source_path), str(destination_path))
+
+    def generate_renamed_path(self, destination: str) -> str:
+        destination_path = self._resolve(destination)
+        parent = destination_path.parent
+
+        if destination_path.suffix:
+            stem = destination_path.stem
+            suffix = destination_path.suffix
+            pattern = "{stem} copy{counter}{suffix}"
+        else:
+            stem = destination_path.name
+            suffix = ""
+            pattern = "{stem} copy{counter}"
+
+        for index in range(1, 1_000):
+            counter = "" if index == 1 else f" {index}"
+            candidate = parent / pattern.format(stem=stem, counter=counter, suffix=suffix)
+            if not candidate.exists():
+                return str(candidate)
+
+        raise OSError(f"Could not generate renamed path for {destination_path}")
+
+    @staticmethod
+    def _resolve(path: str) -> Path:
+        return Path(path).expanduser().resolve()

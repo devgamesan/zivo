@@ -5,6 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
+from plain.models import ConflictResolution, PasteConflict, PasteRequest
 from plain.models.shell_data import EntryKind, NotificationLevel
 
 UiMode = Literal["BROWSING", "FILTER", "RENAME", "CREATE", "CONFIRM", "BUSY"]
@@ -61,6 +62,16 @@ class ClipboardState:
 
 
 @dataclass(frozen=True)
+class PasteConflictState:
+    """Pending conflict dialog state for a clipboard paste."""
+
+    request: PasteRequest
+    conflicts: tuple[PasteConflict, ...]
+    first_conflict: PasteConflict
+    available_resolutions: tuple[ConflictResolution, ...] = ("overwrite", "skip", "rename")
+
+
+@dataclass(frozen=True)
 class HistoryState:
     """Back/forward navigation history."""
 
@@ -100,8 +111,11 @@ class AppState:
     history: HistoryState = HistoryState()
     ui_mode: UiMode = "BROWSING"
     notification: NotificationState | None = None
+    paste_conflict: PasteConflictState | None = None
+    post_reload_notification: NotificationState | None = None
     pending_browser_snapshot_request_id: int | None = None
     pending_child_pane_request_id: int | None = None
+    pending_paste_request_id: int | None = None
     next_request_id: int = 1
 
 

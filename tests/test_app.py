@@ -7,9 +7,16 @@ from textual.css.query import NoMatches
 from textual.widgets import DataTable, Label, ListView
 
 from plain import create_app
-from plain.services import FakeBrowserSnapshotLoader
+from plain.models import (
+    PasteConflict,
+    PasteConflictPrompt,
+    PasteExecutionResult,
+    PasteRequest,
+    PasteSummary,
+)
+from plain.services import FakeBrowserSnapshotLoader, FakeClipboardOperationService
 from plain.state import BrowserSnapshot, DirectoryEntryState, PaneState
-from plain.ui import CurrentPathBar, StatusBar
+from plain.ui import ConflictDialog, CurrentPathBar, HelpBar, StatusBar
 
 
 def _build_snapshot(
@@ -773,4 +780,98 @@ async def test_app_child_snapshot_failure_shows_error() -> None:
         assert str(status_bar.renderable) == (
             "2 items | 0 selected | sort: name asc | filter: none | "
             "error: permission denied"
+        )
+
+
+@pytest.mark.asyncio
+async def test_app_displays_browsing_help_bar() -> None:
+    path = "/tmp/plain-help"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (DirectoryEntryState(f"{path}/docs", "docs", "dir"),),
+                child_path=f"{path}/docs",
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test():
+        await _wait_for_snapshot_loaded(app, path)
+        await asyncio.sleep(0.05)
+        help_bar = app.query_one("#help-bar", HelpBar)
+
+        assert str(help_bar.renderable) == (
+            "Space select | y copy | x cut | p paste | enter open dir"
+        )
+
+
+@pytest.mark.asyncio
+async def test_app_paste_conflict_dialog_round_trip() -> None:
+    path = "/tmp/plain-paste-conflict"
+    docs = f"{path}/docs"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (DirectoryEntryState(docs, "docs", "dir"),),
+                child_path=docs,
+            )
+        }
+    )
+    initial_request = PasteRequest(
+        mode="copy",
+        source_paths=(docs,),
+        destination_dir=path,
+    )
+    rename_request = PasteRequest(
+        mode="copy",
+        source_paths=(docs,),
+        destination_dir=path,
+        conflict_resolution="rename",
+    )
+    clipboard_service = FakeClipboardOperationService(
+        results={
+            initial_request: PasteConflictPrompt(
+                request=initial_request,
+                conflicts=(PasteConflict(source_path=docs, destination_path=docs),),
+            ),
+            rename_request: PasteExecutionResult(
+                summary=PasteSummary(
+                    mode="copy",
+                    destination_dir=path,
+                    total_count=1,
+                    success_count=1,
+                    skipped_count=0,
+                )
+            ),
+        }
+    )
+    app = create_app(
+        snapshot_loader=loader,
+        clipboard_service=clipboard_service,
+        initial_path=path,
+    )
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("y")
+        await pilot.press("p")
+        await asyncio.sleep(0.05)
+
+        help_bar = app.query_one("#help-bar", HelpBar)
+        dialog = app.query_one("#conflict-dialog", ConflictDialog)
+
+        assert app.app_state.ui_mode == "CONFIRM"
+        assert str(help_bar.renderable) == "o overwrite | s skip | r rename | esc cancel"
+        assert dialog.display is True
+
+        await pilot.press("r")
+        await asyncio.sleep(0.05)
+
+        status_bar = await _wait_for_status_bar(app)
+        assert app.app_state.ui_mode == "BROWSING"
+        assert str(status_bar.renderable) == (
+            "1 items | 0 selected | sort: name asc | filter: none | info: Copied 1 item(s)"
         )

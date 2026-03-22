@@ -11,8 +11,13 @@ from textual.containers import Horizontal
 from textual.css.query import NoMatches
 from textual.worker import Worker, WorkerState
 
-from plain.models import ThreePaneShellData
-from plain.services import BrowserSnapshotLoader, LiveBrowserSnapshotLoader
+from plain.models import PasteConflictPrompt, PasteExecutionResult, ThreePaneShellData
+from plain.services import (
+    BrowserSnapshotLoader,
+    ClipboardOperationService,
+    LiveBrowserSnapshotLoader,
+    LiveClipboardOperationService,
+)
 from plain.state import (
     Action,
     AppState,
@@ -20,36 +25,32 @@ from plain.state import (
     BrowserSnapshotLoaded,
     ChildPaneSnapshotFailed,
     ChildPaneSnapshotLoaded,
+    ClipboardPasteCompleted,
+    ClipboardPasteFailed,
+    ClipboardPasteNeedsResolution,
     Effect,
     LoadBrowserSnapshotEffect,
     LoadChildPaneSnapshotEffect,
     ReduceResult,
     RequestBrowserSnapshot,
+    RunClipboardPasteEffect,
     build_placeholder_app_state,
     dispatch_key_input,
+    iter_bound_keys,
     reduce_app_state,
     select_shell_data,
 )
-from plain.ui import CurrentPathBar, MainPane, SidePane, StatusBar
+from plain.ui import ConflictDialog, CurrentPathBar, HelpBar, MainPane, SidePane, StatusBar
 
 
 class PlainApp(App[None]):
-    """Minimal three-pane shell used as the initial UI skeleton."""
+    """Three-pane shell with reducer-driven file operations."""
 
     TITLE = "Plain"
     SUB_TITLE = "Three-pane shell"
     BINDINGS = [
-        Binding("up", "dispatch_bound_key('up')", show=False, priority=True),
-        Binding("down", "dispatch_bound_key('down')", show=False, priority=True),
-        Binding("left", "dispatch_bound_key('left')", show=False, priority=True),
-        Binding("right", "dispatch_bound_key('right')", show=False, priority=True),
-        Binding("enter", "dispatch_bound_key('enter')", show=False, priority=True),
-        Binding("backspace", "dispatch_bound_key('backspace')", show=False, priority=True),
-        Binding("ctrl+h", "dispatch_bound_key('ctrl+h')", show=False, priority=True),
-        Binding("space", "dispatch_bound_key('space')", show=False, priority=True),
-        Binding("escape", "dispatch_bound_key('escape')", show=False, priority=True),
-        Binding("ctrl+f", "dispatch_bound_key('ctrl+f')", show=False, priority=True),
-        Binding("f5", "dispatch_bound_key('f5')", show=False, priority=True),
+        Binding(key, f"dispatch_bound_key('{key}')", show=False, priority=True)
+        for key in iter_bound_keys()
     ]
     CSS = """
     Screen {
@@ -95,6 +96,7 @@ class PlainApp(App[None]):
     }
 
     #current-path-bar,
+    #help-bar,
     #status-bar {
         height: 1;
         padding: 0 1;
@@ -106,15 +108,43 @@ class PlainApp(App[None]):
         text-style: bold;
     }
 
+    #help-bar {
+        background: $panel;
+        color: $text-muted;
+    }
+
     #status-bar {
         background: $surface;
         color: $text;
+    }
+
+    #conflict-dialog {
+        display: none;
+        height: 5;
+        margin: 1 2;
+        padding: 1 2;
+        border: round $warning;
+        background: $surface;
+    }
+
+    #conflict-dialog-title {
+        text-style: bold;
+        color: $warning;
+    }
+
+    #conflict-dialog-message {
+        margin: 0 0 1 0;
+    }
+
+    #conflict-dialog-options {
+        color: $text-muted;
     }
     """
 
     def __init__(
         self,
         snapshot_loader: BrowserSnapshotLoader | None = None,
+        clipboard_service: ClipboardOperationService | None = None,
         *,
         initial_path: str | Path | None = None,
     ) -> None:
@@ -122,6 +152,7 @@ class PlainApp(App[None]):
         self._initial_path = str(Path(initial_path or Path.cwd()).expanduser().resolve())
         self._app_state: AppState = build_placeholder_app_state(self._initial_path)
         self._snapshot_loader = snapshot_loader or LiveBrowserSnapshotLoader()
+        self._clipboard_service = clipboard_service or LiveClipboardOperationService()
         self._pending_workers: dict[str, Effect] = {}
 
     @property
@@ -134,7 +165,9 @@ class PlainApp(App[None]):
         shell = select_shell_data(self._app_state)
         yield CurrentPathBar(shell.current_path, id="current-path-bar")
         yield self._build_body(shell)
+        yield HelpBar(shell.help, id="help-bar")
         yield StatusBar(shell.status, id="status-bar")
+        yield ConflictDialog(shell.conflict_dialog, id="conflict-dialog")
 
     async def on_mount(self) -> None:
         """Load the initial directory snapshot after the UI mounts."""
@@ -224,6 +257,8 @@ class PlainApp(App[None]):
                 self._schedule_browser_snapshot(effect)
             elif isinstance(effect, LoadChildPaneSnapshotEffect):
                 self._schedule_child_pane_snapshot(effect)
+            elif isinstance(effect, RunClipboardPasteEffect):
+                self._schedule_clipboard_paste(effect)
 
     def _schedule_browser_snapshot(self, effect: LoadBrowserSnapshotEffect) -> None:
         worker = self.run_worker(
@@ -251,6 +286,18 @@ class PlainApp(App[None]):
             name=f"child-pane-snapshot:{effect.request_id}",
             group="child-pane-snapshot",
             description=effect.cursor_path,
+            exit_on_error=False,
+            exclusive=True,
+            thread=True,
+        )
+        self._pending_workers[worker.name] = effect
+
+    def _schedule_clipboard_paste(self, effect: RunClipboardPasteEffect) -> None:
+        worker = self.run_worker(
+            partial(self._clipboard_service.execute_paste, effect.request),
+            name=f"clipboard-paste:{effect.request_id}",
+            group="clipboard-paste",
+            description=effect.request.destination_dir,
             exit_on_error=False,
             exclusive=True,
             thread=True,
@@ -285,17 +332,42 @@ class PlainApp(App[None]):
                 )
                 return
 
-            await self.dispatch_actions(
-                (
-                    ChildPaneSnapshotLoaded(
-                        request_id=effect.request_id,
-                        pane=event.worker.result,
-                    ),
+            if isinstance(effect, LoadChildPaneSnapshotEffect):
+                await self.dispatch_actions(
+                    (
+                        ChildPaneSnapshotLoaded(
+                            request_id=effect.request_id,
+                            pane=event.worker.result,
+                        ),
+                    )
                 )
-            )
-            return
+                return
 
-        message = str(event.worker.error) or "Failed to load directory"
+            result = event.worker.result
+            if isinstance(result, PasteConflictPrompt):
+                await self.dispatch_actions(
+                    (
+                        ClipboardPasteNeedsResolution(
+                            request_id=effect.request_id,
+                            request=result.request,
+                            conflicts=result.conflicts,
+                        ),
+                    )
+                )
+                return
+
+            if isinstance(result, PasteExecutionResult):
+                await self.dispatch_actions(
+                    (
+                        ClipboardPasteCompleted(
+                            request_id=effect.request_id,
+                            summary=result.summary,
+                        ),
+                    )
+                )
+                return
+
+        message = str(event.worker.error) or "Operation failed"
         if isinstance(effect, LoadBrowserSnapshotEffect):
             await self.dispatch_actions(
                 (
@@ -308,9 +380,20 @@ class PlainApp(App[None]):
             )
             return
 
+        if isinstance(effect, LoadChildPaneSnapshotEffect):
+            await self.dispatch_actions(
+                (
+                    ChildPaneSnapshotFailed(
+                        request_id=effect.request_id,
+                        message=message,
+                    ),
+                )
+            )
+            return
+
         await self.dispatch_actions(
             (
-                ChildPaneSnapshotFailed(
+                ClipboardPasteFailed(
                     request_id=effect.request_id,
                     message=message,
                 ),
@@ -324,36 +407,48 @@ class PlainApp(App[None]):
             parent_pane = self.query_one("#parent-pane", SidePane)
             current_pane = self.query_one("#current-pane", MainPane)
             child_pane = self.query_one("#child-pane", SidePane)
+            help_bar = self.query_one("#help-bar", HelpBar)
             status_bar = self.query_one("#status-bar", StatusBar)
+            conflict_dialog = self.query_one("#conflict-dialog", ConflictDialog)
         except NoMatches:
-            try:
-                await self.query_one("#current-path-bar").remove()
-            except NoMatches:
-                pass
-            try:
-                await self.query_one("#body").remove()
-            except NoMatches:
-                pass
-            try:
-                await self.query_one("#status-bar").remove()
-            except NoMatches:
-                pass
+            selectors = (
+                "#current-path-bar",
+                "#body",
+                "#help-bar",
+                "#status-bar",
+                "#conflict-dialog",
+            )
+            for selector in selectors:
+                try:
+                    await self.query_one(selector).remove()
+                except NoMatches:
+                    pass
             await self.mount(CurrentPathBar(shell.current_path, id="current-path-bar"))
             await self.mount(self._build_body(shell))
+            await self.mount(HelpBar(shell.help, id="help-bar"))
             await self.mount(StatusBar(shell.status, id="status-bar"))
+            await self.mount(ConflictDialog(shell.conflict_dialog, id="conflict-dialog"))
             return
 
         current_path_bar.set_path(shell.current_path)
         await parent_pane.set_entries(shell.parent_entries)
         current_pane.set_entries(shell.current_entries, shell.current_cursor_index)
         await child_pane.set_entries(shell.child_entries)
+        help_bar.set_state(shell.help)
         status_bar.set_state(shell.status)
+        conflict_dialog.set_state(shell.conflict_dialog)
 
 
 def create_app(
     snapshot_loader: BrowserSnapshotLoader | None = None,
+    clipboard_service: ClipboardOperationService | None = None,
     *,
     initial_path: str | Path | None = None,
 ) -> PlainApp:
     """Create the application instance."""
-    return PlainApp(snapshot_loader=snapshot_loader, initial_path=initial_path)
+
+    return PlainApp(
+        snapshot_loader=snapshot_loader,
+        clipboard_service=clipboard_service,
+        initial_path=initial_path,
+    )

@@ -2,6 +2,8 @@
 
 from dataclasses import dataclass
 
+from plain.models import PasteRequest
+
 from .models import AppState
 
 
@@ -23,8 +25,15 @@ class LoadChildPaneSnapshotEffect:
     current_path: str
     cursor_path: str
 
+@dataclass(frozen=True)
+class RunClipboardPasteEffect:
+    """Execute a clipboard paste outside the reducer."""
 
-Effect = LoadBrowserSnapshotEffect | LoadChildPaneSnapshotEffect
+    request_id: int
+    request: PasteRequest
+
+
+Effect = LoadBrowserSnapshotEffect | LoadChildPaneSnapshotEffect | RunClipboardPasteEffect
 
 
 @dataclass(frozen=True)
