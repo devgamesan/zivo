@@ -3,7 +3,7 @@
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 
-from plain.models import build_dummy_shell_data
+from plain.state import AppState, build_initial_app_state, select_shell_data
 from plain.ui import MainPane, SidePane, StatusBar
 
 
@@ -63,8 +63,12 @@ class PlainApp(App[None]):
     }
     """
 
+    def __init__(self) -> None:
+        super().__init__()
+        self._app_state: AppState = build_initial_app_state()
+
     def compose(self) -> ComposeResult:
-        shell = build_dummy_shell_data()
+        shell = select_shell_data(self._app_state)
         yield Horizontal(
             SidePane(
                 "親ディレクトリ",
