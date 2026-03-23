@@ -25,6 +25,7 @@ from .actions import (
     SetFilterRecursive,
     SetNotification,
     SetPendingInputValue,
+    SetSort,
     SubmitPendingInput,
     ToggleSelectionAndAdvance,
 )
@@ -46,6 +47,8 @@ BROWSING_KEYMAP = {
     "f2": "begin_rename",
     "ctrl+n": "begin_create_file",
     "ctrl+shift+n": "begin_create_dir",
+    "s": "cycle_sort",
+    "d": "toggle_directories_first",
     "delete": "delete_targets",
     "right": "enter_or_open",
     "enter": "enter_or_open",
@@ -143,6 +146,18 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
 
     if key == "ctrl+shift+n":
         return _supported(BeginCreateInput("dir"))
+
+    if key == "s":
+        return _supported(_next_sort_action(state))
+
+    if key == "d":
+        return _supported(
+            SetSort(
+                field=state.sort.field,
+                descending=state.sort.descending,
+                directories_first=not state.sort.directories_first,
+            )
+        )
 
     if key == "delete":
         if not target_paths:
@@ -246,3 +261,21 @@ def _supported(*actions: Action) -> DispatchedActions:
 
 def _warn(message: str) -> DispatchedActions:
     return (SetNotification(NotificationState(level="warning", message=message)),)
+
+
+def _next_sort_action(state: AppState) -> SetSort:
+    cycle = (
+        ("name", False),
+        ("name", True),
+        ("modified", True),
+        ("modified", False),
+        ("size", True),
+        ("size", False),
+    )
+    current = (state.sort.field, state.sort.descending)
+    current_index = cycle.index(current) if current in cycle else 0
+    next_field, next_descending = cycle[(current_index + 1) % len(cycle)]
+    return SetSort(
+        field=next_field,
+        descending=next_descending,
+    )

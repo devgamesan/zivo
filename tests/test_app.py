@@ -167,7 +167,9 @@ async def test_app_uses_cwd_for_default_initial_path(tmp_path, monkeypatch) -> N
         status_bar = await _wait_for_status_bar(app)
 
         assert str(current_path_bar.renderable) == f"Current Path: {tmp_path}"
-        assert str(status_bar.renderable) == "2 items | 0 selected | sort: name asc | filter: none"
+        assert str(status_bar.renderable) == (
+            "2 items | 0 selected | sort: name asc dirs:on | filter: none"
+        )
 
 
 @pytest.mark.asyncio
@@ -216,7 +218,9 @@ async def test_app_renders_loaded_three_pane_shell() -> None:
         assert current_table.row_count == 2
         assert child_entries == ["spec.md"]
         assert str(current_path_bar.renderable) == f"Current Path: {path}"
-        assert str(status_bar.renderable) == "2 items | 0 selected | sort: name asc | filter: none"
+        assert str(status_bar.renderable) == (
+            "2 items | 0 selected | sort: name asc dirs:on | filter: none"
+        )
 
 
 @pytest.mark.asyncio
@@ -327,7 +331,9 @@ async def test_app_keyboard_input_updates_selection_and_child_pane() -> None:
         assert app.app_state.current_pane.cursor_path == f"{path}/src"
         assert child_names == ["main.py"]
         assert str(current_path_bar.renderable) == f"Current Path: {path}"
-        assert str(status_bar.renderable) == "3 items | 1 selected | sort: name asc | filter: none"
+        assert str(status_bar.renderable) == (
+            "3 items | 1 selected | sort: name asc dirs:on | filter: none"
+        )
 
         current_table = app.query_one("#current-pane-table", DataTable)
         first_row = current_table.get_row_at(0)
@@ -628,7 +634,9 @@ async def test_app_f5_drops_selection_for_missing_entries() -> None:
 
         assert app.app_state.current_pane.selected_paths == set()
         assert app.app_state.current_pane.cursor_path == f"{path}/src"
-        assert str(status_bar.renderable) == "1 items | 0 selected | sort: name asc | filter: none"
+        assert str(status_bar.renderable) == (
+            "1 items | 0 selected | sort: name asc dirs:on | filter: none"
+        )
 
 
 @pytest.mark.asyncio
@@ -678,7 +686,9 @@ async def test_app_navigation_clears_selection_in_new_directory() -> None:
 
         assert app.app_state.current_pane.selected_paths == set()
         assert app.app_state.current_path == docs
-        assert str(status_bar.renderable) == "1 items | 0 selected | sort: name asc | filter: none"
+        assert str(status_bar.renderable) == (
+            "1 items | 0 selected | sort: name asc dirs:on | filter: none"
+        )
 
 
 @pytest.mark.asyncio
@@ -828,7 +838,7 @@ async def test_app_child_snapshot_failure_shows_error() -> None:
         assert list(child_list.children) == []
         assert str(current_path_bar.renderable) == f"Current Path: {path}"
         assert str(status_bar.renderable) == (
-            "2 items | 0 selected | sort: name asc | filter: none | "
+            "2 items | 0 selected | sort: name asc dirs:on | filter: none | "
             "error: permission denied"
         )
 
@@ -853,8 +863,73 @@ async def test_app_displays_browsing_help_bar() -> None:
         help_bar = app.query_one("#help-bar", HelpBar)
 
         assert str(help_bar.renderable) == (
-            "/ filter | Space select | y copy | x cut | p paste | "
+            "/ filter | s sort | d dirs | Space select | y copy | x cut | p paste | "
             "F2 rename | ctrl+n file | ctrl+shift+n dir"
+        )
+
+
+@pytest.mark.asyncio
+async def test_app_sort_shortcuts_update_side_panes_and_status_bar() -> None:
+    path = "/tmp/plain-sort-shortcuts"
+    parent_path = "/tmp"
+    child_path = f"{path}/zeta"
+    snapshot = BrowserSnapshot(
+        current_path=path,
+        parent_pane=PaneState(
+            directory_path=parent_path,
+            entries=(
+                DirectoryEntryState(f"{parent_path}/beta.txt", "beta.txt", "file"),
+                DirectoryEntryState(f"{parent_path}/alpha", "alpha", "dir"),
+                DirectoryEntryState(path, "plain-sort-shortcuts", "dir"),
+            ),
+            cursor_path=path,
+        ),
+        current_pane=PaneState(
+            directory_path=path,
+            entries=(
+                DirectoryEntryState(f"{path}/zeta", "zeta", "dir"),
+                DirectoryEntryState(f"{path}/alpha.txt", "alpha.txt", "file", size_bytes=10),
+                DirectoryEntryState(f"{path}/beta", "beta", "dir"),
+            ),
+            cursor_path=f"{path}/zeta",
+        ),
+        child_pane=PaneState(
+            directory_path=child_path,
+            entries=(
+                DirectoryEntryState(f"{child_path}/notes.txt", "notes.txt", "file", size_bytes=5),
+                DirectoryEntryState(f"{child_path}/archive", "archive", "dir"),
+            ),
+        ),
+    )
+    loader = FakeBrowserSnapshotLoader(snapshots={path: snapshot})
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await _wait_for_row_count(app, 3)
+
+        await pilot.press("d")
+        await pilot.press("s")
+        await asyncio.sleep(0.05)
+
+        parent_list = app.query_one("#parent-pane-list", ListView)
+        child_list = app.query_one("#child-pane-list", ListView)
+        status_bar = await _wait_for_status_bar(app)
+
+        assert app.app_state.sort.field == "name"
+        assert app.app_state.sort.descending is True
+        assert app.app_state.sort.directories_first is False
+        assert [str(item.query_one(Label).renderable) for item in parent_list.children] == [
+            "plain-sort-shortcuts",
+            "beta.txt",
+            "alpha",
+        ]
+        assert [str(item.query_one(Label).renderable) for item in child_list.children] == [
+            "notes.txt",
+            "archive",
+        ]
+        assert str(status_bar.renderable) == (
+            "3 items | 0 selected | sort: name desc dirs:off | filter: none"
         )
 
 
@@ -917,7 +992,7 @@ async def test_app_recursive_filter_updates_current_entries() -> None:
             DirectoryEntryState(f"{docs}/spec.md", "spec.md", "file"),
         )
         assert str(status_bar.renderable) == (
-            "1 items | 0 selected | sort: name asc | filter: spec (recursive)"
+            "1 items | 0 selected | sort: name asc dirs:on | filter: spec (recursive)"
         )
 
 
@@ -969,7 +1044,8 @@ async def test_app_rename_round_trip_updates_status_bar(tmp_path) -> None:
         assert (tmp_path / "manuals").is_dir()
         assert app.app_state.ui_mode == "BROWSING"
         assert str(status_bar.renderable) == (
-            "1 items | 0 selected | sort: name asc | filter: none | info: Renamed to manuals"
+            "1 items | 0 selected | sort: name asc dirs:on | "
+            "filter: none | info: Renamed to manuals"
         )
 
 
@@ -1039,7 +1115,7 @@ async def test_app_paste_conflict_dialog_round_trip() -> None:
         status_bar = await _wait_for_status_bar(app)
         assert app.app_state.ui_mode == "BROWSING"
         assert str(status_bar.renderable) == (
-            "1 items | 0 selected | sort: name asc | filter: none | info: Copied 1 item(s)"
+            "1 items | 0 selected | sort: name asc dirs:on | filter: none | info: Copied 1 item(s)"
         )
 
 
@@ -1096,5 +1172,5 @@ async def test_app_delete_confirmation_round_trip() -> None:
         status_bar = await _wait_for_status_bar(app)
         assert app.app_state.ui_mode == "BROWSING"
         assert str(status_bar.renderable) == (
-            "2 items | 0 selected | sort: name asc | filter: none | info: Trashed 2 items"
+            "2 items | 0 selected | sort: name asc dirs:on | filter: none | info: Trashed 2 items"
         )

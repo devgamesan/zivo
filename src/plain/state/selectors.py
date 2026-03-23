@@ -48,7 +48,7 @@ def select_parent_entries(state: AppState) -> tuple[PaneEntry, ...]:
     cut_paths = _select_cut_paths(state)
     return tuple(
         _to_pane_entry(entry, cut=entry.path in cut_paths)
-        for entry in state.parent_pane.entries
+        for entry in _sort_entries(state.parent_pane.entries, state.sort)
     )
 
 
@@ -77,7 +77,7 @@ def select_child_entries(state: AppState) -> tuple[PaneEntry, ...]:
     cut_paths = _select_cut_paths(state)
     return tuple(
         _to_pane_entry(entry, cut=entry.path in cut_paths)
-        for entry in state.child_pane.entries
+        for entry in _sort_entries(state.child_pane.entries, state.sort)
     )
 
 
@@ -111,7 +111,7 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
     if state.ui_mode == "BUSY":
         return HelpBarState("processing...")
     return HelpBarState(
-        "/ filter | Space select | y copy | x cut | p paste | "
+        "/ filter | s sort | d dirs | Space select | y copy | x cut | p paste | "
         "F2 rename | ctrl+n file | ctrl+shift+n dir"
     )
 
@@ -259,7 +259,8 @@ def _sort_key(field: str):
 
 def _format_sort_label(sort: SortState) -> str:
     direction = "desc" if sort.descending else "asc"
-    return f"{sort.field} {direction}"
+    directories = "on" if sort.directories_first else "off"
+    return f"{sort.field} {direction} dirs:{directories}"
 
 
 def _format_filter_label(state: AppState) -> str:

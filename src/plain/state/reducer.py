@@ -76,6 +76,7 @@ from .models import (
     PasteConflictState,
     PendingInputState,
 )
+from .selectors import select_visible_current_entry_states
 
 
 def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
@@ -467,17 +468,27 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
         directories_first = state.sort.directories_first
         if action.directories_first is not None:
             directories_first = action.directories_first
-        return done(
-            replace(
-                state,
-                sort=replace(
-                    state.sort,
-                    field=action.field,
-                    descending=action.descending,
-                    directories_first=directories_first,
-                ),
+        next_state = replace(
+            state,
+            sort=replace(
+                state.sort,
+                field=action.field,
+                descending=action.descending,
+                directories_first=directories_first,
+            ),
+        )
+        cursor_path = _normalize_cursor_path(
+            select_visible_current_entry_states(next_state),
+            state.current_pane.cursor_path,
+        )
+        next_state = replace(
+            next_state,
+            current_pane=replace(
+                next_state.current_pane,
+                cursor_path=cursor_path,
             )
         )
+        return _sync_child_pane(next_state, cursor_path)
 
     if isinstance(action, SetNotification):
         return done(replace(state, notification=action.notification))

@@ -27,6 +27,7 @@ from plain.state import (
     SetFilterRecursive,
     SetNotification,
     SetPendingInputValue,
+    SetSort,
     SubmitPendingInput,
     ToggleSelectionAndAdvance,
     build_initial_app_state,
@@ -224,6 +225,42 @@ def test_browsing_ctrl_shift_n_begins_directory_create_mode() -> None:
     actions = dispatch_key_input(state, key="ctrl+shift+n")
 
     assert actions == (SetNotification(None), BeginCreateInput("dir"))
+
+
+def test_browsing_s_cycles_sort_state() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="s", character="s")
+
+    assert actions == (
+        SetNotification(None),
+        SetSort(field="name", descending=True),
+    )
+
+
+def test_browsing_s_cycles_from_name_desc_to_modified_desc() -> None:
+    state = replace(
+        build_initial_app_state(),
+        sort=replace(build_initial_app_state().sort, field="name", descending=True),
+    )
+
+    actions = dispatch_key_input(state, key="s", character="s")
+
+    assert actions == (
+        SetNotification(None),
+        SetSort(field="modified", descending=True),
+    )
+
+
+def test_browsing_d_toggles_directories_first() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="d", character="d")
+
+    assert actions == (
+        SetNotification(None),
+        SetSort(field="name", descending=False, directories_first=False),
+    )
 
 
 def test_browsing_delete_dispatches_delete_targets() -> None:

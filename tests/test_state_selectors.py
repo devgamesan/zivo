@@ -23,6 +23,7 @@ from plain.state import (
     select_current_entries,
     select_help_bar_state,
     select_input_bar_state,
+    select_parent_entries,
     select_shell_data,
     select_status_bar_state,
     select_target_paths,
@@ -169,6 +170,53 @@ def test_select_child_entries_is_empty_when_cursor_is_file() -> None:
     assert select_child_entries(state) == ()
 
 
+def test_select_parent_and_child_entries_follow_sort_state() -> None:
+    state = build_initial_app_state()
+    state = replace(
+        state,
+        parent_pane=PaneState(
+            directory_path="/tmp",
+            entries=(
+                DirectoryEntryState("/tmp/beta.txt", "beta.txt", "file"),
+                DirectoryEntryState("/tmp/alpha", "alpha", "dir"),
+                DirectoryEntryState("/tmp/gamma", "gamma", "dir"),
+            ),
+            cursor_path="/tmp/alpha",
+        ),
+        current_pane=PaneState(
+            directory_path="/home/tadashi/develop/plain",
+            entries=state.current_pane.entries,
+            cursor_path="/home/tadashi/develop/plain/docs",
+        ),
+        child_pane=PaneState(
+            directory_path="/home/tadashi/develop/plain/docs",
+            entries=(
+                DirectoryEntryState(
+                    "/home/tadashi/develop/plain/docs/readme.txt",
+                    "readme.txt",
+                    "file",
+                ),
+                DirectoryEntryState(
+                    "/home/tadashi/develop/plain/docs/archive",
+                    "archive",
+                    "dir",
+                ),
+            ),
+        ),
+        sort=replace(state.sort, field="name", descending=False),
+    )
+    state = _reduce_state(
+        state,
+        SetSort(field="name", descending=False, directories_first=False),
+    )
+
+    parent_entries = select_parent_entries(state)
+    child_entries = select_child_entries(state)
+
+    assert [entry.name for entry in parent_entries] == ["alpha", "beta.txt", "gamma"]
+    assert [entry.name for entry in child_entries] == ["archive", "readme.txt"]
+
+
 def test_select_shell_data_exposes_visible_cursor_index() -> None:
     state = build_initial_app_state()
     state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/plain/tests"))
@@ -187,7 +235,7 @@ def test_select_status_bar_keeps_summary_format() -> None:
     assert (
         f"{status.item_count} items | {status.selected_count} selected | "
         f"sort: {status.sort_label} | filter: {status.filter_label}"
-    ) == "5 items | 0 selected | sort: name asc | filter: none"
+    ) == "5 items | 0 selected | sort: name asc dirs:on | filter: none"
 
 
 def test_recursive_filter_label_is_reflected_in_status_bar() -> None:
@@ -219,7 +267,7 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
     help_state = select_help_bar_state(state)
 
     assert help_state.text == (
-        "/ filter | Space select | y copy | x cut | p paste | "
+        "/ filter | s sort | d dirs | Space select | y copy | x cut | p paste | "
         "F2 rename | ctrl+n file | ctrl+shift+n dir"
     )
 

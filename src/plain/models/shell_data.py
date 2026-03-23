@@ -113,7 +113,7 @@ def build_dummy_shell_data() -> ThreePaneShellData:
         status=StatusBarState(
             item_count=len(current_entries),
             selected_count=0,
-            sort_label="name asc",
+            sort_label="name asc dirs:on",
             filter_label="none",
             message=None,
             message_level=None,

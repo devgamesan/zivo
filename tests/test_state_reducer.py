@@ -219,6 +219,30 @@ def test_set_sort_returns_new_state_without_mutating_input() -> None:
     assert state.sort.directories_first is True
 
 
+def test_set_sort_keeps_cursor_on_same_visible_path() -> None:
+    state = build_initial_app_state()
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/plain/README.md"))
+
+    next_state = _reduce_state(
+        state,
+        SetSort(field="modified", descending=True, directories_first=False),
+    )
+
+    assert next_state.current_pane.cursor_path == "/home/tadashi/develop/plain/README.md"
+
+
+def test_set_sort_normalizes_cursor_to_first_visible_path_when_hidden() -> None:
+    state = build_initial_app_state()
+    state = _reduce_state(state, SetFilterQuery("py"))
+
+    next_state = _reduce_state(
+        state,
+        SetSort(field="name", descending=False, directories_first=True),
+    )
+
+    assert next_state.current_pane.cursor_path == "/home/tadashi/develop/plain/pyproject.toml"
+
+
 def test_set_cursor_path_ignores_unknown_path() -> None:
     state = build_initial_app_state()
 
