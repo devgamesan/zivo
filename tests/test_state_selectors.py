@@ -2,6 +2,7 @@ from dataclasses import replace
 
 from plain.models import PasteConflict, PasteRequest
 from plain.state import (
+    BeginCommandPalette,
     BeginCreateInput,
     CutTargets,
     DeleteConfirmationState,
@@ -19,6 +20,7 @@ from plain.state import (
     build_initial_app_state,
     reduce_app_state,
     select_child_entries,
+    select_command_palette_state,
     select_conflict_dialog_state,
     select_current_entries,
     select_help_bar_state,
@@ -268,8 +270,36 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
 
     assert help_state.text == (
         "/ filter | s sort | d dirs | Space select | y copy | x cut | p paste | "
-        "F2 rename | ctrl+n file | ctrl+shift+n dir"
+        "F2 rename | : palette"
     )
+
+
+def test_select_command_palette_state_marks_selected_and_disabled_items() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert [item.label for item in palette_state.items[:3]] == [
+        "Create file",
+        "Create directory",
+        "Copy path",
+    ]
+    assert palette_state.items[0].selected is True
+    assert palette_state.items[2].enabled is False
+
+
+def test_select_command_palette_state_filters_query() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = replace(
+        state,
+        command_palette=replace(state.command_palette, query="dir"),
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert [item.label for item in palette_state.items] == ["Create directory"]
 
 
 def test_select_input_bar_state_for_create_mode() -> None:

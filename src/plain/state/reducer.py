@@ -14,12 +14,14 @@ from plain.models import (
 
 from .actions import (
     Action,
+    BeginCommandPalette,
     BeginCreateInput,
     BeginDeleteTargets,
     BeginFilterInput,
     BeginRenameInput,
     BrowserSnapshotFailed,
     BrowserSnapshotLoaded,
+    CancelCommandPalette,
     CancelDeleteConfirmation,
     CancelFilterInput,
     CancelPasteConflict,
@@ -39,6 +41,7 @@ from .actions import (
     FileMutationFailed,
     GoToParentDirectory,
     InitializeState,
+    MoveCommandPaletteCursor,
     MoveCursor,
     PasteClipboard,
     RecursiveFilterFailed,
@@ -46,6 +49,7 @@ from .actions import (
     ReloadDirectory,
     RequestBrowserSnapshot,
     ResolvePasteConflict,
+    SetCommandPaletteQuery,
     SetCursorPath,
     SetFilterQuery,
     SetFilterRecursive,
@@ -53,9 +57,14 @@ from .actions import (
     SetPendingInputValue,
     SetSort,
     SetUiMode,
+    SubmitCommandPalette,
     SubmitPendingInput,
     ToggleSelection,
     ToggleSelectionAndAdvance,
+)
+from .command_palette import (
+    get_filtered_command_palette_items,
+    normalize_command_palette_cursor,
 )
 from .effects import (
     Effect,
@@ -69,6 +78,7 @@ from .effects import (
 from .models import (
     AppState,
     ClipboardState,
+    CommandPaletteState,
     DeleteConfirmationState,
     DirectoryEntryState,
     NotificationState,
@@ -98,6 +108,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 ui_mode="FILTER",
                 notification=None,
                 pending_input=None,
+                command_palette=None,
                 delete_confirmation=None,
             )
         )
@@ -114,6 +125,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 recursive_entries=(),
                 notification=None,
                 pending_input=None,
+                command_palette=None,
                 delete_confirmation=None,
                 pending_recursive_filter_request_id=None,
             )
@@ -133,6 +145,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                     value=entry.name,
                     target_path=entry.path,
                 ),
+                command_palette=None,
                 delete_confirmation=None,
             )
         )
@@ -147,6 +160,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                     ui_mode="CONFIRM",
                     notification=None,
                     pending_input=None,
+                    command_palette=None,
                     paste_conflict=None,
                     delete_confirmation=DeleteConfirmationState(paths=action.paths),
                 )
@@ -172,9 +186,98 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                     prompt=prompt,
                     create_kind=action.kind,
                 ),
+                command_palette=None,
                 delete_confirmation=None,
             )
         )
+
+    if isinstance(action, BeginCommandPalette):
+        return done(
+            replace(
+                state,
+                ui_mode="PALETTE",
+                notification=None,
+                pending_input=None,
+                command_palette=CommandPaletteState(),
+                delete_confirmation=None,
+            )
+        )
+
+    if isinstance(action, CancelCommandPalette):
+        return done(
+            replace(
+                state,
+                ui_mode="BROWSING",
+                notification=None,
+                command_palette=None,
+            )
+        )
+
+    if isinstance(action, MoveCommandPaletteCursor):
+        if state.command_palette is None:
+            return done(state)
+        return done(
+            replace(
+                state,
+                command_palette=replace(
+                    state.command_palette,
+                    cursor_index=normalize_command_palette_cursor(
+                        state,
+                        state.command_palette.cursor_index + action.delta,
+                    ),
+                ),
+            )
+        )
+
+    if isinstance(action, SetCommandPaletteQuery):
+        if state.command_palette is None:
+            return done(state)
+        return done(
+            replace(
+                state,
+                command_palette=replace(
+                    state.command_palette,
+                    query=action.query,
+                    cursor_index=0,
+                ),
+            )
+        )
+
+    if isinstance(action, SubmitCommandPalette):
+        if state.command_palette is None:
+            return done(state)
+        items = get_filtered_command_palette_items(state)
+        if not items:
+            return done(
+                replace(
+                    state,
+                    notification=NotificationState(level="warning", message="No matching command"),
+                )
+            )
+        selected_item = items[
+            normalize_command_palette_cursor(state, state.command_palette.cursor_index)
+        ]
+        if not selected_item.enabled:
+            return done(
+                replace(
+                    state,
+                    notification=NotificationState(
+                        level="warning",
+                        message=f"{selected_item.label} is not available yet",
+                    ),
+                )
+            )
+        next_state = replace(
+            state,
+            ui_mode="BROWSING",
+            notification=None,
+            command_palette=None,
+        )
+        if selected_item.id == "create_file":
+            return reduce_app_state(next_state, BeginCreateInput("file"))
+        if selected_item.id == "create_dir":
+            return reduce_app_state(next_state, BeginCreateInput("dir"))
+        return done(next_state)
 
     if isinstance(action, SetPendingInputValue):
         if state.pending_input is None:
@@ -193,6 +296,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 ui_mode="BROWSING",
                 notification=None,
                 pending_input=None,
+                command_palette=None,
                 delete_confirmation=None,
             )
         )
@@ -401,6 +505,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 state,
                 paste_conflict=None,
                 delete_confirmation=None,
+                command_palette=None,
                 ui_mode="BROWSING",
                 notification=None,
             ),
@@ -499,6 +604,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             state,
             notification=None,
             recursive_entries=(),
+            command_palette=None,
             pending_browser_snapshot_request_id=request_id,
             pending_child_pane_request_id=None,
             pending_recursive_filter_request_id=None,

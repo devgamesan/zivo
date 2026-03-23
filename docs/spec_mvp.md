@@ -135,10 +135,11 @@
 | Ctrl+C | コピー |
 | Ctrl+X | カット |
 | Ctrl+V | ペースト |
+| : | コマンドパレット |
 | F2 | リネーム |
 | Delete | ゴミ箱へ移動 |
-| Ctrl+N | 新規ファイル |
-| Ctrl+Shift+N | 新規ディレクトリ |
+| コマンドパレット -> Create file | 新規ファイル |
+| コマンドパレット -> Create directory | 新規ディレクトリ |
 
 ---
 

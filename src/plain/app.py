@@ -54,6 +54,7 @@ from plain.state import (
     select_shell_data,
 )
 from plain.ui import (
+    CommandPalette,
     ConflictDialog,
     CurrentPathBar,
     HelpBar,
@@ -142,6 +143,26 @@ class PlainApp(App[None]):
         text-style: bold;
     }
 
+    #command-palette {
+        display: none;
+        height: auto;
+        min-height: 4;
+        max-height: 10;
+        margin: 0 2;
+        padding: 0 1;
+        border: round $accent;
+        background: $surface;
+    }
+
+    #command-palette-title {
+        color: $accent;
+        text-style: bold;
+    }
+
+    #command-palette-query {
+        margin: 0 0 1 0;
+    }
+
     #status-bar {
         background: $surface;
         color: $text;
@@ -196,6 +217,7 @@ class PlainApp(App[None]):
         shell = select_shell_data(self._app_state)
         yield CurrentPathBar(shell.current_path, id="current-path-bar")
         yield self._build_body(shell)
+        yield CommandPalette(shell.command_palette, id="command-palette")
         yield HelpBar(shell.help, id="help-bar")
         yield InputBar(shell.input_bar, id="input-bar")
         yield StatusBar(shell.status, id="status-bar")
@@ -218,9 +240,9 @@ class PlainApp(App[None]):
         """Handle priority key bindings through the central dispatcher."""
 
         character = None
-        if self._app_state.ui_mode in {"FILTER", "RENAME", "CREATE"}:
+        if self._app_state.ui_mode in {"FILTER", "RENAME", "CREATE", "PALETTE"}:
             if key == "space":
-                if self._app_state.ui_mode in {"RENAME", "CREATE"}:
+                if self._app_state.ui_mode in {"RENAME", "CREATE", "PALETTE"}:
                     character = " "
             elif len(key) == 1 and key.isprintable():
                 character = key
@@ -522,6 +544,7 @@ class PlainApp(App[None]):
             parent_pane = self.query_one("#parent-pane", SidePane)
             current_pane = self.query_one("#current-pane", MainPane)
             child_pane = self.query_one("#child-pane", SidePane)
+            command_palette = self.query_one("#command-palette", CommandPalette)
             help_bar = self.query_one("#help-bar", HelpBar)
             input_bar = self.query_one("#input-bar", InputBar)
             status_bar = self.query_one("#status-bar", StatusBar)
@@ -530,6 +553,7 @@ class PlainApp(App[None]):
             selectors = (
                 "#current-path-bar",
                 "#body",
+                "#command-palette",
                 "#help-bar",
                 "#input-bar",
                 "#status-bar",
@@ -542,6 +566,7 @@ class PlainApp(App[None]):
                     pass
             await self.mount(CurrentPathBar(shell.current_path, id="current-path-bar"))
             await self.mount(self._build_body(shell))
+            await self.mount(CommandPalette(shell.command_palette, id="command-palette"))
             await self.mount(HelpBar(shell.help, id="help-bar"))
             await self.mount(InputBar(shell.input_bar, id="input-bar"))
             await self.mount(StatusBar(shell.status, id="status-bar"))
@@ -552,6 +577,7 @@ class PlainApp(App[None]):
         await parent_pane.set_entries(shell.parent_entries)
         current_pane.set_entries(shell.current_entries, shell.current_cursor_index)
         await child_pane.set_entries(shell.child_entries)
+        command_palette.set_state(shell.command_palette)
         help_bar.set_state(shell.help)
         input_bar.set_state(shell.input_bar)
         status_bar.set_state(shell.status)

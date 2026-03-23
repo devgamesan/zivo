@@ -3,6 +3,8 @@
 from pathlib import Path
 
 from plain.models import (
+    CommandPaletteItemViewState,
+    CommandPaletteViewState,
     ConflictDialogState,
     HelpBarState,
     InputBarState,
@@ -11,6 +13,7 @@ from plain.models import (
     ThreePaneShellData,
 )
 
+from .command_palette import get_filtered_command_palette_items, normalize_command_palette_cursor
 from .models import AppState, DirectoryEntryState, SortState
 
 
@@ -37,6 +40,7 @@ def select_shell_data(state: AppState) -> ThreePaneShellData:
         ),
         help=select_help_bar_state(state),
         input_bar=select_input_bar_state(state),
+        command_palette=select_command_palette_state(state),
         status=select_status_bar_state(state),
         conflict_dialog=select_conflict_dialog_state(state),
     )
@@ -108,11 +112,13 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
         return HelpBarState("type name | enter apply | esc cancel")
     if state.ui_mode == "CREATE":
         return HelpBarState("type name | enter apply | esc cancel")
+    if state.ui_mode == "PALETTE":
+        return HelpBarState("type command | enter run | esc cancel")
     if state.ui_mode == "BUSY":
         return HelpBarState("processing...")
     return HelpBarState(
         "/ filter | s sort | d dirs | Space select | y copy | x cut | p paste | "
-        "F2 rename | ctrl+n file | ctrl+shift+n dir"
+        "F2 rename | : palette"
     )
 
 
@@ -130,6 +136,28 @@ def select_input_bar_state(state: AppState) -> InputBarState | None:
         mode_label=mode_label,
         prompt=state.pending_input.prompt,
         value=state.pending_input.value,
+    )
+
+
+def select_command_palette_state(state: AppState) -> CommandPaletteViewState | None:
+    """Return the visible command palette entries for the active mode."""
+
+    if state.ui_mode != "PALETTE" or state.command_palette is None:
+        return None
+
+    items = get_filtered_command_palette_items(state)
+    cursor_index = normalize_command_palette_cursor(state, state.command_palette.cursor_index)
+    return CommandPaletteViewState(
+        query=state.command_palette.query,
+        items=tuple(
+            CommandPaletteItemViewState(
+                label=item.label,
+                shortcut=item.shortcut,
+                enabled=item.enabled,
+                selected=index == cursor_index,
+            )
+            for index, item in enumerate(items)
+        ),
     )
 
 

@@ -73,6 +73,35 @@ class BeginCreateInput:
 
 
 @dataclass(frozen=True)
+class BeginCommandPalette:
+    """Open the command palette."""
+
+
+@dataclass(frozen=True)
+class CancelCommandPalette:
+    """Close the command palette without running a command."""
+
+
+@dataclass(frozen=True)
+class MoveCommandPaletteCursor:
+    """Move the command palette cursor by the provided delta."""
+
+    delta: int
+
+
+@dataclass(frozen=True)
+class SetCommandPaletteQuery:
+    """Update the command palette query."""
+
+    query: str
+
+
+@dataclass(frozen=True)
+class SubmitCommandPalette:
+    """Run the currently selected command palette command."""
+
+
+@dataclass(frozen=True)
 class SetPendingInputValue:
     """Update the rename/create text input value."""
 
@@ -319,6 +348,11 @@ Action = (
     | CancelFilterInput
     | BeginRenameInput
     | BeginCreateInput
+    | BeginCommandPalette
+    | CancelCommandPalette
+    | MoveCommandPaletteCursor
+    | SetCommandPaletteQuery
+    | SubmitCommandPalette
     | SetPendingInputValue
     | SubmitPendingInput
     | CancelPendingInput

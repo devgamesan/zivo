@@ -144,7 +144,9 @@ stateDiagram-v2
     [*] --> BROWSING
     BROWSING --> FILTER: /
     BROWSING --> RENAME: F2
-    BROWSING --> CREATE: Ctrl+N / Ctrl+Shift+N
+    BROWSING --> PALETTE: :
+    PALETTE --> CREATE: Enter on create command
+    PALETTE --> BROWSING: Esc
     FILTER --> BROWSING: Enter
     FILTER --> BROWSING: Esc
     RENAME --> BUSY: Enter
@@ -160,9 +162,11 @@ stateDiagram-v2
 補足:
 
 - `BROWSING`
-  - `Up`, `Down`, `Left`, `Right`, `Enter`, `Backspace`, `F5`, `Space`, `Esc`, `/`, `Delete`, `F2`, `Ctrl+N`, `Ctrl+Shift+N` を処理
+  - `Up`, `Down`, `Left`, `Right`, `Enter`, `Backspace`, `F5`, `Space`, `Esc`, `/`, `Delete`, `F2`, `:` を処理
 - `FILTER`
   - 文字入力、`Backspace`, `Space`, `Enter`, `Esc` を処理
+- `PALETTE`
+  - 文字入力、`Up`, `Down`, `Backspace`, `Enter`, `Esc` を処理
 - `RENAME`, `CREATE`
   - 入力バーで名前編集し、`Enter` で rename/create を実行、`Esc` で cancel
 - `CONFIRM`
@@ -182,6 +186,7 @@ stateDiagram-v2
 - 単一対象の rename
 - ゴミ箱への削除
 - 新規ファイル / ディレクトリ作成
+- コマンドパレット表示と create 系コマンド実行
 - モード別キー解釈
 - 入力バーによる rename/create 編集
 - 画面上部へのカレントパス表示

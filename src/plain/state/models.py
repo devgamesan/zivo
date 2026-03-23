@@ -8,7 +8,7 @@ from typing import Literal
 from plain.models import ConflictResolution, CreateKind, PasteConflict, PasteRequest
 from plain.models.shell_data import EntryKind, NotificationLevel
 
-UiMode = Literal["BROWSING", "FILTER", "RENAME", "CREATE", "CONFIRM", "BUSY"]
+UiMode = Literal["BROWSING", "FILTER", "RENAME", "CREATE", "PALETTE", "CONFIRM", "BUSY"]
 SortField = Literal["name", "modified", "size"]
 ClipboardMode = Literal["copy", "cut", "none"]
 
@@ -105,6 +105,14 @@ class PendingInputState:
 
 
 @dataclass(frozen=True)
+class CommandPaletteState:
+    """Transient palette search and cursor state."""
+
+    query: str = ""
+    cursor_index: int = 0
+
+
+@dataclass(frozen=True)
 class BrowserSnapshot:
     """Pane snapshot payload returned from async loaders."""
 
@@ -130,6 +138,7 @@ class AppState:
     ui_mode: UiMode = "BROWSING"
     notification: NotificationState | None = None
     pending_input: PendingInputState | None = None
+    command_palette: CommandPaletteState | None = None
     paste_conflict: PasteConflictState | None = None
     delete_confirmation: DeleteConfirmationState | None = None
     post_reload_notification: NotificationState | None = None

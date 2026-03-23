@@ -10,6 +10,7 @@ from plain.models import (
     TrashDeleteRequest,
 )
 from plain.state import (
+    BeginCommandPalette,
     BeginCreateInput,
     BeginDeleteTargets,
     BeginFilterInput,
@@ -17,6 +18,7 @@ from plain.state import (
     BrowserSnapshot,
     BrowserSnapshotFailed,
     BrowserSnapshotLoaded,
+    CancelCommandPalette,
     CancelDeleteConfirmation,
     CancelFilterInput,
     CancelPasteConflict,
@@ -39,6 +41,7 @@ from plain.state import (
     LoadBrowserSnapshotEffect,
     LoadChildPaneSnapshotEffect,
     LoadRecursiveFilterEffect,
+    MoveCommandPaletteCursor,
     MoveCursor,
     NotificationState,
     PaneState,
@@ -51,11 +54,13 @@ from plain.state import (
     ResolvePasteConflict,
     RunClipboardPasteEffect,
     RunFileMutationEffect,
+    SetCommandPaletteQuery,
     SetCursorPath,
     SetFilterQuery,
     SetPendingInputValue,
     SetSort,
     SetUiMode,
+    SubmitCommandPalette,
     SubmitPendingInput,
     ToggleSelection,
     ToggleSelectionAndAdvance,
@@ -364,6 +369,73 @@ def test_begin_create_input_sets_mode_and_kind() -> None:
         value="",
         create_kind="dir",
     )
+
+
+def test_begin_command_palette_sets_mode_and_empty_query() -> None:
+    state = build_initial_app_state()
+
+    next_state = _reduce_state(state, BeginCommandPalette())
+
+    assert next_state.ui_mode == "PALETTE"
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.query == ""
+    assert next_state.command_palette.cursor_index == 0
+
+
+def test_move_command_palette_cursor_clamps_to_visible_commands() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+
+    next_state = _reduce_state(state, MoveCommandPaletteCursor(delta=10))
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.cursor_index == 6
+
+
+def test_set_command_palette_query_resets_cursor() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = _reduce_state(state, MoveCommandPaletteCursor(delta=3))
+
+    next_state = _reduce_state(state, SetCommandPaletteQuery("dir"))
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.query == "dir"
+    assert next_state.command_palette.cursor_index == 0
+
+
+def test_submit_command_palette_runs_create_file_flow() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+
+    next_state = _reduce_state(state, SubmitCommandPalette())
+
+    assert next_state.ui_mode == "CREATE"
+    assert next_state.command_palette is None
+    assert next_state.pending_input == PendingInputState(
+        prompt="New file: ",
+        value="",
+        create_kind="file",
+    )
+
+
+def test_submit_command_palette_warns_for_disabled_command() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = _reduce_state(state, MoveCommandPaletteCursor(delta=2))
+
+    next_state = _reduce_state(state, SubmitCommandPalette())
+
+    assert next_state.ui_mode == "PALETTE"
+    assert next_state.notification == NotificationState(
+        level="warning",
+        message="Copy path is not available yet",
+    )
+
+
+def test_cancel_command_palette_returns_to_browsing() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+
+    next_state = _reduce_state(state, CancelCommandPalette())
+
+    assert next_state.ui_mode == "BROWSING"
+    assert next_state.command_palette is None
 
 
 def test_begin_delete_targets_single_runs_file_mutation() -> None:

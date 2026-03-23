@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from rich.text import Text
 from textual.css.query import NoMatches
-from textual.widgets import DataTable, Label, ListView
+from textual.widgets import DataTable, Label, ListView, Static
 
 from plain import create_app
 from plain.models import (
@@ -22,7 +22,7 @@ from plain.services import (
     FakeFileMutationService,
 )
 from plain.state import BrowserSnapshot, DirectoryEntryState, PaneState
-from plain.ui import ConflictDialog, CurrentPathBar, HelpBar, InputBar, StatusBar
+from plain.ui import CommandPalette, ConflictDialog, CurrentPathBar, HelpBar, InputBar, StatusBar
 
 
 def _build_snapshot(
@@ -84,6 +84,17 @@ async def _wait_for_input_bar(app, timeout: float = 0.5) -> InputBar:
     while True:
         try:
             return app.query_one("#input-bar", InputBar)
+        except NoMatches:
+            if asyncio.get_running_loop().time() >= deadline:
+                raise
+            await asyncio.sleep(0.01)
+
+
+async def _wait_for_command_palette(app, timeout: float = 0.5) -> CommandPalette:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
+        try:
+            return app.query_one("#command-palette", CommandPalette)
         except NoMatches:
             if asyncio.get_running_loop().time() >= deadline:
                 raise
@@ -864,8 +875,62 @@ async def test_app_displays_browsing_help_bar() -> None:
 
         assert str(help_bar.renderable) == (
             "/ filter | s sort | d dirs | Space select | y copy | x cut | p paste | "
-            "F2 rename | ctrl+n file | ctrl+shift+n dir"
+            "F2 rename | : palette"
         )
+
+
+@pytest.mark.asyncio
+async def test_app_colon_shows_command_palette() -> None:
+    path = "/tmp/plain-command-palette"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (DirectoryEntryState(f"{path}/docs", "docs", "dir"),),
+                child_path=f"{path}/docs",
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press(":")
+        await asyncio.sleep(0.05)
+
+        palette = await _wait_for_command_palette(app)
+        items = palette.query_one("#command-palette-items", Static)
+
+        assert app.app_state.ui_mode == "PALETTE"
+        assert palette.display is True
+        assert "Create file" in str(items.renderable)
+
+
+@pytest.mark.asyncio
+async def test_app_command_palette_create_file_opens_input_bar() -> None:
+    path = "/tmp/plain-command-palette-create"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (DirectoryEntryState(f"{path}/docs", "docs", "dir"),),
+                child_path=f"{path}/docs",
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press(":")
+        await pilot.press("enter")
+        await asyncio.sleep(0.05)
+
+        input_bar = await _wait_for_input_bar(app)
+
+        assert app.app_state.ui_mode == "CREATE"
+        assert input_bar.display is True
+        assert str(input_bar.renderable) == "[NEW FILE] New file: _  enter apply | esc cancel"
 
 
 @pytest.mark.asyncio

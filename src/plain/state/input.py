@@ -2,10 +2,11 @@
 
 from .actions import (
     Action,
-    BeginCreateInput,
+    BeginCommandPalette,
     BeginDeleteTargets,
     BeginFilterInput,
     BeginRenameInput,
+    CancelCommandPalette,
     CancelDeleteConfirmation,
     CancelFilterInput,
     CancelPasteConflict,
@@ -17,15 +18,18 @@ from .actions import (
     CutTargets,
     EnterCursorDirectory,
     GoToParentDirectory,
+    MoveCommandPaletteCursor,
     MoveCursor,
     PasteClipboard,
     ReloadDirectory,
     ResolvePasteConflict,
+    SetCommandPaletteQuery,
     SetFilterQuery,
     SetFilterRecursive,
     SetNotification,
     SetPendingInputValue,
     SetSort,
+    SubmitCommandPalette,
     SubmitPendingInput,
     ToggleSelectionAndAdvance,
 )
@@ -45,8 +49,7 @@ BROWSING_KEYMAP = {
     "ctrl+h": "go_to_parent",
     "f5": "reload_directory",
     "f2": "begin_rename",
-    "ctrl+n": "begin_create_file",
-    "ctrl+shift+n": "begin_create_dir",
+    ":": "begin_command_palette",
     "s": "cycle_sort",
     "d": "toggle_directories_first",
     "delete": "delete_targets",
@@ -87,6 +90,9 @@ def dispatch_key_input(
 
     if state.ui_mode == "BUSY":
         return _warn("Input ignored while processing")
+
+    if state.ui_mode == "PALETTE":
+        return _dispatch_command_palette_input(state, key=key, character=character)
 
     if state.ui_mode in {"RENAME", "CREATE"}:
         return _dispatch_pending_input(state, key=key, character=character)
@@ -141,11 +147,8 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
             return _warn("Rename requires a single target")
         return _supported(BeginRenameInput(target_paths[0]))
 
-    if key == "ctrl+n":
-        return _supported(BeginCreateInput("file"))
-
-    if key == "ctrl+shift+n":
-        return _supported(BeginCreateInput("dir"))
+    if key == ":":
+        return _supported(BeginCommandPalette())
 
     if key == "s":
         return _supported(_next_sort_action(state))
@@ -170,6 +173,35 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
         return _warn("Opening files is not implemented yet")
 
     return ()
+
+
+def _dispatch_command_palette_input(
+    state: AppState,
+    *,
+    key: str,
+    character: str | None,
+) -> DispatchedActions:
+    if key == "escape":
+        return _supported(CancelCommandPalette())
+
+    if key == "up":
+        return _supported(MoveCommandPaletteCursor(delta=-1))
+
+    if key == "down":
+        return _supported(MoveCommandPaletteCursor(delta=1))
+
+    if key == "enter":
+        return _supported(SubmitCommandPalette())
+
+    if key == "backspace":
+        current_query = state.command_palette.query if state.command_palette is not None else ""
+        return _supported(SetCommandPaletteQuery(current_query[:-1]))
+
+    if character and character.isprintable():
+        current_query = state.command_palette.query if state.command_palette is not None else ""
+        return _supported(SetCommandPaletteQuery(f"{current_query}{character}"))
+
+    return _warn("Use arrows, type to filter, Enter to run, or Esc to cancel")
 
 
 def _dispatch_filter_input(

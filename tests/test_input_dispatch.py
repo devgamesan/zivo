@@ -1,10 +1,11 @@
 from dataclasses import replace
 
 from plain.state import (
-    BeginCreateInput,
+    BeginCommandPalette,
     BeginDeleteTargets,
     BeginFilterInput,
     BeginRenameInput,
+    CancelCommandPalette,
     CancelDeleteConfirmation,
     CancelFilterInput,
     CancelPasteConflict,
@@ -17,17 +18,20 @@ from plain.state import (
     DeleteConfirmationState,
     EnterCursorDirectory,
     GoToParentDirectory,
+    MoveCommandPaletteCursor,
     MoveCursor,
     NotificationState,
     PasteClipboard,
     PendingInputState,
     ReloadDirectory,
     ResolvePasteConflict,
+    SetCommandPaletteQuery,
     SetFilterQuery,
     SetFilterRecursive,
     SetNotification,
     SetPendingInputValue,
     SetSort,
+    SubmitCommandPalette,
     SubmitPendingInput,
     ToggleSelectionAndAdvance,
     build_initial_app_state,
@@ -211,20 +215,44 @@ def test_browsing_f2_warns_for_multiple_targets() -> None:
     )
 
 
-def test_browsing_ctrl_n_begins_file_create_mode() -> None:
+def test_browsing_colon_opens_command_palette() -> None:
     state = build_initial_app_state()
 
-    actions = dispatch_key_input(state, key="ctrl+n")
+    actions = dispatch_key_input(state, key=":", character=":")
 
-    assert actions == (SetNotification(None), BeginCreateInput("file"))
+    assert actions == (SetNotification(None), BeginCommandPalette())
 
 
-def test_browsing_ctrl_shift_n_begins_directory_create_mode() -> None:
-    state = build_initial_app_state()
+def test_palette_enter_submits_selected_command() -> None:
+    state = replace(build_initial_app_state(), ui_mode="PALETTE")
 
-    actions = dispatch_key_input(state, key="ctrl+shift+n")
+    actions = dispatch_key_input(state, key="enter")
 
-    assert actions == (SetNotification(None), BeginCreateInput("dir"))
+    assert actions == (SetNotification(None), SubmitCommandPalette())
+
+
+def test_palette_escape_closes_command_palette() -> None:
+    state = replace(build_initial_app_state(), ui_mode="PALETTE")
+
+    actions = dispatch_key_input(state, key="escape")
+
+    assert actions == (SetNotification(None), CancelCommandPalette())
+
+
+def test_palette_down_moves_cursor() -> None:
+    state = replace(build_initial_app_state(), ui_mode="PALETTE")
+
+    actions = dispatch_key_input(state, key="down")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=1))
+
+
+def test_palette_printable_key_updates_query() -> None:
+    state = replace(build_initial_app_state(), ui_mode="PALETTE")
+
+    actions = dispatch_key_input(state, key="f", character="f")
+
+    assert actions == (SetNotification(None), SetCommandPaletteQuery("f"))
 
 
 def test_browsing_s_cycles_sort_state() -> None:

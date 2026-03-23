@@ -60,6 +60,25 @@ class InputBarState:
 
 
 @dataclass(frozen=True)
+class CommandPaletteItemViewState:
+    """Single command row rendered in the command palette."""
+
+    label: str
+    shortcut: str | None
+    enabled: bool
+    selected: bool = False
+
+
+@dataclass(frozen=True)
+class CommandPaletteViewState:
+    """Display data for the command palette."""
+
+    query: str
+    items: tuple[CommandPaletteItemViewState, ...]
+    empty_message: str = "No matching commands"
+
+
+@dataclass(frozen=True)
 class ConflictDialogState:
     """Display data for the paste conflict dialog."""
 
@@ -79,6 +98,7 @@ class ThreePaneShellData:
     current_cursor_index: int | None
     help: HelpBarState
     input_bar: InputBarState | None
+    command_palette: CommandPaletteViewState | None
     status: StatusBarState
     conflict_dialog: ConflictDialogState | None = None
 
@@ -108,8 +128,12 @@ def build_dummy_shell_data() -> ThreePaneShellData:
             PaneEntry("wireframes", "dir"),
         ),
         current_cursor_index=0,
-        help=HelpBarState("Space select | y copy | x cut | p paste"),
+        help=HelpBarState(
+            "/ filter | s sort | d dirs | Space select | y copy | x cut | p paste | "
+            "F2 rename | : palette"
+        ),
         input_bar=None,
+        command_palette=None,
         status=StatusBarState(
             item_count=len(current_entries),
             selected_count=0,
