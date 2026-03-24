@@ -28,6 +28,7 @@ from plain.state import (
     ChildPaneSnapshotLoaded,
     ClearSelection,
     ClipboardPasteCompleted,
+    ClipboardPasteFailed,
     ClipboardPasteNeedsResolution,
     ConfirmDeleteTargets,
     ConfirmFilterInput,
@@ -54,6 +55,7 @@ from plain.state import (
     PasteClipboard,
     PasteConflictState,
     PendingInputState,
+    RecursiveFilterFailed,
     RecursiveFilterLoaded,
     ReloadDirectory,
     RequestBrowserSnapshot,
@@ -64,6 +66,7 @@ from plain.state import (
     SetCommandPaletteQuery,
     SetCursorPath,
     SetFilterQuery,
+    SetFilterRecursive,
     SetPendingInputValue,
     SetSort,
     SetUiMode,
@@ -75,10 +78,11 @@ from plain.state import (
     build_initial_app_state,
     reduce_app_state,
 )
+from tests.state_test_helpers import entry, reduce_state
 
 
 def _reduce_state(state, action):
-    return reduce_app_state(state, action).state
+    return reduce_state(state, action)
 
 
 def test_set_ui_mode_updates_only_mode() -> None:
@@ -413,6 +417,14 @@ def test_begin_rename_input_sets_initial_value_from_target_name() -> None:
     )
 
 
+def test_begin_rename_input_ignores_unknown_path() -> None:
+    state = build_initial_app_state()
+
+    next_state = _reduce_state(state, BeginRenameInput("/tmp/missing"))
+
+    assert next_state == state
+
+
 def test_begin_create_input_sets_mode_and_kind() -> None:
     state = build_initial_app_state()
 
@@ -481,6 +493,19 @@ def test_submit_command_palette_warns_for_disabled_command() -> None:
     assert next_state.notification == NotificationState(
         level="warning",
         message="Copy path is not available yet",
+    )
+
+
+def test_submit_command_palette_warns_when_query_has_no_match() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("zzz"))
+
+    next_state = _reduce_state(state, SubmitCommandPalette())
+
+    assert next_state.ui_mode == "PALETTE"
+    assert next_state.notification == NotificationState(
+        level="warning",
+        message="No matching command",
     )
 
 
@@ -571,6 +596,14 @@ def test_begin_delete_targets_single_runs_file_mutation() -> None:
             request=TrashDeleteRequest(paths=("/home/tadashi/develop/plain/docs",)),
         ),
     )
+
+
+def test_begin_delete_targets_with_empty_paths_keeps_state() -> None:
+    state = build_initial_app_state()
+
+    next_state = _reduce_state(state, BeginDeleteTargets(()))
+
+    assert next_state == state
 
 
 def test_begin_delete_targets_multiple_enters_confirm_mode() -> None:
@@ -815,6 +848,38 @@ def test_cancel_filter_input_clears_query_and_recursive_flag() -> None:
     assert next_state.filter.recursive is False
 
 
+def test_set_filter_recursive_false_clears_recursive_entries_and_normalizes_state() -> None:
+    initial_state = build_initial_app_state()
+    state = replace(
+        initial_state,
+        filter=replace(initial_state.filter, query="spec", active=True, recursive=True),
+        recursive_entries=(
+            entry("/home/tadashi/develop/plain/docs/spec_mvp.md"),
+            entry("/home/tadashi/develop/plain/README.md"),
+        ),
+        current_pane=replace(
+            initial_state.current_pane,
+            cursor_path="/home/tadashi/develop/plain/docs/spec_mvp.md",
+            selected_paths=frozenset(
+                {
+                    "/home/tadashi/develop/plain/docs/spec_mvp.md",
+                    "/home/tadashi/develop/plain/README.md",
+                }
+            ),
+        ),
+    )
+
+    result = reduce_app_state(state, SetFilterRecursive(False))
+
+    assert result.state.filter.recursive is False
+    assert result.state.recursive_entries == ()
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/plain/docs"
+    assert result.state.current_pane.selected_paths == frozenset(
+        {"/home/tadashi/develop/plain/README.md"}
+    )
+    assert result.effects == ()
+
+
 def test_copy_targets_updates_clipboard_state() -> None:
     state = build_initial_app_state()
 
@@ -822,6 +887,24 @@ def test_copy_targets_updates_clipboard_state() -> None:
 
     assert next_state.clipboard.mode == "copy"
     assert next_state.clipboard.paths == ("/home/tadashi/develop/plain/docs",)
+
+
+def test_copy_targets_warns_when_empty() -> None:
+    state = build_initial_app_state()
+
+    next_state = _reduce_state(state, CopyTargets(()))
+
+    assert next_state.notification == NotificationState(level="warning", message="Nothing to copy")
+    assert next_state.clipboard.mode == "none"
+
+
+def test_cut_targets_warns_when_empty() -> None:
+    state = build_initial_app_state()
+
+    next_state = _reduce_state(state, CutTargets(()))
+
+    assert next_state.notification == NotificationState(level="warning", message="Nothing to cut")
+    assert next_state.clipboard.mode == "none"
 
 
 def test_paste_clipboard_emits_paste_effect_and_sets_busy() -> None:
@@ -841,6 +924,18 @@ def test_paste_clipboard_emits_paste_effect_and_sets_busy() -> None:
         ),
     )
     assert result.effects[0].request.destination_dir == "/home/tadashi/develop/plain"
+
+
+def test_paste_clipboard_warns_when_empty() -> None:
+    state = build_initial_app_state()
+
+    next_state = _reduce_state(state, PasteClipboard())
+
+    assert next_state.notification == NotificationState(
+        level="warning",
+        message="Clipboard is empty",
+    )
+    assert next_state.ui_mode == "BROWSING"
 
 
 def test_paste_needs_resolution_enters_confirm_mode() -> None:
@@ -870,6 +965,33 @@ def test_paste_needs_resolution_enters_confirm_mode() -> None:
     assert next_state.ui_mode == "CONFIRM"
     assert isinstance(next_state.paste_conflict, PasteConflictState)
     assert next_state.paste_conflict.first_conflict == conflict
+
+
+def test_paste_needs_resolution_ignores_stale_request() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        CopyTargets(("/home/tadashi/develop/plain/docs",)),
+    )
+    requested = reduce_app_state(state, PasteClipboard()).state
+
+    conflict = PasteConflict(
+        source_path="/home/tadashi/develop/plain/docs",
+        destination_path="/home/tadashi/develop/plain/docs",
+    )
+    next_state = _reduce_state(
+        requested,
+        ClipboardPasteNeedsResolution(
+            request_id=99,
+            request=PasteRequest(
+                mode="copy",
+                source_paths=("/home/tadashi/develop/plain/docs",),
+                destination_dir="/home/tadashi/develop/plain",
+            ),
+            conflicts=(conflict,),
+        ),
+    )
+
+    assert next_state == requested
 
 
 def test_resolve_paste_conflict_restarts_paste_with_resolution() -> None:
@@ -1046,6 +1168,40 @@ def test_delete_file_mutation_failed_returns_to_browsing() -> None:
     )
 
 
+def test_clipboard_paste_failed_returns_to_browsing_and_clears_dialog_state() -> None:
+    conflict = PasteConflict(
+        source_path="/home/tadashi/develop/plain/docs",
+        destination_path="/home/tadashi/develop/plain/docs",
+    )
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="BUSY",
+        pending_paste_request_id=4,
+        paste_conflict=PasteConflictState(
+            request=PasteRequest(
+                mode="copy",
+                source_paths=("/home/tadashi/develop/plain/docs",),
+                destination_dir="/home/tadashi/develop/plain",
+            ),
+            conflicts=(conflict,),
+            first_conflict=conflict,
+        ),
+        delete_confirmation=DeleteConfirmationState(paths=("/home/tadashi/develop/plain/docs",)),
+        name_conflict=NameConflictState(kind="rename", name="docs"),
+    )
+
+    next_state = _reduce_state(
+        state,
+        ClipboardPasteFailed(request_id=4, message="paste failed"),
+    )
+
+    assert next_state.ui_mode == "BROWSING"
+    assert next_state.paste_conflict is None
+    assert next_state.delete_confirmation is None
+    assert next_state.name_conflict is None
+    assert next_state.notification == NotificationState(level="error", message="paste failed")
+
+
 def test_external_launch_failed_sets_error_notification() -> None:
     state = build_initial_app_state()
 
@@ -1150,6 +1306,18 @@ def test_request_browser_snapshot_returns_effect_and_updates_pending_request() -
     assert len(result.effects) == 1
     assert result.effects[0].path == "/tmp/example"
     assert result.effects[0].request_id == 1
+
+
+def test_browser_snapshot_failed_ignores_stale_request() -> None:
+    state = build_initial_app_state()
+    requested = reduce_app_state(state, RequestBrowserSnapshot("/tmp/example")).state
+
+    next_state = _reduce_state(
+        requested,
+        BrowserSnapshotFailed(request_id=99, message="load failed"),
+    )
+
+    assert next_state == requested
 
 
 def test_browser_snapshot_loaded_ignores_stale_request() -> None:
@@ -1290,6 +1458,60 @@ def test_browser_snapshot_failed_sets_error_notification() -> None:
     assert next_state.pending_browser_snapshot_request_id is None
 
 
+def test_recursive_filter_loaded_ignores_stale_request() -> None:
+    initial_state = build_initial_app_state()
+    state = replace(
+        initial_state,
+        filter=replace(initial_state.filter, query="spec", active=True, recursive=True),
+        pending_recursive_filter_request_id=3,
+    )
+
+    next_state = _reduce_state(
+        state,
+        RecursiveFilterLoaded(
+            request_id=99,
+            entries=(entry("/home/tadashi/develop/plain/docs/spec_mvp.md"),),
+        ),
+    )
+
+    assert next_state == state
+
+
+def test_recursive_filter_failed_clears_results_and_sets_error() -> None:
+    initial_state = build_initial_app_state()
+    state = replace(
+        initial_state,
+        filter=replace(initial_state.filter, query="spec", active=True, recursive=True),
+        recursive_entries=(entry("/home/tadashi/develop/plain/docs/spec_mvp.md"),),
+        pending_recursive_filter_request_id=4,
+    )
+
+    next_state = _reduce_state(
+        state,
+        RecursiveFilterFailed(request_id=4, message="search failed"),
+    )
+
+    assert next_state.recursive_entries == ()
+    assert next_state.pending_recursive_filter_request_id is None
+    assert next_state.notification == NotificationState(level="error", message="search failed")
+
+
+def test_recursive_filter_failed_ignores_stale_request() -> None:
+    initial_state = build_initial_app_state()
+    state = replace(
+        initial_state,
+        filter=replace(initial_state.filter, query="spec", active=True, recursive=True),
+        pending_recursive_filter_request_id=4,
+    )
+
+    next_state = _reduce_state(
+        state,
+        RecursiveFilterFailed(request_id=99, message="search failed"),
+    )
+
+    assert next_state == state
+
+
 def test_move_cursor_emits_child_snapshot_effect_only_when_target_changes() -> None:
     state = build_initial_app_state()
     visible_paths = (
@@ -1344,6 +1566,18 @@ def test_child_pane_snapshot_loaded_ignores_stale_request() -> None:
             request_id=99,
             pane=requested.child_pane,
         ),
+    )
+
+    assert next_state == requested
+
+
+def test_child_pane_snapshot_failed_ignores_stale_request() -> None:
+    state = build_initial_app_state()
+    requested = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/plain/src")).state
+
+    next_state = _reduce_state(
+        requested,
+        ChildPaneSnapshotFailed(request_id=99, message="permission denied"),
     )
 
     assert next_state == requested

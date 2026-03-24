@@ -21,7 +21,6 @@ from plain.state import (
     SetSort,
     ToggleSelection,
     build_initial_app_state,
-    reduce_app_state,
     select_child_entries,
     select_command_palette_state,
     select_conflict_dialog_state,
@@ -32,11 +31,13 @@ from plain.state import (
     select_shell_data,
     select_status_bar_state,
     select_target_paths,
+    select_visible_current_entry_states,
 )
+from tests.state_test_helpers import entry, pane, reduce_state
 
 
 def _reduce_state(state, action):
-    return reduce_app_state(state, action).state
+    return reduce_state(state, action)
 
 
 def test_select_current_entries_applies_filter_and_sort() -> None:
@@ -97,6 +98,60 @@ def test_select_current_entries_hides_hidden_by_default() -> None:
     entries = select_current_entries(state)
 
     assert [entry.name for entry in entries] == ["docs"]
+
+
+def test_select_visible_current_entries_sorts_by_modified_with_missing_values_last() -> None:
+    state = replace(
+        build_initial_app_state(),
+        current_pane=pane(
+            "/home/tadashi/develop/plain",
+            (
+                entry(
+                    "/home/tadashi/develop/plain/alpha.txt",
+                    modified_at=None,
+                ),
+                entry(
+                    "/home/tadashi/develop/plain/beta.txt",
+                    modified_at=build_initial_app_state().current_pane.entries[3].modified_at,
+                ),
+                entry(
+                    "/home/tadashi/develop/plain/gamma.txt",
+                    modified_at=build_initial_app_state().current_pane.entries[4].modified_at,
+                ),
+            ),
+            cursor_path="/home/tadashi/develop/plain/alpha.txt",
+        ),
+        sort=replace(build_initial_app_state().sort, field="modified", descending=True),
+    )
+
+    entries = select_visible_current_entry_states(state)
+
+    assert [entry.name for entry in entries] == ["alpha.txt", "beta.txt", "gamma.txt"]
+
+
+def test_select_visible_current_entries_sorts_by_size_without_directories_first() -> None:
+    state = replace(
+        build_initial_app_state(),
+        current_pane=pane(
+            "/home/tadashi/develop/plain",
+            (
+                entry("/home/tadashi/develop/plain/docs", kind="dir"),
+                entry("/home/tadashi/develop/plain/alpha.txt", size_bytes=500),
+                entry("/home/tadashi/develop/plain/beta.txt", size_bytes=2_000),
+            ),
+            cursor_path="/home/tadashi/develop/plain/docs",
+        ),
+        sort=replace(
+            build_initial_app_state().sort,
+            field="size",
+            descending=True,
+            directories_first=False,
+        ),
+    )
+
+    entries = select_visible_current_entry_states(state)
+
+    assert [entry.name for entry in entries] == ["docs", "beta.txt", "alpha.txt"]
 
 
 def test_select_parent_and_child_entries_hide_hidden_unless_enabled() -> None:
@@ -195,6 +250,25 @@ def test_select_target_paths_prefers_recursive_selection_in_visible_order() -> N
         "/home/tadashi/develop/plain/README.md",
         "/home/tadashi/develop/plain/docs/spec_mvp.md",
     )
+
+
+def test_select_target_paths_ignores_hidden_selected_entries_when_hidden_files_are_off() -> None:
+    hidden_path = "/home/tadashi/develop/plain/.env"
+    visible_path = "/home/tadashi/develop/plain/docs"
+    state = replace(
+        build_initial_app_state(),
+        current_pane=pane(
+            "/home/tadashi/develop/plain",
+            (
+                entry(hidden_path, hidden=True),
+                entry(visible_path, kind="dir"),
+            ),
+            cursor_path=visible_path,
+            selected_paths=(hidden_path, visible_path),
+        ),
+    )
+
+    assert select_target_paths(state) == (visible_path,)
 
 
 def test_select_target_paths_falls_back_to_cursor() -> None:
@@ -301,6 +375,28 @@ def test_select_shell_data_exposes_visible_cursor_index() -> None:
     assert shell.current_cursor_index == 2
 
 
+def test_select_shell_data_includes_selected_cut_and_contextual_models() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        ToggleSelection("/home/tadashi/develop/plain/README.md"),
+    )
+    state = _reduce_state(state, CutTargets(("/home/tadashi/develop/plain/docs",)))
+    state = replace(
+        state,
+        filter=replace(state.filter, query="read", active=True),
+        notification=NotificationState(level="info", message="Ready"),
+    )
+
+    shell = select_shell_data(state)
+
+    assert [entry.name for entry in shell.current_entries] == ["README.md"]
+    assert shell.current_entries[0].selected is True
+    assert shell.parent_entries[0].cut is False
+    assert shell.current_context_input is not None
+    assert shell.current_context_input.value == "read"
+    assert shell.status.message == "Ready"
+
+
 def test_select_status_bar_keeps_summary_format() -> None:
     state = build_initial_app_state()
 
@@ -344,6 +440,14 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
         "/ filter | s sort | d dirs | Space select | y copy | x cut | p paste | "
         "F2 rename | : palette"
     )
+
+
+def test_select_help_bar_for_busy_mode() -> None:
+    state = replace(build_initial_app_state(), ui_mode="BUSY")
+
+    help_state = select_help_bar_state(state)
+
+    assert help_state.text == "processing..."
 
 
 def test_select_command_palette_state_marks_selected_and_disabled_items() -> None:
