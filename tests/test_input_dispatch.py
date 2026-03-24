@@ -16,10 +16,12 @@ from plain.state import (
     CopyTargets,
     CutTargets,
     DeleteConfirmationState,
+    DismissNameConflict,
     EnterCursorDirectory,
     GoToParentDirectory,
     MoveCommandPaletteCursor,
     MoveCursor,
+    NameConflictState,
     NotificationState,
     PasteClipboard,
     PendingInputState,
@@ -372,6 +374,30 @@ def test_confirm_escape_returns_to_browsing() -> None:
     actions = dispatch_key_input(state, key="escape")
 
     assert actions == (SetNotification(None), CancelPasteConflict())
+
+
+def test_name_conflict_confirm_enter_returns_to_input() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        name_conflict=NameConflictState(kind="rename", name="docs"),
+    )
+
+    actions = dispatch_key_input(state, key="enter")
+
+    assert actions == (SetNotification(None), DismissNameConflict())
+
+
+def test_name_conflict_confirm_escape_returns_to_input() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        name_conflict=NameConflictState(kind="create_file", name="docs"),
+    )
+
+    actions = dispatch_key_input(state, key="escape")
+
+    assert actions == (SetNotification(None), DismissNameConflict())
 
 
 def test_confirm_o_selects_overwrite_resolution() -> None:

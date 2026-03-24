@@ -9,6 +9,7 @@ from plain.state import (
     CutTargets,
     DeleteConfirmationState,
     DirectoryEntryState,
+    NameConflictState,
     NotificationState,
     PaneState,
     PasteConflictState,
@@ -479,6 +480,32 @@ def test_select_conflict_dialog_state_formats_delete_confirmation() -> None:
     assert dialog.options == ("enter confirm", "esc cancel")
 
 
+def test_select_conflict_dialog_state_formats_rename_conflict() -> None:
+    state = replace(
+        build_initial_app_state(),
+        name_conflict=NameConflictState(kind="rename", name="src"),
+    )
+
+    dialog = select_conflict_dialog_state(state)
+
+    assert dialog is not None
+    assert dialog.title == "Rename Conflict"
+    assert dialog.options == ("enter return to input", "esc return to input")
+
+
+def test_select_conflict_dialog_state_formats_create_directory_conflict() -> None:
+    state = replace(
+        build_initial_app_state(),
+        name_conflict=NameConflictState(kind="create_dir", name="docs"),
+    )
+
+    dialog = select_conflict_dialog_state(state)
+
+    assert dialog is not None
+    assert dialog.title == "Create Directory Conflict"
+    assert "creating the directory" in dialog.message
+
+
 def test_select_help_bar_for_paste_conflict_uses_generic_guidance() -> None:
     conflict = PasteConflict(
         source_path="/home/tadashi/develop/plain/docs",
@@ -501,6 +528,18 @@ def test_select_help_bar_for_paste_conflict_uses_generic_guidance() -> None:
     help_state = select_help_bar_state(state)
 
     assert help_state.text == "resolve conflict in dialog"
+
+
+def test_select_help_bar_for_name_conflict() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        name_conflict=NameConflictState(kind="create_file", name="docs"),
+    )
+
+    help_state = select_help_bar_state(state)
+
+    assert help_state.text == "enter return to input | esc return to input"
 
 
 def test_select_help_bar_for_delete_confirmation() -> None:

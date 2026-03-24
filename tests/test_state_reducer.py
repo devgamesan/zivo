@@ -34,6 +34,7 @@ from plain.state import (
     CutTargets,
     DeleteConfirmationState,
     DirectoryEntryState,
+    DismissNameConflict,
     EnterCursorDirectory,
     FileMutationCompleted,
     FileMutationFailed,
@@ -43,6 +44,7 @@ from plain.state import (
     LoadRecursiveFilterEffect,
     MoveCommandPaletteCursor,
     MoveCursor,
+    NameConflictState,
     NotificationState,
     PaneState,
     PasteClipboard,
@@ -604,11 +606,12 @@ def test_submit_pending_input_rejects_duplicate_name() -> None:
 
     next_state = _reduce_state(state, SubmitPendingInput())
 
-    assert next_state.ui_mode == "CREATE"
+    assert next_state.ui_mode == "CONFIRM"
     assert next_state.pending_input is not None
-    assert next_state.notification == NotificationState(
-        level="error",
-        message="An entry named 'README.md' already exists",
+    assert next_state.notification is None
+    assert next_state.name_conflict == NameConflictState(
+        kind="create_file",
+        name="README.md",
     )
 
 
@@ -679,6 +682,43 @@ def test_submit_pending_input_emits_create_effect() -> None:
             ),
         ),
     )
+
+
+def test_submit_pending_input_name_conflict_enters_confirm_mode_for_rename() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="RENAME",
+        pending_input=PendingInputState(
+            prompt="Rename: ",
+            value="src",
+            target_path="/home/tadashi/develop/plain/docs",
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitPendingInput())
+
+    assert result.state.ui_mode == "CONFIRM"
+    assert result.state.notification is None
+    assert result.state.name_conflict == NameConflictState(kind="rename", name="src")
+    assert result.effects == ()
+
+
+def test_submit_pending_input_name_conflict_enters_confirm_mode_for_create_dir() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CREATE",
+        pending_input=PendingInputState(
+            prompt="New directory: ",
+            value="docs",
+            create_kind="dir",
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitPendingInput())
+
+    assert result.state.ui_mode == "CONFIRM"
+    assert result.state.name_conflict == NameConflictState(kind="create_dir", name="docs")
+    assert result.effects == ()
 
 
 def test_confirm_filter_input_returns_to_browsing() -> None:
@@ -932,6 +972,44 @@ def test_delete_file_mutation_failed_returns_to_browsing() -> None:
         level="error",
         message="trash failed",
     )
+
+
+def test_dismiss_name_conflict_restores_rename_mode_and_keeps_input() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        pending_input=PendingInputState(
+            prompt="Rename: ",
+            value="src",
+            target_path="/home/tadashi/develop/plain/docs",
+        ),
+        name_conflict=NameConflictState(kind="rename", name="src"),
+    )
+
+    next_state = _reduce_state(state, DismissNameConflict())
+
+    assert next_state.ui_mode == "RENAME"
+    assert next_state.pending_input == state.pending_input
+    assert next_state.name_conflict is None
+
+
+def test_dismiss_name_conflict_restores_create_mode_and_keeps_input() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        pending_input=PendingInputState(
+            prompt="New file: ",
+            value="docs",
+            create_kind="file",
+        ),
+        name_conflict=NameConflictState(kind="create_file", name="docs"),
+    )
+
+    next_state = _reduce_state(state, DismissNameConflict())
+
+    assert next_state.ui_mode == "CREATE"
+    assert next_state.pending_input == state.pending_input
+    assert next_state.name_conflict is None
 
 
 def test_cancel_paste_conflict_returns_to_browsing_with_warning() -> None:

@@ -111,6 +111,8 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
     if state.ui_mode == "CONFIRM":
         if state.delete_confirmation is not None:
             return HelpBarState("enter confirm delete | esc cancel")
+        if state.name_conflict is not None:
+            return HelpBarState("enter return to input | esc return to input")
         return HelpBarState("resolve conflict in dialog")
     if state.ui_mode == "FILTER":
         return HelpBarState("type filter | space recursive | enter apply | esc cancel")
@@ -199,6 +201,25 @@ def select_conflict_dialog_state(state: AppState) -> ConflictDialogState | None:
             title="Delete Confirmation",
             message=message,
             options=("enter confirm", "esc cancel"),
+        )
+
+    if state.name_conflict is not None:
+        name = state.name_conflict.name
+        if state.name_conflict.kind == "rename":
+            title = "Rename Conflict"
+            message = f"'{name}' already exists. Enter a different name before renaming."
+        elif state.name_conflict.kind == "create_file":
+            title = "Create File Conflict"
+            message = f"'{name}' already exists. Enter a different name before creating the file."
+        else:
+            title = "Create Directory Conflict"
+            message = (
+                f"'{name}' already exists. Enter a different name before creating the directory."
+            )
+        return ConflictDialogState(
+            title=title,
+            message=message,
+            options=("enter return to input", "esc return to input"),
         )
 
     if state.paste_conflict is None:

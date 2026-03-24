@@ -36,6 +36,7 @@ from .actions import (
     ConfirmFilterInput,
     CopyTargets,
     CutTargets,
+    DismissNameConflict,
     EnterCursorDirectory,
     FileMutationCompleted,
     FileMutationFailed,
@@ -82,6 +83,8 @@ from .models import (
     CommandPaletteState,
     DeleteConfirmationState,
     DirectoryEntryState,
+    NameConflictKind,
+    NameConflictState,
     NotificationState,
     PaneState,
     PasteConflictState,
@@ -111,6 +114,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 pending_input=None,
                 command_palette=None,
                 delete_confirmation=None,
+                name_conflict=None,
             )
         )
 
@@ -128,6 +132,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 pending_input=None,
                 command_palette=None,
                 delete_confirmation=None,
+                name_conflict=None,
                 pending_recursive_filter_request_id=None,
             )
         )
@@ -148,6 +153,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 ),
                 command_palette=None,
                 delete_confirmation=None,
+                name_conflict=None,
             )
         )
 
@@ -164,6 +170,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                     command_palette=None,
                     paste_conflict=None,
                     delete_confirmation=DeleteConfirmationState(paths=action.paths),
+                    name_conflict=None,
                 )
             )
         return _run_file_mutation_request(
@@ -172,6 +179,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 notification=None,
                 paste_conflict=None,
                 delete_confirmation=None,
+                name_conflict=None,
             ),
             TrashDeleteRequest(paths=action.paths),
         )
@@ -189,6 +197,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 ),
                 command_palette=None,
                 delete_confirmation=None,
+                name_conflict=None,
             )
         )
 
@@ -201,6 +210,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 pending_input=None,
                 command_palette=CommandPaletteState(),
                 delete_confirmation=None,
+                name_conflict=None,
             )
         )
 
@@ -211,6 +221,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 ui_mode="BROWSING",
                 notification=None,
                 command_palette=None,
+                name_conflict=None,
             )
         )
 
@@ -301,6 +312,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 pending_input=None,
                 command_palette=None,
                 delete_confirmation=None,
+                name_conflict=None,
             )
         )
 
@@ -309,10 +321,25 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             return done(state)
         validation_error = _validate_pending_input(state)
         if validation_error is not None:
+            if _is_name_conflict_validation_error(state, validation_error):
+                return done(
+                    replace(
+                        state,
+                        ui_mode="CONFIRM",
+                        notification=None,
+                        paste_conflict=None,
+                        delete_confirmation=None,
+                        name_conflict=NameConflictState(
+                            kind=_name_conflict_kind(state),
+                            name=state.pending_input.value,
+                        ),
+                    )
+                )
             return done(
                 replace(
                     state,
                     notification=NotificationState(level="error", message=validation_error),
+                    name_conflict=None,
                 )
             )
         request = _build_file_mutation_request(state)
@@ -761,6 +788,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                     first_conflict=action.conflicts[0],
                 ),
                 delete_confirmation=None,
+                name_conflict=None,
                 pending_paste_request_id=None,
                 ui_mode="CONFIRM",
             )
@@ -780,6 +808,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             notification=None,
             paste_conflict=None,
             delete_confirmation=None,
+            name_conflict=None,
             post_reload_notification=_notification_for_paste_summary(action.summary),
             pending_paste_request_id=None,
             ui_mode="BROWSING",
@@ -795,6 +824,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 notification=NotificationState(level="error", message=action.message),
                 paste_conflict=None,
                 delete_confirmation=None,
+                name_conflict=None,
                 pending_paste_request_id=None,
                 ui_mode="BROWSING",
             )
@@ -814,6 +844,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             current_pane=replace(state.current_pane, selected_paths=selected_paths),
             pending_input=None,
             delete_confirmation=None,
+            name_conflict=None,
             pending_file_mutation_request_id=None,
             post_reload_notification=NotificationState(
                 level=action.result.level,
@@ -836,7 +867,20 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 notification=NotificationState(level="error", message=action.message),
                 pending_file_mutation_request_id=None,
                 delete_confirmation=None,
-                ui_mode=_restore_ui_mode_after_file_mutation_failure(state),
+                name_conflict=None,
+                ui_mode=_restore_ui_mode_after_pending_input(state),
+            )
+        )
+
+    if isinstance(action, DismissNameConflict):
+        if state.name_conflict is None:
+            return done(state)
+        return done(
+            replace(
+                state,
+                notification=None,
+                name_conflict=None,
+                ui_mode=_restore_ui_mode_after_pending_input(state),
             )
         )
 
@@ -939,7 +983,7 @@ def _cursor_path_after_file_mutation(
     return result.path
 
 
-def _restore_ui_mode_after_file_mutation_failure(state: AppState) -> str:
+def _restore_ui_mode_after_pending_input(state: AppState) -> str:
     if state.pending_input is None:
         return "BROWSING"
     if state.pending_input.create_kind is not None:
@@ -1099,6 +1143,20 @@ def _validate_pending_input(state: AppState) -> str | None:
     if candidate_path in existing_paths and candidate_path != current_target_path:
         return f"An entry named '{name}' already exists"
     return None
+
+
+def _is_name_conflict_validation_error(state: AppState, message: str) -> bool:
+    return state.pending_input is not None and message == (
+        f"An entry named '{state.pending_input.value}' already exists"
+    )
+
+
+def _name_conflict_kind(state: AppState) -> NameConflictKind:
+    if state.pending_input is not None and state.pending_input.create_kind == "file":
+        return "create_file"
+    if state.pending_input is not None and state.pending_input.create_kind == "dir":
+        return "create_dir"
+    return "rename"
 
 
 def _build_file_mutation_request(
