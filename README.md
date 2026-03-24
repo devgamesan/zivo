@@ -23,7 +23,7 @@ uv run plain
 uv run python -m plain
 ```
 
-現在は起動時に `CWD` を実ファイルシステムから読み込み、画面上部にカレントパス、その下に親・中央・子の 3 ペイン、コマンドパレット、ヘルプ行、ステータスバーを表示します。`FILTER` / `RENAME` / `CREATE` の入力中は `Current Directory` タイトル直下に入力ラインを表示し、中央ペイン近傍でモード遷移と入力値を確認できます。中央ペインは詳細表示、左右ペインは軽量表示で、カーソル移動時は必要なときだけ子ペインを再取得します。`←` / `→` / `Enter` / `Backspace` / `F5` によるディレクトリ移動と再読み込みに加えて、`s` / `d` によるソート切替、`Space` / `y` / `x` / `p` による選択と copy/cut/paste、`Delete` によるゴミ箱削除、`F2` による rename、`:` によるコマンドパレット起動を reducer 経由で処理します。コマンドパレット経由ではまず `新規ファイル` / `新規ディレクトリ` に加えて `Show hidden files` / `Hide hidden files` を実行でき、未実装コマンドは一覧上で無効表示されます。取得失敗やファイル操作結果はステータスバーの通知へ変換されます。
+現在は起動時に `CWD` を実ファイルシステムから読み込み、画面上部にカレントパス、その下に親・中央・子の 3 ペイン、コマンドパレット、ヘルプ行、ステータスバーを表示します。`FILTER` / `RENAME` / `CREATE` の入力中は `Current Directory` タイトル直下に入力ラインを表示し、中央ペイン近傍でモード遷移と入力値を確認できます。中央ペインは詳細表示、左右ペインは軽量表示で、カーソル移動時は必要なときだけ子ペインを再取得します。`←` / `→` / `Enter` / `Backspace` / `F5` によるディレクトリ移動と再読み込みに加えて、`s` / `d` によるソート切替、`Space` / `y` / `x` / `p` による選択と copy/cut/paste、`Delete` によるゴミ箱削除、`F2` による rename、`:` によるコマンドパレット起動を reducer 経由で処理します。ファイル cursor 上の `Enter` / `→` は OS の既定アプリでファイルを開きます。コマンドパレット経由では `新規ファイル` / `新規ディレクトリ` / `Open terminal here` / `Show hidden files` / `Hide hidden files` を実行でき、未実装コマンドは一覧上で無効表示されます。取得失敗やファイル操作結果はステータスバーの通知へ変換されます。
 
 実装構造の全体像は [docs/architecture.md](docs/architecture.md) にまとめています。
 
@@ -35,7 +35,7 @@ uv run python -m plain
 | --- | --- | --- |
 | `BROWSING` | `↑` / `↓` | 可視エントリ内でカーソル移動 |
 | `BROWSING` | `←` / `Backspace` | 親ディレクトリへ移動 |
-| `BROWSING` | `→` / `Enter` | カーソルがディレクトリならその中へ移動 |
+| `BROWSING` | `→` / `Enter` | カーソルがディレクトリならその中へ移動、ファイルなら既定アプリで開く |
 | `BROWSING` | `F5` | カレントディレクトリを再読み込み |
 | `BROWSING` | `s` | `name asc -> name desc -> modified desc -> modified asc -> size desc -> size asc` の順でソートを循環 |
 | `BROWSING` | `d` | ディレクトリ優先表示 ON/OFF を切り替え |
@@ -65,8 +65,6 @@ uv run python -m plain
 | `CONFIRM` | `o` / `s` / `r` / `Esc` | 競合ダイアログで overwrite / skip / rename / cancel を選ぶ |
 | `CONFIRM` | `Enter` / `Esc` | 削除確認ダイアログで confirm / cancel を選ぶ |
 | `BUSY` | 任意 | 入力を無視し、ステータスバーへ警告を表示 |
-
-ファイル cursor 上の `Enter` / `→` による open はまだ未実装で、warning 通知を表示します。
 
 選択はカレントディレクトリ単位で管理します。別ディレクトリへ移動した場合は選択を解除し、同じディレクトリの再読み込みではまだ存在する選択だけを維持します。copy は clipboard を維持し、cut は貼り付けで 1 件以上成功した時点で clipboard を空にします。cut 中の項目は一覧上で dim 表示し、保留中の移動対象であることを見分けられるようにしています。
 

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from plain.models import (
     CreatePathRequest,
+    ExternalLaunchRequest,
     FileMutationResult,
     PasteRequest,
     PasteSummary,
@@ -38,12 +39,16 @@ from .actions import (
     CutTargets,
     DismissNameConflict,
     EnterCursorDirectory,
+    ExternalLaunchCompleted,
+    ExternalLaunchFailed,
     FileMutationCompleted,
     FileMutationFailed,
     GoToParentDirectory,
     InitializeState,
     MoveCommandPaletteCursor,
     MoveCursor,
+    OpenPathWithDefaultApp,
+    OpenTerminalAtPath,
     PasteClipboard,
     RecursiveFilterFailed,
     RecursiveFilterLoaded,
@@ -75,6 +80,7 @@ from .effects import (
     LoadRecursiveFilterEffect,
     ReduceResult,
     RunClipboardPasteEffect,
+    RunExternalLaunchEffect,
     RunFileMutationEffect,
 )
 from .models import (
@@ -291,6 +297,8 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             return reduce_app_state(next_state, BeginCreateInput("dir"))
         if selected_item.id == "toggle_hidden":
             return reduce_app_state(next_state, ToggleHiddenFiles())
+        if selected_item.id == "open_terminal":
+            return reduce_app_state(next_state, OpenTerminalAtPath(next_state.current_path))
         return done(next_state)
 
     if isinstance(action, SetPendingInputValue):
@@ -409,6 +417,21 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 cursor_path=state.current_pane.cursor_path,
                 blocking=True,
             ),
+        )
+
+    if isinstance(action, OpenPathWithDefaultApp):
+        entry = _current_entry_for_path(state, action.path)
+        if entry is None or entry.kind != "file":
+            return done(state)
+        return _run_external_launch_request(
+            replace(state, notification=None),
+            ExternalLaunchRequest(kind="open_file", path=entry.path),
+        )
+
+    if isinstance(action, OpenTerminalAtPath):
+        return _run_external_launch_request(
+            replace(state, notification=None),
+            ExternalLaunchRequest(kind="open_terminal", path=action.path),
         )
 
     if isinstance(action, ToggleSelection):
@@ -872,6 +895,17 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             )
         )
 
+    if isinstance(action, ExternalLaunchCompleted):
+        return done(state)
+
+    if isinstance(action, ExternalLaunchFailed):
+        return done(
+            replace(
+                state,
+                notification=NotificationState(level="error", message=action.message),
+            )
+        )
+
     if isinstance(action, DismissNameConflict):
         if state.name_conflict is None:
             return done(state)
@@ -936,6 +970,21 @@ def _run_paste_request(state: AppState, request: PasteRequest) -> ReduceResult:
     return ReduceResult(
         state=next_state,
         effects=(RunClipboardPasteEffect(request_id=request_id, request=request),),
+    )
+
+
+def _run_external_launch_request(
+    state: AppState,
+    request: ExternalLaunchRequest,
+) -> ReduceResult:
+    request_id = state.next_request_id
+    next_state = replace(
+        state,
+        next_request_id=request_id + 1,
+    )
+    return ReduceResult(
+        state=next_state,
+        effects=(RunExternalLaunchEffect(request_id=request_id, request=request),),
     )
 
 

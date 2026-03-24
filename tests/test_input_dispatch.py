@@ -23,6 +23,7 @@ from plain.state import (
     MoveCursor,
     NameConflictState,
     NotificationState,
+    OpenPathWithDefaultApp,
     PasteClipboard,
     PendingInputState,
     ReloadDirectory,
@@ -139,7 +140,7 @@ def test_browsing_right_enters_directory() -> None:
     assert actions == (SetNotification(None), EnterCursorDirectory())
 
 
-def test_browsing_enter_on_file_shows_warning() -> None:
+def test_browsing_enter_on_file_dispatches_open_with_default_app() -> None:
     state = build_initial_app_state()
     state = replace(
         state,
@@ -152,9 +153,8 @@ def test_browsing_enter_on_file_shows_warning() -> None:
     actions = dispatch_key_input(state, key="enter")
 
     assert actions == (
-        SetNotification(
-            NotificationState(level="warning", message="Opening files is not implemented yet")
-        ),
+        SetNotification(None),
+        OpenPathWithDefaultApp("/home/tadashi/develop/plain/README.md"),
     )
 
 

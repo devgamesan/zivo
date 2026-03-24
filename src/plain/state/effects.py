@@ -2,7 +2,13 @@
 
 from dataclasses import dataclass
 
-from plain.models import CreatePathRequest, PasteRequest, RenameRequest, TrashDeleteRequest
+from plain.models import (
+    CreatePathRequest,
+    ExternalLaunchRequest,
+    PasteRequest,
+    RenameRequest,
+    TrashDeleteRequest,
+)
 
 from .models import AppState
 
@@ -50,12 +56,21 @@ class RunFileMutationEffect:
     request: RenameRequest | CreatePathRequest | TrashDeleteRequest
 
 
+@dataclass(frozen=True)
+class RunExternalLaunchEffect:
+    """Execute an external file or terminal launch outside the reducer."""
+
+    request_id: int
+    request: ExternalLaunchRequest
+
+
 Effect = (
     LoadBrowserSnapshotEffect
     | LoadChildPaneSnapshotEffect
     | LoadRecursiveFilterEffect
     | RunClipboardPasteEffect
     | RunFileMutationEffect
+    | RunExternalLaunchEffect
 )
 
 

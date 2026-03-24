@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from plain.models import (
     ConflictResolution,
     CreateKind,
+    ExternalLaunchRequest,
     FileMutationResult,
     PasteConflict,
     PasteRequest,
@@ -146,6 +147,20 @@ class GoToParentDirectory:
 @dataclass(frozen=True)
 class ReloadDirectory:
     """Reload the current directory snapshot."""
+
+
+@dataclass(frozen=True)
+class OpenPathWithDefaultApp:
+    """Open a file path with the OS default application."""
+
+    path: str
+
+
+@dataclass(frozen=True)
+class OpenTerminalAtPath:
+    """Open a new terminal rooted at the supplied directory path."""
+
+    path: str
 
 
 @dataclass(frozen=True)
@@ -350,6 +365,22 @@ class FileMutationFailed:
     message: str
 
 
+@dataclass(frozen=True)
+class ExternalLaunchCompleted:
+    """Apply a completed external launch operation."""
+
+    request_id: int
+
+
+@dataclass(frozen=True)
+class ExternalLaunchFailed:
+    """Apply a terminal external launch failure."""
+
+    request_id: int
+    request: ExternalLaunchRequest
+    message: str
+
+
 Action = (
     InitializeState
     | SetUiMode
@@ -371,6 +402,8 @@ Action = (
     | EnterCursorDirectory
     | GoToParentDirectory
     | ReloadDirectory
+    | OpenPathWithDefaultApp
+    | OpenTerminalAtPath
     | ToggleSelection
     | ToggleSelectionAndAdvance
     | ClearSelection
@@ -397,4 +430,6 @@ Action = (
     | ClipboardPasteFailed
     | FileMutationCompleted
     | FileMutationFailed
+    | ExternalLaunchCompleted
+    | ExternalLaunchFailed
 )

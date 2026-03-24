@@ -8,6 +8,7 @@ from textual.widgets import DataTable, Label, ListView, Static
 
 from plain import create_app
 from plain.models import (
+    ExternalLaunchRequest,
     FileMutationResult,
     PasteConflict,
     PasteConflictPrompt,
@@ -19,6 +20,7 @@ from plain.models import (
 from plain.services import (
     FakeBrowserSnapshotLoader,
     FakeClipboardOperationService,
+    FakeExternalLaunchService,
     FakeFileMutationService,
 )
 from plain.state import BrowserSnapshot, DirectoryEntryState, PaneState
@@ -139,6 +141,18 @@ async def _wait_for_path(app, expected_path: str, timeout: float = 0.5) -> None:
             return
         if asyncio.get_running_loop().time() >= deadline:
             raise AssertionError(f"path did not become {expected_path}")
+        await asyncio.sleep(0.01)
+
+
+async def _wait_for_external_launch_count(app, expected_count: int, timeout: float = 0.5) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
+        service = getattr(app, "_external_launch_service", None)
+        executed_requests = getattr(service, "executed_requests", None)
+        if executed_requests is not None and len(executed_requests) == expected_count:
+            return
+        if asyncio.get_running_loop().time() >= deadline:
+            raise AssertionError(f"external launches did not become {expected_count}")
         await asyncio.sleep(0.01)
 
 
@@ -969,6 +983,112 @@ async def test_app_command_palette_toggles_hidden_files() -> None:
         await _wait_for_row_count(app, 1)
 
         assert app.app_state.show_hidden is False
+
+
+@pytest.mark.asyncio
+async def test_app_enter_on_file_launches_default_app() -> None:
+    path = "/tmp/plain-open-file"
+    launch_service = FakeExternalLaunchService()
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (
+                    DirectoryEntryState(f"{path}/docs", "docs", "dir"),
+                    DirectoryEntryState(f"{path}/README.md", "README.md", "file"),
+                ),
+                child_path=f"{path}/docs",
+            )
+        }
+    )
+    app = create_app(
+        snapshot_loader=loader,
+        external_launch_service=launch_service,
+        initial_path=path,
+    )
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("down")
+        await pilot.press("enter")
+        await _wait_for_external_launch_count(app, 1)
+
+        assert launch_service.executed_requests == [
+            ExternalLaunchRequest(kind="open_file", path=f"{path}/README.md")
+        ]
+        assert app.app_state.ui_mode == "BROWSING"
+
+
+@pytest.mark.asyncio
+async def test_app_command_palette_open_terminal_launches_current_directory() -> None:
+    path = "/tmp/plain-open-terminal"
+    launch_service = FakeExternalLaunchService()
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (
+                    DirectoryEntryState(f"{path}/docs", "docs", "dir"),
+                    DirectoryEntryState(f"{path}/README.md", "README.md", "file"),
+                ),
+                child_path=f"{path}/docs",
+            )
+        }
+    )
+    app = create_app(
+        snapshot_loader=loader,
+        external_launch_service=launch_service,
+        initial_path=path,
+    )
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press(":")
+        await pilot.press("t", "e", "r", "m", "i", "n", "a", "l")
+        await pilot.press("enter")
+        await _wait_for_external_launch_count(app, 1)
+
+        assert launch_service.executed_requests == [
+            ExternalLaunchRequest(kind="open_terminal", path=path)
+        ]
+        assert app.app_state.ui_mode == "BROWSING"
+
+
+@pytest.mark.asyncio
+async def test_app_external_launch_failure_surfaces_error_notification() -> None:
+    path = "/tmp/plain-open-failure"
+    request = ExternalLaunchRequest(kind="open_file", path=f"{path}/README.md")
+    launch_service = FakeExternalLaunchService(
+        failure_messages={request: "Failed to open /tmp/plain-open-failure/README.md: denied"}
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (
+                    DirectoryEntryState(f"{path}/docs", "docs", "dir"),
+                    DirectoryEntryState(f"{path}/README.md", "README.md", "file"),
+                ),
+                child_path=f"{path}/docs",
+            )
+        }
+    )
+    app = create_app(
+        snapshot_loader=loader,
+        external_launch_service=launch_service,
+        initial_path=path,
+    )
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("down")
+        await pilot.press("enter")
+        await _wait_for_external_launch_count(app, 1)
+
+        status_bar = await _wait_for_status_bar(app)
+        assert "error: Failed to open /tmp/plain-open-failure/README.md: denied" in str(
+            status_bar.renderable
+        )
 
 
 @pytest.mark.asyncio

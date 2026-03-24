@@ -20,9 +20,11 @@ from plain.models import (
 from plain.services import (
     BrowserSnapshotLoader,
     ClipboardOperationService,
+    ExternalLaunchService,
     FileMutationService,
     LiveBrowserSnapshotLoader,
     LiveClipboardOperationService,
+    LiveExternalLaunchService,
     LiveFileMutationService,
 )
 from plain.state import (
@@ -36,6 +38,8 @@ from plain.state import (
     ClipboardPasteFailed,
     ClipboardPasteNeedsResolution,
     Effect,
+    ExternalLaunchCompleted,
+    ExternalLaunchFailed,
     FileMutationCompleted,
     FileMutationFailed,
     LoadBrowserSnapshotEffect,
@@ -46,6 +50,7 @@ from plain.state import (
     ReduceResult,
     RequestBrowserSnapshot,
     RunClipboardPasteEffect,
+    RunExternalLaunchEffect,
     RunFileMutationEffect,
     build_placeholder_app_state,
     dispatch_key_input,
@@ -138,7 +143,7 @@ class PlainApp(App[None]):
         display: none;
         height: auto;
         min-height: 4;
-        max-height: 10;
+        max-height: 12;
         margin: 0 2;
         padding: 0 1;
         border: round $accent;
@@ -199,6 +204,7 @@ class PlainApp(App[None]):
         snapshot_loader: BrowserSnapshotLoader | None = None,
         clipboard_service: ClipboardOperationService | None = None,
         file_mutation_service: FileMutationService | None = None,
+        external_launch_service: ExternalLaunchService | None = None,
         *,
         initial_path: str | Path | None = None,
     ) -> None:
@@ -208,6 +214,7 @@ class PlainApp(App[None]):
         self._snapshot_loader = snapshot_loader or LiveBrowserSnapshotLoader()
         self._clipboard_service = clipboard_service or LiveClipboardOperationService()
         self._file_mutation_service = file_mutation_service or LiveFileMutationService()
+        self._external_launch_service = external_launch_service or LiveExternalLaunchService()
         self._pending_workers: dict[str, Effect] = {}
 
     @property
@@ -327,6 +334,8 @@ class PlainApp(App[None]):
                 self._schedule_clipboard_paste(effect)
             elif isinstance(effect, RunFileMutationEffect):
                 self._schedule_file_mutation(effect)
+            elif isinstance(effect, RunExternalLaunchEffect):
+                self._schedule_external_launch(effect)
 
     def _schedule_browser_snapshot(self, effect: LoadBrowserSnapshotEffect) -> None:
         worker = self.run_worker(
@@ -396,6 +405,17 @@ class PlainApp(App[None]):
             description=str(effect.request),
             exit_on_error=False,
             exclusive=True,
+            thread=True,
+        )
+        self._pending_workers[worker.name] = effect
+
+    def _schedule_external_launch(self, effect: RunExternalLaunchEffect) -> None:
+        worker = self.run_worker(
+            partial(self._external_launch_service.execute, effect.request),
+            name=f"external-launch:{effect.request_id}",
+            group="external-launch",
+            description=str(effect.request),
+            exit_on_error=False,
             thread=True,
         )
         self._pending_workers[worker.name] = effect
@@ -485,6 +505,12 @@ class PlainApp(App[None]):
                 )
                 return
 
+            if isinstance(effect, RunExternalLaunchEffect):
+                await self.dispatch_actions(
+                    (ExternalLaunchCompleted(request_id=effect.request_id),)
+                )
+                return
+
         message = str(event.worker.error) or "Operation failed"
         if isinstance(effect, LoadBrowserSnapshotEffect):
             await self.dispatch_actions(
@@ -525,6 +551,18 @@ class PlainApp(App[None]):
                 (
                     FileMutationFailed(
                         request_id=effect.request_id,
+                        message=message,
+                    ),
+                )
+            )
+            return
+
+        if isinstance(effect, RunExternalLaunchEffect):
+            await self.dispatch_actions(
+                (
+                    ExternalLaunchFailed(
+                        request_id=effect.request_id,
+                        request=effect.request,
                         message=message,
                     ),
                 )
@@ -588,6 +626,7 @@ def create_app(
     snapshot_loader: BrowserSnapshotLoader | None = None,
     clipboard_service: ClipboardOperationService | None = None,
     file_mutation_service: FileMutationService | None = None,
+    external_launch_service: ExternalLaunchService | None = None,
     *,
     initial_path: str | Path | None = None,
 ) -> PlainApp:
@@ -597,5 +636,6 @@ def create_app(
         snapshot_loader=snapshot_loader,
         clipboard_service=clipboard_service,
         file_mutation_service=file_mutation_service,
+        external_launch_service=external_launch_service,
         initial_path=initial_path,
     )

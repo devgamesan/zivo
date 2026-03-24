@@ -21,6 +21,7 @@ from .actions import (
     GoToParentDirectory,
     MoveCommandPaletteCursor,
     MoveCursor,
+    OpenPathWithDefaultApp,
     PasteClipboard,
     ReloadDirectory,
     ResolvePasteConflict,
@@ -171,7 +172,9 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
     if key in {"right", "enter"}:
         if cursor_entry is not None and cursor_entry.kind == "dir":
             return _supported(EnterCursorDirectory())
-        return _warn("Opening files is not implemented yet")
+        if cursor_entry is not None and cursor_entry.kind == "file":
+            return _supported(OpenPathWithDefaultApp(cursor_entry.path))
+        return ()
 
     return ()
 

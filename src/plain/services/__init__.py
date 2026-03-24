@@ -11,6 +11,11 @@ from .clipboard_operations import (
     FakeClipboardOperationService,
     LiveClipboardOperationService,
 )
+from .external_launcher import (
+    ExternalLaunchService,
+    FakeExternalLaunchService,
+    LiveExternalLaunchService,
+)
 from .file_mutations import (
     FakeFileMutationService,
     FileMutationService,
@@ -20,10 +25,13 @@ from .file_mutations import (
 __all__ = [
     "BrowserSnapshotLoader",
     "ClipboardOperationService",
+    "ExternalLaunchService",
     "FakeFileMutationService",
     "FakeBrowserSnapshotLoader",
     "FakeClipboardOperationService",
+    "FakeExternalLaunchService",
     "FileMutationService",
+    "LiveExternalLaunchService",
     "LiveFileMutationService",
     "LiveClipboardOperationService",
     "LiveBrowserSnapshotLoader",

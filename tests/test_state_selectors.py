@@ -359,6 +359,7 @@ def test_select_command_palette_state_marks_selected_and_disabled_items() -> Non
     ]
     assert palette_state.items[0].selected is True
     assert palette_state.items[2].enabled is False
+    assert any(item.label == "Open terminal here" and item.enabled for item in palette_state.items)
 
 
 def test_select_command_palette_state_filters_query() -> None:

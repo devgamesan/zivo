@@ -2,6 +2,7 @@ from dataclasses import replace
 
 from plain.models import (
     CreatePathRequest,
+    ExternalLaunchRequest,
     FileMutationResult,
     PasteConflict,
     PasteRequest,
@@ -36,6 +37,7 @@ from plain.state import (
     DirectoryEntryState,
     DismissNameConflict,
     EnterCursorDirectory,
+    ExternalLaunchFailed,
     FileMutationCompleted,
     FileMutationFailed,
     GoToParentDirectory,
@@ -46,6 +48,8 @@ from plain.state import (
     MoveCursor,
     NameConflictState,
     NotificationState,
+    OpenPathWithDefaultApp,
+    OpenTerminalAtPath,
     PaneState,
     PasteClipboard,
     PasteConflictState,
@@ -55,6 +59,7 @@ from plain.state import (
     RequestBrowserSnapshot,
     ResolvePasteConflict,
     RunClipboardPasteEffect,
+    RunExternalLaunchEffect,
     RunFileMutationEffect,
     SetCommandPaletteQuery,
     SetCursorPath,
@@ -339,6 +344,53 @@ def test_reload_directory_requests_snapshot_with_current_cursor() -> None:
     assert result.effects[0].blocking is True
 
 
+def test_open_path_with_default_app_emits_external_launch_effect() -> None:
+    state = replace(
+        build_initial_app_state(),
+        current_pane=replace(
+            build_initial_app_state().current_pane,
+            cursor_path="/home/tadashi/develop/plain/README.md",
+        ),
+    )
+
+    result = reduce_app_state(
+        state,
+        OpenPathWithDefaultApp("/home/tadashi/develop/plain/README.md"),
+    )
+
+    assert result.state.ui_mode == "BROWSING"
+    assert result.state.next_request_id == 2
+    assert result.effects == (
+        RunExternalLaunchEffect(
+            request_id=1,
+            request=ExternalLaunchRequest(
+                kind="open_file",
+                path="/home/tadashi/develop/plain/README.md",
+            ),
+        ),
+    )
+
+
+def test_open_terminal_at_path_emits_external_launch_effect() -> None:
+    state = build_initial_app_state()
+
+    result = reduce_app_state(
+        state,
+        OpenTerminalAtPath("/home/tadashi/develop/plain"),
+    )
+
+    assert result.state.next_request_id == 2
+    assert result.effects == (
+        RunExternalLaunchEffect(
+            request_id=1,
+            request=ExternalLaunchRequest(
+                kind="open_terminal",
+                path="/home/tadashi/develop/plain",
+            ),
+        ),
+    )
+
+
 def test_begin_filter_input_switches_mode_without_mutating_query() -> None:
     state = build_initial_app_state()
 
@@ -444,6 +496,26 @@ def test_submit_command_palette_toggles_hidden_files() -> None:
     assert next_state.notification == NotificationState(
         level="info",
         message="Hidden files shown",
+    )
+
+
+def test_submit_command_palette_runs_open_terminal_flow() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("terminal"))
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.ui_mode == "BROWSING"
+    assert result.state.command_palette is None
+    assert result.state.next_request_id == 2
+    assert result.effects == (
+        RunExternalLaunchEffect(
+            request_id=1,
+            request=ExternalLaunchRequest(
+                kind="open_terminal",
+                path="/home/tadashi/develop/plain",
+            ),
+        ),
     )
 
 
@@ -971,6 +1043,24 @@ def test_delete_file_mutation_failed_returns_to_browsing() -> None:
     assert next_state.notification == NotificationState(
         level="error",
         message="trash failed",
+    )
+
+
+def test_external_launch_failed_sets_error_notification() -> None:
+    state = build_initial_app_state()
+
+    next_state = _reduce_state(
+        state,
+        ExternalLaunchFailed(
+            request_id=5,
+            request=ExternalLaunchRequest(kind="open_file", path="/tmp/plain/README.md"),
+            message="Failed to open /tmp/plain/README.md: permission denied",
+        ),
+    )
+
+    assert next_state.notification == NotificationState(
+        level="error",
+        message="Failed to open /tmp/plain/README.md: permission denied",
     )
 
 

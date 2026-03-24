@@ -1,5 +1,6 @@
 """Models used across the Plain application."""
 
+from .external_launch import ExternalLaunchKind, ExternalLaunchRequest
 from .file_operations import (
     ConflictResolution,
     CreateKind,
@@ -35,6 +36,8 @@ __all__ = [
     "ConflictResolution",
     "CreateKind",
     "CreatePathRequest",
+    "ExternalLaunchKind",
+    "ExternalLaunchRequest",
     "FileMutationResult",
     "FileMutationRequest",
     "HelpBarState",

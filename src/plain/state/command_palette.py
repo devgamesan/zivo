@@ -38,11 +38,9 @@ def normalize_command_palette_cursor(state: AppState, cursor_index: int) -> int:
 
 def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, ...]:
     target_paths = _select_target_paths(state)
-    current_entry = _current_entry(state)
     single_target_entry = _single_target_entry(state, target_paths)
     has_target = bool(target_paths)
     has_single_target = single_target_entry is not None
-    has_directory_target = single_target_entry is not None and single_target_entry.kind == "dir"
 
     items = [
         CommandPaletteItem(
@@ -96,15 +94,14 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             )
         )
 
-    if has_directory_target or (current_entry is not None and current_entry.kind == "dir"):
-        items.append(
-            CommandPaletteItem(
-                id="open_terminal",
-                label="Open terminal here",
-                shortcut=None,
-                enabled=False,
-            )
+    items.append(
+        CommandPaletteItem(
+            id="open_terminal",
+            label="Open terminal here",
+            shortcut=None,
+            enabled=True,
         )
+    )
 
     return tuple(items)
 
