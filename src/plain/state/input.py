@@ -16,6 +16,7 @@ from .actions import (
     ConfirmFilterInput,
     CopyTargets,
     CutTargets,
+    DismissNameConflict,
     EnterCursorDirectory,
     GoToParentDirectory,
     MoveCommandPaletteCursor,
@@ -236,6 +237,11 @@ def _dispatch_confirm_input(state: AppState, key: str) -> DispatchedActions:
         if key == "enter":
             return _supported(ConfirmDeleteTargets())
         return _warn("Use Enter to confirm delete or Esc to cancel")
+
+    if state.name_conflict is not None:
+        if key in {"enter", "escape"}:
+            return _supported(DismissNameConflict())
+        return _warn("Use Enter or Esc to return to name editing")
 
     if key == "escape":
         return _supported(CancelPasteConflict())

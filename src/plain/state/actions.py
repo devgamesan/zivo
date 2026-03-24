@@ -210,6 +210,11 @@ class CancelDeleteConfirmation:
 
 
 @dataclass(frozen=True)
+class DismissNameConflict:
+    """Dismiss the pending rename/create conflict dialog."""
+
+
+@dataclass(frozen=True)
 class SetFilterQuery:
     """Update the active filter query."""
 
@@ -374,6 +379,7 @@ Action = (
     | PasteClipboard
     | ResolvePasteConflict
     | CancelPasteConflict
+    | DismissNameConflict
     | SetFilterQuery
     | SetFilterRecursive
     | ToggleHiddenFiles

@@ -1167,6 +1167,38 @@ async def test_app_rename_mode_shows_context_input_and_updates_help() -> None:
 
 
 @pytest.mark.asyncio
+async def test_app_rename_name_conflict_dialog_returns_to_input(tmp_path) -> None:
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "src").mkdir()
+    app = create_app(initial_path=tmp_path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, str(tmp_path))
+        await pilot.press("f2")
+        await asyncio.sleep(0.05)
+        for _ in range(4):
+            await pilot.press("backspace")
+        await pilot.press("s", "r", "c", "enter")
+        await asyncio.sleep(0.05)
+
+        help_bar = app.query_one("#help-bar", HelpBar)
+        dialog = app.query_one("#conflict-dialog", ConflictDialog)
+
+        assert app.app_state.ui_mode == "CONFIRM"
+        assert str(help_bar.renderable) == "enter return to input | esc return to input"
+        assert dialog.display is True
+
+        await pilot.press("enter")
+        await asyncio.sleep(0.05)
+
+        input_bar = await _wait_for_context_input(app)
+
+        assert app.app_state.ui_mode == "RENAME"
+        assert dialog.display is False
+        assert str(input_bar.renderable) == "[RENAME] Rename: src  enter apply | esc cancel"
+
+
+@pytest.mark.asyncio
 async def test_app_rename_round_trip_updates_status_bar(tmp_path) -> None:
     (tmp_path / "docs").mkdir()
     app = create_app(initial_path=tmp_path)
@@ -1188,6 +1220,36 @@ async def test_app_rename_round_trip_updates_status_bar(tmp_path) -> None:
             "1 items | 0 selected | sort: name asc dirs:on | "
             "filter: none | info: Renamed to manuals"
         )
+
+
+@pytest.mark.asyncio
+async def test_app_create_name_conflict_dialog_returns_to_input(tmp_path) -> None:
+    (tmp_path / "docs").mkdir()
+    app = create_app(initial_path=tmp_path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, str(tmp_path))
+        await pilot.press(":")
+        await pilot.press("enter")
+        await asyncio.sleep(0.05)
+        await pilot.press("d", "o", "c", "s", "enter")
+        await asyncio.sleep(0.05)
+
+        help_bar = app.query_one("#help-bar", HelpBar)
+        dialog = app.query_one("#conflict-dialog", ConflictDialog)
+
+        assert app.app_state.ui_mode == "CONFIRM"
+        assert str(help_bar.renderable) == "enter return to input | esc return to input"
+        assert dialog.display is True
+
+        await pilot.press("escape")
+        await asyncio.sleep(0.05)
+
+        input_bar = await _wait_for_context_input(app)
+
+        assert app.app_state.ui_mode == "CREATE"
+        assert dialog.display is False
+        assert str(input_bar.renderable) == "[NEW FILE] New file: docs  enter apply | esc cancel"
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,4 @@
-"""Paste conflict dialog widget."""
+"""Shared confirmation/conflict dialog widget."""
 
 from textual.containers import Container
 from textual.widgets import Static
@@ -7,7 +7,7 @@ from plain.models import ConflictDialogState
 
 
 class ConflictDialog(Container):
-    """Simple overlay used while waiting on paste conflict input."""
+    """Simple overlay used while waiting on confirm/conflict input."""
 
     def __init__(
         self,

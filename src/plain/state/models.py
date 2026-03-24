@@ -11,6 +11,7 @@ from plain.models.shell_data import EntryKind, NotificationLevel
 UiMode = Literal["BROWSING", "FILTER", "RENAME", "CREATE", "PALETTE", "CONFIRM", "BUSY"]
 SortField = Literal["name", "modified", "size"]
 ClipboardMode = Literal["copy", "cut", "none"]
+NameConflictKind = Literal["rename", "create_file", "create_dir"]
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,14 @@ class DeleteConfirmationState:
 
 
 @dataclass(frozen=True)
+class NameConflictState:
+    """Pending dialog state for rename/create name collisions."""
+
+    kind: NameConflictKind
+    name: str
+
+
+@dataclass(frozen=True)
 class HistoryState:
     """Back/forward navigation history."""
 
@@ -142,6 +151,7 @@ class AppState:
     command_palette: CommandPaletteState | None = None
     paste_conflict: PasteConflictState | None = None
     delete_confirmation: DeleteConfirmationState | None = None
+    name_conflict: NameConflictState | None = None
     post_reload_notification: NotificationState | None = None
     pending_browser_snapshot_request_id: int | None = None
     pending_child_pane_request_id: int | None = None
