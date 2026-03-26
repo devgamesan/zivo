@@ -44,7 +44,6 @@ from plain.state import (
     GoToParentDirectory,
     LoadBrowserSnapshotEffect,
     LoadChildPaneSnapshotEffect,
-    LoadRecursiveFilterEffect,
     MoveCommandPaletteCursor,
     MoveCursor,
     NameConflictState,
@@ -55,8 +54,6 @@ from plain.state import (
     PasteClipboard,
     PasteConflictState,
     PendingInputState,
-    RecursiveFilterFailed,
-    RecursiveFilterLoaded,
     ReloadDirectory,
     RequestBrowserSnapshot,
     ResolvePasteConflict,
@@ -66,7 +63,6 @@ from plain.state import (
     SetCommandPaletteQuery,
     SetCursorPath,
     SetFilterQuery,
-    SetFilterRecursive,
     SetPendingInputValue,
     SetSort,
     SetUiMode,
@@ -78,7 +74,7 @@ from plain.state import (
     build_initial_app_state,
     reduce_app_state,
 )
-from tests.state_test_helpers import entry, reduce_state
+from tests.state_test_helpers import reduce_state
 
 
 def _reduce_state(state, action):
@@ -127,97 +123,6 @@ def test_set_filter_query_returns_new_state_without_mutating_input() -> None:
     assert next_state.filter.active is True
     assert state.filter.query == ""
     assert state.filter.active is False
-
-
-def test_set_filter_query_queues_recursive_search_when_enabled() -> None:
-    state = build_initial_app_state()
-    state = replace(
-        state,
-        filter=replace(state.filter, recursive=True),
-    )
-
-    result = reduce_app_state(state, SetFilterQuery("spec"))
-
-    assert result.state.filter.query == "spec"
-    assert result.state.pending_recursive_filter_request_id == 1
-    assert result.effects == (
-        LoadRecursiveFilterEffect(
-            request_id=1,
-            path="/home/tadashi/develop/plain",
-            query="spec",
-        ),
-    )
-
-
-def test_recursive_filter_loaded_updates_recursive_entries_and_cursor() -> None:
-    state = build_initial_app_state()
-    state = replace(
-        state,
-        filter=replace(state.filter, query="md", active=True, recursive=True),
-        current_pane=replace(state.current_pane, cursor_path="/missing"),
-        pending_recursive_filter_request_id=7,
-        next_request_id=8,
-    )
-
-    result = reduce_app_state(
-        state,
-        RecursiveFilterLoaded(
-            request_id=7,
-            entries=(
-                DirectoryEntryState(
-                    "/home/tadashi/develop/plain/docs/spec_mvp.md",
-                    "spec_mvp.md",
-                    "file",
-                ),
-                DirectoryEntryState("/home/tadashi/develop/plain/README.md", "README.md", "file"),
-            ),
-        ),
-    )
-
-    assert result.state.recursive_entries == (
-        DirectoryEntryState(
-            "/home/tadashi/develop/plain/docs/spec_mvp.md",
-            "spec_mvp.md",
-            "file",
-        ),
-        DirectoryEntryState("/home/tadashi/develop/plain/README.md", "README.md", "file"),
-    )
-    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/plain/docs/spec_mvp.md"
-    assert result.state.pending_recursive_filter_request_id is None
-
-
-def test_browser_snapshot_loaded_queues_recursive_search_for_active_recursive_filter() -> None:
-    state = build_initial_app_state()
-    state = replace(
-        state,
-        filter=replace(state.filter, query="md", active=True, recursive=True),
-        pending_browser_snapshot_request_id=3,
-        next_request_id=4,
-    )
-    snapshot = BrowserSnapshot(
-        current_path="/home/tadashi/develop/plain",
-        parent_pane=state.parent_pane,
-        current_pane=state.current_pane,
-        child_pane=state.child_pane,
-    )
-
-    result = reduce_app_state(
-        state,
-        BrowserSnapshotLoaded(
-            request_id=3,
-            snapshot=snapshot,
-            blocking=False,
-        ),
-    )
-
-    assert result.state.pending_recursive_filter_request_id == 4
-    assert result.effects == (
-        LoadRecursiveFilterEffect(
-            request_id=4,
-            path="/home/tadashi/develop/plain",
-            query="md",
-        ),
-    )
 
 
 def test_set_sort_returns_new_state_without_mutating_input() -> None:
@@ -835,7 +740,7 @@ def test_confirm_filter_input_returns_to_browsing() -> None:
     assert next_state.ui_mode == "BROWSING"
 
 
-def test_cancel_filter_input_clears_query_and_recursive_flag() -> None:
+def test_cancel_filter_input_clears_query() -> None:
     state = build_initial_app_state()
     state = _reduce_state(state, SetUiMode("FILTER"))
     state = _reduce_state(state, SetFilterQuery("readme"))
@@ -845,39 +750,6 @@ def test_cancel_filter_input_clears_query_and_recursive_flag() -> None:
     assert next_state.ui_mode == "BROWSING"
     assert next_state.filter.query == ""
     assert next_state.filter.active is False
-    assert next_state.filter.recursive is False
-
-
-def test_set_filter_recursive_false_clears_recursive_entries_and_normalizes_state() -> None:
-    initial_state = build_initial_app_state()
-    state = replace(
-        initial_state,
-        filter=replace(initial_state.filter, query="spec", active=True, recursive=True),
-        recursive_entries=(
-            entry("/home/tadashi/develop/plain/docs/spec_mvp.md"),
-            entry("/home/tadashi/develop/plain/README.md"),
-        ),
-        current_pane=replace(
-            initial_state.current_pane,
-            cursor_path="/home/tadashi/develop/plain/docs/spec_mvp.md",
-            selected_paths=frozenset(
-                {
-                    "/home/tadashi/develop/plain/docs/spec_mvp.md",
-                    "/home/tadashi/develop/plain/README.md",
-                }
-            ),
-        ),
-    )
-
-    result = reduce_app_state(state, SetFilterRecursive(False))
-
-    assert result.state.filter.recursive is False
-    assert result.state.recursive_entries == ()
-    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/plain/docs"
-    assert result.state.current_pane.selected_paths == frozenset(
-        {"/home/tadashi/develop/plain/README.md"}
-    )
-    assert result.effects == ()
 
 
 def test_copy_targets_updates_clipboard_state() -> None:
@@ -1456,60 +1328,6 @@ def test_browser_snapshot_failed_sets_error_notification() -> None:
         message="load failed",
     )
     assert next_state.pending_browser_snapshot_request_id is None
-
-
-def test_recursive_filter_loaded_ignores_stale_request() -> None:
-    initial_state = build_initial_app_state()
-    state = replace(
-        initial_state,
-        filter=replace(initial_state.filter, query="spec", active=True, recursive=True),
-        pending_recursive_filter_request_id=3,
-    )
-
-    next_state = _reduce_state(
-        state,
-        RecursiveFilterLoaded(
-            request_id=99,
-            entries=(entry("/home/tadashi/develop/plain/docs/spec_mvp.md"),),
-        ),
-    )
-
-    assert next_state == state
-
-
-def test_recursive_filter_failed_clears_results_and_sets_error() -> None:
-    initial_state = build_initial_app_state()
-    state = replace(
-        initial_state,
-        filter=replace(initial_state.filter, query="spec", active=True, recursive=True),
-        recursive_entries=(entry("/home/tadashi/develop/plain/docs/spec_mvp.md"),),
-        pending_recursive_filter_request_id=4,
-    )
-
-    next_state = _reduce_state(
-        state,
-        RecursiveFilterFailed(request_id=4, message="search failed"),
-    )
-
-    assert next_state.recursive_entries == ()
-    assert next_state.pending_recursive_filter_request_id is None
-    assert next_state.notification == NotificationState(level="error", message="search failed")
-
-
-def test_recursive_filter_failed_ignores_stale_request() -> None:
-    initial_state = build_initial_app_state()
-    state = replace(
-        initial_state,
-        filter=replace(initial_state.filter, query="spec", active=True, recursive=True),
-        pending_recursive_filter_request_id=4,
-    )
-
-    next_state = _reduce_state(
-        state,
-        RecursiveFilterFailed(request_id=99, message="search failed"),
-    )
-
-    assert next_state == state
 
 
 def test_move_cursor_emits_child_snapshot_effect_only_when_target_changes() -> None:

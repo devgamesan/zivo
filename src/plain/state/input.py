@@ -27,7 +27,6 @@ from .actions import (
     ResolvePasteConflict,
     SetCommandPaletteQuery,
     SetFilterQuery,
-    SetFilterRecursive,
     SetNotification,
     SetPendingInputValue,
     SetSort,
@@ -223,9 +222,6 @@ def _dispatch_filter_input(
     if key == "backspace":
         next_query = state.filter.query[:-1]
         return _supported(SetFilterQuery(next_query, active=bool(next_query)))
-
-    if key == "space":
-        return _supported(SetFilterRecursive(not state.filter.recursive))
 
     if character and character.isprintable() and not character.isspace():
         return _supported(SetFilterQuery(f"{state.filter.query}{character}", active=True))

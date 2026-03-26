@@ -16,7 +16,6 @@ from plain.state import (
     PendingInputState,
     SetCursorPath,
     SetFilterQuery,
-    SetFilterRecursive,
     SetNotification,
     SetSort,
     ToggleSelection,
@@ -52,56 +51,6 @@ def test_select_current_entries_applies_filter_and_sort() -> None:
     entries = select_current_entries(state)
 
     assert [entry.name for entry in entries] == ["tests", "pyproject.toml"]
-
-
-def test_select_current_entries_uses_recursive_results_when_enabled() -> None:
-    state = build_initial_app_state()
-    state = replace(
-        state,
-        filter=replace(state.filter, query="md", active=True, recursive=True),
-        recursive_entries=(
-            DirectoryEntryState(
-                "/home/tadashi/develop/plain/docs/spec_mvp.md",
-                "spec_mvp.md",
-                "file",
-            ),
-            DirectoryEntryState("/home/tadashi/develop/plain/docs/notes.md", "notes.md", "file"),
-        ),
-        current_pane=replace(
-            state.current_pane,
-            cursor_path="/home/tadashi/develop/plain/docs/spec_mvp.md",
-        ),
-    )
-
-    entries = select_current_entries(state)
-
-    assert [entry.name for entry in entries] == ["notes.md", "spec_mvp.md"]
-
-
-def test_select_current_entries_adds_relative_parent_detail_for_recursive_duplicates() -> None:
-    state = build_initial_app_state()
-    state = replace(
-        state,
-        filter=replace(state.filter, query="readme", active=True, recursive=True),
-        recursive_entries=(
-            DirectoryEntryState("/home/tadashi/develop/plain/README.md", "README.md", "file"),
-            DirectoryEntryState(
-                "/home/tadashi/develop/plain/docs/README.md",
-                "README.md",
-                "file",
-            ),
-        ),
-        current_pane=replace(
-            state.current_pane,
-            cursor_path="/home/tadashi/develop/plain/README.md",
-        ),
-    )
-
-    entries = select_current_entries(state)
-
-    assert [entry.name for entry in entries] == ["README.md", "README.md"]
-    assert entries[0].name_detail is None
-    assert entries[1].name_detail == "docs/"
 
 
 def test_select_current_entries_hides_hidden_by_default() -> None:
@@ -246,36 +195,6 @@ def test_select_target_paths_prefers_selection_in_entry_order() -> None:
     assert select_target_paths(state) == (
         "/home/tadashi/develop/plain/docs",
         "/home/tadashi/develop/plain/README.md",
-    )
-
-
-def test_select_target_paths_prefers_recursive_selection_in_visible_order() -> None:
-    state = build_initial_app_state()
-    state = replace(
-        state,
-        filter=replace(state.filter, query="md", active=True, recursive=True),
-        recursive_entries=(
-            DirectoryEntryState(
-                "/home/tadashi/develop/plain/docs/spec_mvp.md",
-                "spec_mvp.md",
-                "file",
-            ),
-            DirectoryEntryState("/home/tadashi/develop/plain/README.md", "README.md", "file"),
-        ),
-        current_pane=replace(
-            state.current_pane,
-            selected_paths=frozenset(
-                {
-                    "/home/tadashi/develop/plain/README.md",
-                    "/home/tadashi/develop/plain/docs/spec_mvp.md",
-                }
-            ),
-        ),
-    )
-
-    assert select_target_paths(state) == (
-        "/home/tadashi/develop/plain/README.md",
-        "/home/tadashi/develop/plain/docs/spec_mvp.md",
     )
 
 
@@ -436,16 +355,6 @@ def test_select_current_summary_state_keeps_summary_format() -> None:
     ) == "5 items | 0 selected | sort: name asc dirs:on"
 
 
-def test_recursive_filter_does_not_change_current_summary_format() -> None:
-    state = build_initial_app_state()
-    state = _reduce_state(state, SetFilterQuery("md"))
-    state = _reduce_state(state, SetFilterRecursive(True))
-
-    summary = select_current_summary_state(state)
-
-    assert summary.sort_label == "name asc dirs:on"
-
-
 def test_select_status_bar_exposes_notification_level() -> None:
     state = build_initial_app_state()
     state = _reduce_state(
@@ -545,7 +454,6 @@ def test_select_input_bar_state_for_create_mode() -> None:
 def test_select_input_bar_state_for_filter_mode() -> None:
     state = _reduce_state(build_initial_app_state(), BeginFilterInput())
     state = _reduce_state(state, SetFilterQuery("spec"))
-    state = _reduce_state(state, SetFilterRecursive(True))
 
     input_bar = select_input_bar_state(state)
 
@@ -553,7 +461,7 @@ def test_select_input_bar_state_for_filter_mode() -> None:
     assert input_bar.mode_label == "FILTER"
     assert input_bar.prompt == "Filter: "
     assert input_bar.value == "spec"
-    assert input_bar.hint == "space recursive:on | enter apply | esc cancel"
+    assert input_bar.hint == "enter apply | esc cancel"
 
 
 def test_select_input_bar_state_keeps_active_filter_visible_after_confirm() -> None:

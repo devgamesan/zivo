@@ -155,6 +155,4 @@ def _entry_for_path(state: AppState, path: str | None) -> DirectoryEntryState | 
 
 
 def _active_current_entries(state: AppState) -> tuple[DirectoryEntryState, ...]:
-    if state.filter.recursive and state.filter.active:
-        return state.recursive_entries
     return state.current_pane.entries

@@ -15,7 +15,6 @@ from plain.models import (
 from .models import (
     AppState,
     BrowserSnapshot,
-    DirectoryEntryState,
     NotificationState,
     PaneState,
     SortField,
@@ -238,13 +237,6 @@ class SetFilterQuery:
 
 
 @dataclass(frozen=True)
-class SetFilterRecursive:
-    """Toggle recursive filtering mode."""
-
-    recursive: bool
-
-
-@dataclass(frozen=True)
 class ToggleHiddenFiles:
     """Toggle hidden file visibility across the shell."""
 
@@ -303,22 +295,6 @@ class ChildPaneSnapshotLoaded:
 @dataclass(frozen=True)
 class ChildPaneSnapshotFailed:
     """Apply an error raised while loading the child pane."""
-
-    request_id: int
-    message: str
-
-
-@dataclass(frozen=True)
-class RecursiveFilterLoaded:
-    """Apply recursively searched entries for the current filter query."""
-
-    request_id: int
-    entries: tuple[DirectoryEntryState, ...]
-
-
-@dataclass(frozen=True)
-class RecursiveFilterFailed:
-    """Apply an error raised while recursively searching the current directory."""
 
     request_id: int
     message: str
@@ -414,7 +390,6 @@ Action = (
     | CancelPasteConflict
     | DismissNameConflict
     | SetFilterQuery
-    | SetFilterRecursive
     | ToggleHiddenFiles
     | SetSort
     | SetNotification
@@ -423,8 +398,6 @@ Action = (
     | BrowserSnapshotFailed
     | ChildPaneSnapshotLoaded
     | ChildPaneSnapshotFailed
-    | RecursiveFilterLoaded
-    | RecursiveFilterFailed
     | ClipboardPasteNeedsResolution
     | ClipboardPasteCompleted
     | ClipboardPasteFailed

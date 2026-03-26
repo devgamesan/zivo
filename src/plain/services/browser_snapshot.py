@@ -9,7 +9,6 @@ from plain.adapters import DirectoryReader, LocalFilesystemAdapter
 from plain.state.models import (
     AppState,
     BrowserSnapshot,
-    DirectoryEntryState,
     PaneState,
     build_initial_app_state,
 )
@@ -29,12 +28,6 @@ class BrowserSnapshotLoader(Protocol):
         current_path: str,
         cursor_path: str | None,
     ) -> PaneState: ...
-
-    def load_recursive_entries(
-        self,
-        path: str,
-        query: str,
-    ) -> tuple[DirectoryEntryState, ...]: ...
 
 
 @dataclass(frozen=True)
@@ -88,22 +81,6 @@ class LiveBrowserSnapshotLoader:
         child_entries = self._list_directory(str(child_path))
         return PaneState(directory_path=str(child_path), entries=child_entries)
 
-    def load_recursive_entries(
-        self,
-        path: str,
-        query: str,
-    ) -> tuple[DirectoryEntryState, ...]:
-        try:
-            return self.filesystem.list_directory_recursive(path, query)
-        except PermissionError as error:
-            raise OSError(f"Permission denied: {path}") from error
-        except FileNotFoundError as error:
-            raise OSError(f"Not found: {path}") from error
-        except NotADirectoryError as error:
-            raise OSError(f"Not a directory: {path}") from error
-        except OSError as error:
-            raise OSError(str(error) or f"Failed to search directory: {path}") from error
-
     def _list_directory(self, path: str):
         try:
             return self.filesystem.list_directory(path)
@@ -123,16 +100,11 @@ class FakeBrowserSnapshotLoader:
 
     snapshots: Mapping[str, BrowserSnapshot] = field(default_factory=dict)
     child_panes: Mapping[tuple[str, str | None], PaneState] = field(default_factory=dict)
-    recursive_results: Mapping[tuple[str, str], tuple[DirectoryEntryState, ...]] = field(
-        default_factory=dict
-    )
     failure_messages: Mapping[str, str] = field(default_factory=dict)
     child_failure_messages: Mapping[tuple[str, str | None], str] = field(default_factory=dict)
-    recursive_failure_messages: Mapping[tuple[str, str], str] = field(default_factory=dict)
     default_delay_seconds: float = 0.0
     per_path_delay_seconds: Mapping[str, float] = field(default_factory=dict)
     child_delay_seconds: Mapping[tuple[str, str | None], float] = field(default_factory=dict)
-    recursive_delay_seconds: Mapping[tuple[str, str], float] = field(default_factory=dict)
 
     def load_browser_snapshot(
         self,
@@ -170,21 +142,6 @@ class FakeBrowserSnapshotLoader:
             return pane
 
         return PaneState(directory_path=current_path, entries=())
-
-    def load_recursive_entries(
-        self,
-        path: str,
-        query: str,
-    ) -> tuple[DirectoryEntryState, ...]:
-        key = (path, query)
-        delay = self.recursive_delay_seconds.get(key, self.default_delay_seconds)
-        if delay > 0:
-            sleep(delay)
-
-        if key in self.recursive_failure_messages:
-            raise OSError(self.recursive_failure_messages[key])
-
-        return self.recursive_results.get(key, ())
 
     def _resolve_snapshot(
         self,

@@ -16,7 +16,6 @@ from plain.state import (
     CopyTargets,
     CutTargets,
     DeleteConfirmationState,
-    DirectoryEntryState,
     DismissNameConflict,
     EnterCursorDirectory,
     GoToParentDirectory,
@@ -31,7 +30,6 @@ from plain.state import (
     ResolvePasteConflict,
     SetCommandPaletteQuery,
     SetFilterQuery,
-    SetFilterRecursive,
     SetNotification,
     SetPendingInputValue,
     SetSort,
@@ -157,65 +155,6 @@ def test_browsing_enter_on_file_dispatches_open_with_default_app() -> None:
         SetNotification(None),
         OpenPathWithDefaultApp("/home/tadashi/develop/plain/README.md"),
     )
-
-
-def test_browsing_enter_on_recursive_filter_file_dispatches_open_with_default_app() -> None:
-    initial_state = build_initial_app_state()
-    state = replace(
-        initial_state,
-        filter=replace(
-            initial_state.filter,
-            query="readme",
-            active=True,
-            recursive=True,
-        ),
-        recursive_entries=(
-            DirectoryEntryState(
-                "/home/tadashi/develop/plain/docs/README.md",
-                "README.md",
-                "file",
-            ),
-        ),
-        current_pane=replace(
-            initial_state.current_pane,
-            cursor_path="/home/tadashi/develop/plain/docs/README.md",
-        ),
-    )
-
-    actions = dispatch_key_input(state, key="enter")
-
-    assert actions == (
-        SetNotification(None),
-        OpenPathWithDefaultApp("/home/tadashi/develop/plain/docs/README.md"),
-    )
-
-
-def test_browsing_enter_on_recursive_filter_directory_dispatches_enter_cursor_directory() -> None:
-    initial_state = build_initial_app_state()
-    state = replace(
-        initial_state,
-        filter=replace(
-            initial_state.filter,
-            query="src",
-            active=True,
-            recursive=True,
-        ),
-        recursive_entries=(
-            DirectoryEntryState(
-                "/home/tadashi/develop/plain/docs/src",
-                "src",
-                "dir",
-            ),
-        ),
-        current_pane=replace(
-            initial_state.current_pane,
-            cursor_path="/home/tadashi/develop/plain/docs/src",
-        ),
-    )
-
-    actions = dispatch_key_input(state, key="enter")
-
-    assert actions == (SetNotification(None), EnterCursorDirectory())
 
 
 def test_browsing_backspace_goes_to_parent_directory() -> None:
@@ -392,7 +331,7 @@ def test_filter_backspace_updates_query() -> None:
     state = replace(
         state,
         ui_mode="FILTER",
-        filter=replace(state.filter, query="rea", recursive=False, active=True),
+        filter=replace(state.filter, query="rea", active=True),
     )
 
     actions = dispatch_key_input(state, key="backspace")
@@ -400,13 +339,20 @@ def test_filter_backspace_updates_query() -> None:
     assert actions == (SetNotification(None), SetFilterQuery("re", active=True))
 
 
-def test_filter_space_toggles_recursive_flag() -> None:
+def test_filter_space_is_unavailable() -> None:
     state = build_initial_app_state()
     state = replace(state, ui_mode="FILTER")
 
     actions = dispatch_key_input(state, key="space")
 
-    assert actions == (SetNotification(None), SetFilterRecursive(True))
+    assert actions == (
+        SetNotification(
+            NotificationState(
+                level="warning",
+                message="This key is unavailable while editing the filter",
+            )
+        ),
+    )
 
 
 def test_filter_enter_confirms_filter() -> None:

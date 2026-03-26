@@ -50,15 +50,12 @@ from .actions import (
     OpenPathWithDefaultApp,
     OpenTerminalAtPath,
     PasteClipboard,
-    RecursiveFilterFailed,
-    RecursiveFilterLoaded,
     ReloadDirectory,
     RequestBrowserSnapshot,
     ResolvePasteConflict,
     SetCommandPaletteQuery,
     SetCursorPath,
     SetFilterQuery,
-    SetFilterRecursive,
     SetNotification,
     SetPendingInputValue,
     SetSort,
@@ -77,7 +74,6 @@ from .effects import (
     Effect,
     LoadBrowserSnapshotEffect,
     LoadChildPaneSnapshotEffect,
-    LoadRecursiveFilterEffect,
     ReduceResult,
     RunClipboardPasteEffect,
     RunExternalLaunchEffect,
@@ -132,14 +128,12 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             replace(
                 state,
                 ui_mode="BROWSING",
-                filter=replace(state.filter, query="", recursive=False, active=False),
-                recursive_entries=(),
+                filter=replace(state.filter, query="", active=False),
                 notification=None,
                 pending_input=None,
                 command_palette=None,
                 delete_confirmation=None,
                 name_conflict=None,
-                pending_recursive_filter_request_id=None,
             )
         )
 
@@ -601,26 +595,12 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
 
     if isinstance(action, SetFilterQuery):
         active = bool(action.query) if action.active is None else action.active
-        next_state = replace(
-            state,
-            filter=replace(state.filter, query=action.query, active=active),
-        )
-        if next_state.filter.recursive:
-            return _update_recursive_filter(next_state)
         return done(
             replace(
-                next_state,
-                recursive_entries=(),
-                pending_recursive_filter_request_id=None,
+                state,
+                filter=replace(state.filter, query=action.query, active=active),
             )
         )
-
-    if isinstance(action, SetFilterRecursive):
-        next_state = replace(
-            state,
-            filter=replace(state.filter, recursive=action.recursive),
-        )
-        return _update_recursive_filter(next_state)
 
     if isinstance(action, ToggleHiddenFiles):
         next_state = replace(
@@ -681,11 +661,9 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
         next_state = replace(
             state,
             notification=None,
-            recursive_entries=(),
             command_palette=None,
             pending_browser_snapshot_request_id=request_id,
             pending_child_pane_request_id=None,
-            pending_recursive_filter_request_id=None,
             next_request_id=request_id + 1,
             ui_mode="BUSY" if action.blocking else state.ui_mode,
         )
@@ -717,16 +695,12 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 selected_paths=selected_paths,
             ),
             child_pane=action.snapshot.child_pane,
-            recursive_entries=(),
             notification=state.post_reload_notification,
             post_reload_notification=None,
             pending_browser_snapshot_request_id=None,
             pending_child_pane_request_id=None,
-            pending_recursive_filter_request_id=None,
             ui_mode="BROWSING" if action.blocking else state.ui_mode,
         )
-        if next_state.filter.recursive and next_state.filter.active:
-            return _queue_recursive_filter(next_state)
         return done(next_state)
 
     if isinstance(action, BrowserSnapshotFailed):
@@ -764,38 +738,6 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 child_pane=PaneState(directory_path=state.current_path, entries=()),
                 notification=NotificationState(level="error", message=action.message),
                 pending_child_pane_request_id=None,
-            )
-        )
-
-    if isinstance(action, RecursiveFilterLoaded):
-        if action.request_id != state.pending_recursive_filter_request_id:
-            return done(state)
-        selected_paths = _normalize_selected_paths(
-            state.current_pane.selected_paths,
-            action.entries,
-        )
-        cursor_path = _normalize_cursor_path(action.entries, state.current_pane.cursor_path)
-        next_state = replace(
-            state,
-            recursive_entries=action.entries,
-            current_pane=replace(
-                state.current_pane,
-                cursor_path=cursor_path,
-                selected_paths=selected_paths,
-            ),
-            pending_recursive_filter_request_id=None,
-        )
-        return _sync_child_pane(next_state, cursor_path)
-
-    if isinstance(action, RecursiveFilterFailed):
-        if action.request_id != state.pending_recursive_filter_request_id:
-            return done(state)
-        return done(
-            replace(
-                state,
-                recursive_entries=(),
-                pending_recursive_filter_request_id=None,
-                notification=NotificationState(level="error", message=action.message),
             )
         )
 
@@ -926,8 +868,6 @@ def _current_entry_paths(state: AppState) -> set[str]:
 
 
 def _active_current_entries(state: AppState) -> tuple[DirectoryEntryState, ...]:
-    if state.filter.recursive and state.filter.active:
-        return state.recursive_entries
     return state.current_pane.entries
 
 
@@ -1127,48 +1067,6 @@ def _normalize_cursor_path(
     if not entries:
         return None
     return entries[0].path
-
-
-def _queue_recursive_filter(state: AppState) -> ReduceResult:
-    request_id = state.next_request_id
-    next_state = replace(
-        state,
-        pending_recursive_filter_request_id=request_id,
-        next_request_id=request_id + 1,
-    )
-    return ReduceResult(
-        state=next_state,
-        effects=(
-            LoadRecursiveFilterEffect(
-                request_id=request_id,
-                path=state.current_path,
-                query=state.filter.query,
-            ),
-        ),
-    )
-
-
-def _update_recursive_filter(state: AppState) -> ReduceResult:
-    if state.filter.recursive and state.filter.active and state.filter.query:
-        return _queue_recursive_filter(state)
-
-    active_entries = state.current_pane.entries
-    selected_paths = _normalize_selected_paths(
-        state.current_pane.selected_paths,
-        active_entries,
-    )
-    cursor_path = _normalize_cursor_path(active_entries, state.current_pane.cursor_path)
-    next_state = replace(
-        state,
-        recursive_entries=(),
-        current_pane=replace(
-            state.current_pane,
-            cursor_path=cursor_path,
-            selected_paths=selected_paths,
-        ),
-        pending_recursive_filter_request_id=None,
-    )
-    return _sync_child_pane(next_state, cursor_path)
 
 
 def _validate_pending_input(state: AppState) -> str | None:

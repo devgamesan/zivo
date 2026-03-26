@@ -127,7 +127,7 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             return HelpBarState("enter return to input | esc return to input")
         return HelpBarState("resolve conflict in dialog")
     if state.ui_mode == "FILTER":
-        return HelpBarState("type filter | space recursive | enter apply | esc cancel")
+        return HelpBarState("type filter | enter apply | esc cancel")
     if state.ui_mode == "RENAME":
         return HelpBarState("type name | enter apply | esc cancel")
     if state.ui_mode == "CREATE":
@@ -148,10 +148,7 @@ def select_input_bar_state(state: AppState) -> InputBarState | None:
     if state.ui_mode == "FILTER" or (state.filter.active and state.filter.query):
         hint = "active"
         if state.ui_mode == "FILTER":
-            recursive = "on" if state.filter.recursive else "off"
-            hint = f"space recursive:{recursive} | enter apply | esc cancel"
-        elif state.filter.recursive:
-            hint = "active | recursive:on"
+            hint = "enter apply | esc cancel"
         return InputBarState(
             mode_label="FILTER",
             prompt="Filter: ",
@@ -279,12 +276,6 @@ def select_target_paths(state: AppState) -> tuple[str, ...]:
 
 def select_visible_current_entry_states(state: AppState) -> tuple[DirectoryEntryState, ...]:
     """Return filtered and sorted raw current-pane entries."""
-
-    if state.filter.recursive and state.filter.active:
-        return _sort_entries(
-            _filter_hidden_entries(state.recursive_entries, state.show_hidden),
-            state.sort,
-        )
 
     entries = _filter_hidden_entries(state.current_pane.entries, state.show_hidden)
     entries = tuple(
@@ -420,14 +411,4 @@ def _format_current_entry_name_detail(
     state: AppState,
     entry: DirectoryEntryState,
 ) -> str | None:
-    if not (state.filter.recursive and state.filter.active):
-        return None
-
-    try:
-        relative_path = Path(entry.path).relative_to(state.current_path)
-    except ValueError:
-        return None
-
-    if str(relative_path.parent) == ".":
-        return None
-    return f"{relative_path.parent.as_posix()}/"
+    return None
