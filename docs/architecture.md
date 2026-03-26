@@ -1,63 +1,79 @@
 # Plain アーキテクチャ概要
 
-このドキュメントは、現在の `Plain` の実装構造を俯瞰するためのものです。  
-MVP 仕様全体ではなく、`2026-03-22` 時点でコード上に存在する責務分割とデータフローを対象にします。
+このドキュメントは、`Plain` の現在の実装構造を俯瞰するためのものです。  
+対象は `2026-03-26` 時点でコード上に存在する責務分割とデータフローであり、MVP 構想全体ではなく現実装を説明します。
 
-## 1. 目的
+## 1. 方針
 
-現在の実装は、以下を明確に分離する方針で組まれています。
+現在の実装は、次の責務分離を前提にしています。
 
-- `UI`: 表示と Textual イベント受け取り
-- `input dispatcher`: キー入力を `Action` に正規化
-- `reducer`: `AppState` を純粋関数で更新
-- `selectors`: `AppState` を表示用モデルへ変換
-- `models`: 表示モデルと状態モデル
-- `services/adapters`: 副作用や OS / filesystem 依存処理の受け皿
+- `UI`: Textual の表示とイベント入口
+- `input dispatcher`: キー入力を reducer 向け `Action` に正規化
+- `reducer`: `AppState` を純粋関数で更新し、必要な副作用を `Effect` として返す
+- `selectors`: `AppState` から描画専用モデルを組み立てる
+- `services`: reducer 外で effect を実行するユースケース境界
+- `adapters`: OS / filesystem / clipboard など外部依存の実装
+
+widget 側に操作分岐を持たせず、状態遷移は `state/` に寄せる構成です。
 
 ## 2. 全体構成
 
 ```mermaid
 flowchart LR
-    subgraph UI["UI layer (`src/plain/ui`, `src/plain/app.py`)"]
+    subgraph UI["UI (`src/plain/app.py`, `src/plain/ui`)"]
         App["PlainApp"]
-        Pane["MainPane / SidePane"]
-        Status["StatusBar"]
+        Widgets["CurrentPathBar / MainPane / SidePane / CommandPalette / ConflictDialog / HelpBar / StatusBar"]
     end
 
-    subgraph State["State layer (`src/plain/state`)"]
+    subgraph State["State (`src/plain/state`)"]
         Input["input.py\nキー入力 dispatcher"]
         Actions["actions.py\nAction 定義"]
         Reducer["reducer.py\nreduce_app_state"]
+        Effects["effects.py\nEffect 定義"]
         Selectors["selectors.py\nselect_shell_data"]
         Models["models.py\nAppState / PaneState / UiMode"]
+        Palette["command_palette.py\npalette 候補構築"]
     end
 
-    subgraph Domain["Display models (`src/plain/models`)"]
-        Shell["shell_data.py\nThreePaneShellData / StatusBarState"]
+    subgraph Services["Services (`src/plain/services`)"]
+        Snapshot["browser_snapshot.py"]
+        Clipboard["clipboard_operations.py"]
+        Mutations["file_mutations.py"]
+        Launch["external_launcher.py"]
     end
 
-    subgraph Future["Future side effects"]
-        Services["services/"]
-        Adapters["adapters/"]
+    subgraph Adapters["Adapters (`src/plain/adapters`)"]
+        FS["filesystem.py"]
+        FileOps["file_operations.py"]
+        External["external_launcher.py"]
+    end
+
+    subgraph Display["Display models (`src/plain/models`)"]
+        Shell["shell_data.py\nThreePaneShellData"]
+        Domain["file_operations.py / external_launch.py"]
     end
 
     App --> Input
     Input --> Actions
     App --> Reducer
     Reducer --> Models
+    Reducer --> Effects
     App --> Selectors
     Selectors --> Models
+    Selectors --> Palette
     Selectors --> Shell
-    Shell --> Pane
-    Shell --> Status
-    Reducer --> Effect["effects.py\nReduceResult / Effect"]
-    Effect --> Services
-    Services --> Adapters
+    App --> Widgets
+    Effects --> Services
+    Snapshot --> FS
+    Clipboard --> FileOps
+    Mutations --> FileOps
+    Launch --> External
+    Services --> Domain
 ```
 
 ## 3. キー入力から描画までの流れ
 
-現在の中核フローは「入力 -> Action -> 状態更新 -> Effect 実行 -> Selector -> 再描画」です。
+中核フローは「入力 -> Action -> 状態更新 -> Effect 実行 -> Selector -> 再描画」です。
 
 ```mermaid
 sequenceDiagram
@@ -66,78 +82,83 @@ sequenceDiagram
     participant Input as dispatch_key_input
     participant Reducer as reduce_app_state
     participant Worker as Textual worker
+    participant Service as services
     participant Selector as select_shell_data
-    participant UI as Pane/StatusBar
+    participant UI as Widgets
 
     User->>App: キー入力
-    App->>Input: ui_mode, key, character
-    Input-->>App: Action の列 or warning message
+    App->>Input: AppState, key, character
+    Input-->>App: Action の列
     loop 各 Action
         App->>Reducer: AppState, Action
         Reducer-->>App: ReduceResult(state, effects)
     end
-    App->>Worker: effect があれば services を実行
-    Worker-->>App: success / failure action
+    opt Effect がある
+        App->>Worker: effect を非同期実行
+        Worker->>Service: snapshot / paste / mutation / launch
+        Service-->>App: success / failure action
+        App->>Reducer: success / failure action
+    end
     App->>Selector: 最新 AppState
     Selector-->>App: ThreePaneShellData
-    App->>UI: current-path-bar / body / status-bar を再描画
+    App->>UI: path / panes / dialogs / help / status を再描画
 ```
 
-## 4. ディレクトリ責務
+## 4. 主要モジュールの責務
 
 ### `src/plain/app.py`
 
 - `PlainApp` がアプリ全体の組み立て役
-- Textual の `Key` イベントを受ける
-- `dispatch_key_input()` と `reduce_app_state()` を呼ぶ
-- reducer が返した effect を Textual worker で実行する
-- selector の結果を使って UI を再描画する
-
-### `src/plain/ui/`
-
-- `CurrentPathBar`, `MainPane`, `SidePane`, `StatusBar` は表示責務に限定
-- widget 自体はキー意味の分岐を持たない
-- 現在の入力解釈は app / state 側で一元管理する
-
-### `src/plain/state/actions.py`
-
-- reducer が受け取る入力単位を定義する
-- 現在は次のような Action がある
-  - UI モード変更
-  - カーソル移動
-  - 選択トグル
-  - フィルタ開始 / 確定 / 取消し
-- 通知更新
-- browser snapshot 読み込み成功 / 失敗
-- child pane 読み込み成功 / 失敗
+- Textual の `Key` イベントを中央 dispatcher に流す
+- reducer が返した effect を worker と各 service に橋渡しする
+- selector の結果を使って UI widget を更新する
 
 ### `src/plain/state/input.py`
 
-- `ui_mode` ごとに同じキーの意味を切り替える
-- `BROWSING`, `FILTER`, `RENAME`, `CREATE`, `CONFIRM`, `BUSY` の入力をサポート
-- 未サポート入力は warning message に変換する
+- モード別にキー入力を `Action` へ正規化する
+- 現在サポートしている主なモードは `BROWSING` / `FILTER` / `RENAME` / `CREATE` / `PALETTE` / `CONFIRM` / `BUSY`
+- `Esc` のように文脈で意味が変わるキーもここで吸収する
 
 ### `src/plain/state/reducer.py`
 
-- `AppState` を純粋関数で更新する
-- 副作用を直接持たず、`ReduceResult(state, effects)` を返す
-- カーソル移動時に child pane の再取得要否を決める
-- full snapshot と child snapshot の stale 結果を request id で破棄する
+- `AppState` の唯一の更新点
+- 画面遷移、カーソル移動、選択、filter、sort、clipboard、rename/create/delete、palette 実行、dialog 状態を管理する
+- 外部 I/O は直接行わず、`LoadBrowserSnapshotEffect`、`RunClipboardPasteEffect`、`RunFileMutationEffect`、`RunExternalLaunchEffect` を返す
+- 非同期結果は request id で突き合わせ、古い snapshot 結果を破棄する
 
 ### `src/plain/state/selectors.py`
 
-- `AppState` を UI 用の `ThreePaneShellData` に変換する
-- 中央ペインにはフィルタと現在の sort を適用し、親・子ペインは固定の名前順で整形する
-- 中央ペイン要約、ステータスバー通知、ヘルプ行、入力バーの表示文字列をここで組み立てる
+- `AppState` から `ThreePaneShellData` を組み立てる
+- 中央ペインにだけ filter / sort を適用し、親・子ペインは名前順 + ディレクトリ優先で固定表示する
+- help bar、status bar、input bar、command palette、conflict dialog の表示文言もここで整形する
+- cut 対象の dim 表示や summary 行の `item_count / selected_count / sort_label` も selector 側で組み立てる
+
+### `src/plain/state/command_palette.py`
+
+- コマンドパレット候補の構築と query フィルタリングを担当する
+- 現在の palette には `Create file`、`Create directory`、`Copy path`、`Show/Hide hidden files`、`Open terminal here` がある
+- `Run shell command` は候補として見える場合があるが、現時点では `enabled=False` のプレースホルダ
+
+### `src/plain/services/`
+
+- `browser_snapshot.py`: 実 filesystem から 3 ペイン用 snapshot を構築
+- `clipboard_operations.py`: copy / cut / paste の実処理と競合検出を担当
+- `file_mutations.py`: rename / create / trash delete を担当
+- `external_launcher.py`: 既定アプリ起動、ターミナル起動、システムクリップボードへのパスコピーを担当
+
+### `src/plain/adapters/`
+
+- `filesystem.py`: ディレクトリエントリの列挙とメタデータ取得
+- `file_operations.py`: copy / move / rename / create / trash などのファイル操作
+- `external_launcher.py`: OS ごとのコマンド差異を吸収して外部プロセスを起動
 
 ### `src/plain/models/`
 
-- `shell_data.py` は描画専用モデル
-- `state/models.py` は reducer 管理対象のアプリ状態
-- `services/browser_snapshot.py` は 3 ペイン snapshot の組み立てを担う
-- `adapters/filesystem.py` はローカル filesystem から `DirectoryEntryState` を構築する
+- `shell_data.py`: 描画専用モデル
+- `external_launch.py` と `file_operations.py`: service と reducer が受け渡す request / result モデル
+- `state/models.py`: reducer 管理対象の状態モデル
 
-## 5. 現在のモードと入力境界
+## 5. モードと入力境界
 
 ```mermaid
 stateDiagram-v2
@@ -146,72 +167,73 @@ stateDiagram-v2
     BROWSING --> RENAME: F2
     BROWSING --> PALETTE: :
     PALETTE --> CREATE: Enter on create command
-    PALETTE --> BROWSING: Esc
-    FILTER --> BROWSING: Enter / Down
-    FILTER --> BROWSING: Esc
+    PALETTE --> BROWSING: Enter on other command / Esc
+    FILTER --> BROWSING: Enter / Down / Esc
     RENAME --> BUSY: Enter
     CREATE --> BUSY: Enter
     RENAME --> BROWSING: Esc
     CREATE --> BROWSING: Esc
-    CONFIRM --> BROWSING: Esc / Enter
-    BUSY --> BROWSING: 完了時
+    CONFIRM --> BROWSING: delete confirm/cancel
+    CONFIRM --> BROWSING: paste conflict resolved/cancelled
+    CONFIRM --> RENAME: rename conflict dismissed
+    CONFIRM --> CREATE: create conflict dismissed
+    BUSY --> BROWSING: effect 完了
 
-    BUSY --> BUSY: 任意キーは無視
+    BUSY --> BUSY: 任意キーは抑止
 ```
 
 補足:
 
 - `BROWSING`
-  - `Up`, `Down`, `Left`, `Right`, `Enter`, `Backspace`, `F5`, `Space`, `Esc`, `/`, `Delete`, `F2`, `:` を処理
-  - active filter が残っている間の `Esc` は選択解除より先に filter 解除を優先する
+  - 移動、選択、filter 開始、paste、delete、rename、palette、sort 切り替えを処理する
+  - `Esc` は active filter が残っている場合、選択解除より先に filter 解除を優先する
 - `FILTER`
-  - 文字入力、`Backspace`, `Down`, `Enter`, `Esc` を処理
+  - 文字入力、`Backspace`、`Enter`、`Down`、`Esc` を処理する
 - `PALETTE`
-  - 文字入力、`Up`, `Down`, `Backspace`, `Enter`, `Esc` を処理
-- `RENAME`, `CREATE`
-  - 入力バーで名前編集し、`Enter` で rename/create を実行、`Esc` で cancel
+  - query 更新、候補カーソル移動、コマンド実行、キャンセルを処理する
+- `RENAME` / `CREATE`
+  - 入力バーで名前を編集し、`Enter` で mutation effect を発行する
 - `CONFIRM`
-  - paste conflict の解決、または複数対象削除の confirm/cancel を受け付ける
+  - delete 確認、paste conflict、rename/create の重複名警告を扱う
 - `BUSY`
-  - 非同期の directory load / file mutation 中は入力を抑止する
+  - snapshot 読み込みや file mutation 実行中の待機状態
 
-## 6. 現在できること / まだできないこと
+## 6. 現在できること
 
-### できること
-
-- `CWD` を起点に実ファイルシステムの 3 ペイン UI を起動
-- 可視行のカーソル移動
-- 親/子ディレクトリへの移動と再読み込み
-- 選択トグルと全解除
-- フィルタ入力
+- `CWD` から実ファイルシステムを読み込んで 3 ペイン UI を起動
+- 親 / 現在 / 子ディレクトリ表示とカーソル移動
+- ディレクトリへの移動、親ディレクトリへの復帰、再読み込み
+- filter 入力と filter 適用後の一覧継続操作
+- 名前 / 更新日時 / サイズソートとディレクトリ優先表示切り替え
+- 選択トグル、選択解除、copy / cut / paste
+- 貼り付け時の競合検出と overwrite / skip / rename の解決
 - 単一対象の rename
-- ゴミ箱への削除
-- 新規ファイル / ディレクトリ作成
-- コマンドパレット表示と create 系コマンド実行
-- モード別キー解釈
-- 入力バーによる rename/create 編集
-- 画面上部へのカレントパス表示
-- ステータスバーへの warning / error 通知表示
-- child pane の必要時のみ再取得
+- 新規ファイル / 新規ディレクトリ作成
+- ゴミ箱への削除と複数対象削除時の確認ダイアログ
+- ファイルの既定アプリ起動
+- コマンドパレットからの path copy、terminal 起動、hidden files 切り替え
+- status bar / help bar / input bar / conflict dialog の状態連動表示
 
-### まだできないこと
+## 7. 現時点で未接続または未実装の範囲
 
-- ファイル open
-- 履歴移動や sort 切り替えの UI 操作
+- `HistoryState` は state にあるが、戻る / 進む操作としてはまだ UI に接続していない
+- `Run shell command` は command palette にプレースホルダがあるが実行不可
+- ファイル内容プレビュー、編集、Git 連携、タブ機能、キーバインドカスタマイズは未実装
 
-## 7. 今後の拡張ポイント
+## 8. 拡張時の差し込み方
 
-将来の実装は、基本的に次の順で差し込む想定です。
+新しい操作を追加する場合は、基本的に次の順で差し込みます。
 
 ```mermaid
 flowchart TD
-    Key["新しいキー操作"] --> Input["input.py に dispatch 追加"]
-    Input --> Action["Action 追加"]
-    Action --> Reducer["reducer に状態遷移追加"]
-    Reducer --> Selector["必要なら selector 更新"]
-    Reducer --> Service["副作用が必要なら services へ委譲"]
-    Service --> Adapter["OS/FS 操作は adapters へ委譲"]
-    Selector --> UI["UI は表示更新だけ行う"]
+    Key["新しい操作"] --> Input["input.py に dispatch 追加"]
+    Input --> Action["actions.py に Action 追加"]
+    Action --> Reducer["reducer.py に状態遷移追加"]
+    Reducer --> Effect["必要なら Effect 追加"]
+    Effect --> Service["services/ に実行追加"]
+    Service --> Adapter["OS / FS 差異は adapters へ委譲"]
+    Reducer --> Selector["表示変更が必要なら selector 更新"]
+    Selector --> UI["UI は表示更新のみ"]
 ```
 
-この流れを守ることで、widget ごとの分岐追加を避けつつ、操作の追加を局所化できます。
+この流れを守ることで、widget ごとの分岐を増やさずに機能追加を局所化できます。
