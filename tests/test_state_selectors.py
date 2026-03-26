@@ -439,8 +439,8 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
     help_state = select_help_bar_state(state)
 
     assert help_state.text == (
-        "/ filter | s sort | d dirs | Space select | y copy | x cut | p paste | "
-        "F2 rename | : palette"
+        "Enter open | / filter | Space select | y copy | x cut | p paste | "
+        "s sort | d dirs | F2 rename | : palette"
     )
 
 

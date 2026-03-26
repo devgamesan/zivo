@@ -142,8 +142,8 @@ def build_dummy_shell_data() -> ThreePaneShellData:
         ),
         current_context_input=None,
         help=HelpBarState(
-            "/ filter | s sort | d dirs | Space select | y copy | x cut | p paste | "
-            "F2 rename | : palette"
+            "Enter open | / filter | Space select | y copy | x cut | p paste | "
+            "s sort | d dirs | F2 rename | : palette"
         ),
         command_palette=None,
         status=StatusBarState(message=None, message_level=None),
