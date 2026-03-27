@@ -2,8 +2,8 @@
 
 [日本語版 README](README.ja.md)
 
-Peneo is a Textual-based TUI file manager that aims to feel closer to a GUI explorer.
-It is designed so you can reach the main actions without having to study a Vim-style key map first.
+Peneo is a Textual-based TUI file manager designed for desktop environments where terminal work still needs to connect smoothly with GUI applications.
+It aims to feel closer to a GUI explorer than to a keyboard-heavy power-user tool, and keeps common actions visible in the on-screen help so you can start using it without memorizing a Vim-style key map.
 
 ![Peneo screenshot](docs/resources/screen1.png)
 
@@ -11,11 +11,13 @@ _Current three-pane UI showing the parent, current, and child directories side b
 
 ## Features
 
-- Three-pane layout for parent / current / child directories
-- Keyboard-only navigation, selection, copy, cut, paste, delete, rename, and create flows
-- Filter input, sort switching, and hidden-file visibility toggle
-- Less frequent actions grouped into a command palette so everyday keys stay small in number
-- Files open with the OS default app, `e` opens the current file in the editor inside the current terminal, and a terminal can also be launched in the current directory
+- Three-pane layout for parent / current / child directories so surrounding filesystem context stays visible
+- Common actions stay visible in the on-screen help, while less frequent actions live in the command palette
+- Keyboard-only navigation, multi-selection, copy, cut, paste, delete-to-trash, rename, and create flows
+- Filter input, recursive file search from the command palette, sort switching, and hidden-file visibility toggle
+- Files open with the OS default app, directories can be opened in the OS file manager, `e` opens the current file in the editor inside the current terminal, and a terminal can also be launched in the current directory
+- Optional shell integration via `peneo-cd` can return your shell to the last directory after quitting
+- Safer file operations with trash deletion and overwrite / skip / rename conflict resolution during paste
 
 ## Current Capabilities
 
@@ -26,6 +28,7 @@ _Current three-pane UI showing the parent, current, and child directories side b
 - Rename a single target
 - Create files and directories
 - Filter by file name
+- Search files recursively from the command palette
 - Switch sorting by name / modified time / size
 - Toggle directories-first ordering
 - Copy paths to the system clipboard
@@ -34,6 +37,7 @@ _Current three-pane UI showing the parent, current, and child directories side b
 - Toggle hidden-file visibility
 - Open files with the OS default app
 - Open files in the editor inside the current terminal
+- Optionally return the shell to the last visited directory after quitting
 
 ## Installation
 
@@ -129,6 +133,7 @@ Commands still under development may appear dimmed and cannot be executed yet.
 ## Platform Notes
 
 - The project is currently verified only on Ubuntu.
+- GUI integration paths such as default-app launch, file-manager launch, and terminal launch are currently validated primarily in that environment.
 - The code contains external-launch implementations for Linux / macOS / Windows, but not every platform path is fully validated.
 - The application is still under active development, so behavior and keybindings may change.
 - File mutations operate on the selected directory entry. If the selected item is a symlink, Peneo mutates the symlink itself instead of silently following and mutating the link target.
