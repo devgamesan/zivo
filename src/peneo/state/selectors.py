@@ -14,7 +14,7 @@ from peneo.models import (
     ThreePaneShellData,
 )
 
-from .command_palette import get_filtered_command_palette_items, normalize_command_palette_cursor
+from .command_palette import get_command_palette_items, normalize_command_palette_cursor
 from .models import AppState, DirectoryEntryState, SortState
 
 SIDE_PANE_SORT = SortState(field="name", descending=False, directories_first=True)
@@ -133,6 +133,8 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
     if state.ui_mode == "CREATE":
         return HelpBarState("type name | enter apply | esc cancel")
     if state.ui_mode == "PALETTE":
+        if state.command_palette is not None and state.command_palette.source == "file_search":
+            return HelpBarState("type filename | enter jump | esc cancel")
         return HelpBarState("type command | enter run | esc cancel")
     if state.ui_mode == "BUSY":
         return HelpBarState("processing...")
@@ -178,9 +180,10 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
     if state.ui_mode != "PALETTE" or state.command_palette is None:
         return None
 
-    items = get_filtered_command_palette_items(state)
+    items = get_command_palette_items(state)
     cursor_index = normalize_command_palette_cursor(state, state.command_palette.cursor_index)
     return CommandPaletteViewState(
+        title=_command_palette_title(state),
         query=state.command_palette.query,
         items=tuple(
             CommandPaletteItemViewState(
@@ -191,6 +194,7 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
             )
             for index, item in enumerate(items)
         ),
+        empty_message=_command_palette_empty_message(state),
     )
 
 
@@ -348,6 +352,18 @@ def _format_sort_label(sort: SortState) -> str:
     direction = "desc" if sort.descending else "asc"
     directories = "on" if sort.directories_first else "off"
     return f"{sort.field} {direction} dirs:{directories}"
+
+
+def _command_palette_title(state: AppState) -> str:
+    if state.command_palette is not None and state.command_palette.source == "file_search":
+        return "Find File"
+    return "Command Palette"
+
+
+def _command_palette_empty_message(state: AppState) -> str:
+    if state.command_palette is not None and state.command_palette.source == "file_search":
+        return "No matching files"
+    return "No matching commands"
 
 
 def _get_current_cursor_entry(state: AppState) -> DirectoryEntryState | None:

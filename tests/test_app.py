@@ -23,8 +23,9 @@ from peneo.services import (
     FakeClipboardOperationService,
     FakeExternalLaunchService,
     FakeFileMutationService,
+    FakeFileSearchService,
 )
-from peneo.state import BrowserSnapshot, DirectoryEntryState, PaneState
+from peneo.state import BrowserSnapshot, DirectoryEntryState, FileSearchResultState, PaneState
 from peneo.ui import (
     CommandPalette,
     ConflictDialog,
@@ -1007,6 +1008,60 @@ async def test_app_command_palette_create_file_opens_context_input() -> None:
         assert app.app_state.ui_mode == "CREATE"
         assert input_bar.display is True
         assert str(input_bar.renderable) == "[NEW FILE] New file: _  enter apply | esc cancel"
+
+
+@pytest.mark.asyncio
+async def test_app_command_palette_find_file_jumps_to_matching_parent_directory() -> None:
+    path = "/tmp/peneo-command-palette-find-file"
+    docs_path = f"{path}/docs"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (
+                    DirectoryEntryState(docs_path, "docs", "dir"),
+                    DirectoryEntryState(f"{path}/notes.txt", "notes.txt", "file"),
+                ),
+                child_path=docs_path,
+            ),
+            docs_path: _build_snapshot(
+                docs_path,
+                (
+                    DirectoryEntryState(f"{docs_path}/README.md", "README.md", "file"),
+                    DirectoryEntryState(f"{docs_path}/guide.md", "guide.md", "file"),
+                ),
+            ),
+        }
+    )
+    file_search_service = FakeFileSearchService(
+        results_by_query={
+            (path, "read", False): (
+                FileSearchResultState(
+                    path=f"{docs_path}/README.md",
+                    display_path="docs/README.md",
+                ),
+            )
+        }
+    )
+    app = create_app(
+        snapshot_loader=loader,
+        file_search_service=file_search_service,
+        initial_path=path,
+    )
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press(":")
+        await pilot.press("down")
+        await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.press("r", "e", "a", "d")
+        await asyncio.sleep(0.05)
+        await pilot.press("enter")
+        await _wait_for_snapshot_loaded(app, docs_path)
+
+        assert app.app_state.current_path == docs_path
+        assert app.app_state.current_pane.cursor_path == f"{docs_path}/README.md"
 
 
 @pytest.mark.asyncio

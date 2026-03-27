@@ -43,6 +43,8 @@ from .actions import (
     ExternalLaunchFailed,
     FileMutationCompleted,
     FileMutationFailed,
+    FileSearchCompleted,
+    FileSearchFailed,
     GoToParentDirectory,
     InitializeState,
     MoveCommandPaletteCursor,
@@ -68,7 +70,7 @@ from .actions import (
     ToggleSelectionAndAdvance,
 )
 from .command_palette import (
-    get_filtered_command_palette_items,
+    get_command_palette_items,
     normalize_command_palette_cursor,
 )
 from .effects import (
@@ -79,6 +81,7 @@ from .effects import (
     RunClipboardPasteEffect,
     RunExternalLaunchEffect,
     RunFileMutationEffect,
+    RunFileSearchEffect,
 )
 from .models import (
     AppState,
@@ -116,6 +119,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 notification=None,
                 pending_input=None,
                 command_palette=None,
+                pending_file_search_request_id=None,
                 delete_confirmation=None,
                 name_conflict=None,
             )
@@ -153,6 +157,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                     target_path=entry.path,
                 ),
                 command_palette=None,
+                pending_file_search_request_id=None,
                 delete_confirmation=None,
                 name_conflict=None,
             )
@@ -169,6 +174,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                     notification=None,
                     pending_input=None,
                     command_palette=None,
+                    pending_file_search_request_id=None,
                     paste_conflict=None,
                     delete_confirmation=DeleteConfirmationState(paths=action.paths),
                     name_conflict=None,
@@ -197,6 +203,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                     create_kind=action.kind,
                 ),
                 command_palette=None,
+                pending_file_search_request_id=None,
                 delete_confirmation=None,
                 name_conflict=None,
             )
@@ -210,6 +217,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 notification=None,
                 pending_input=None,
                 command_palette=CommandPaletteState(),
+                pending_file_search_request_id=None,
                 delete_confirmation=None,
                 name_conflict=None,
             )
@@ -222,6 +230,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 ui_mode="BROWSING",
                 notification=None,
                 command_palette=None,
+                pending_file_search_request_id=None,
                 name_conflict=None,
             )
         )
@@ -245,26 +254,56 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
     if isinstance(action, SetCommandPaletteQuery):
         if state.command_palette is None:
             return done(state)
-        return done(
-            replace(
-                state,
-                command_palette=replace(
-                    state.command_palette,
-                    query=action.query,
-                    cursor_index=0,
-                ),
+        next_palette = replace(
+            state.command_palette,
+            query=action.query,
+            cursor_index=0,
+        )
+        if state.command_palette.source != "file_search":
+            return done(replace(state, command_palette=next_palette))
+
+        normalized_query = action.query.strip()
+        if not normalized_query:
+            return done(
+                replace(
+                    state,
+                    command_palette=replace(next_palette, file_search_results=()),
+                    pending_file_search_request_id=None,
+                )
             )
+        request_id = state.next_request_id
+        next_state = replace(
+            state,
+            command_palette=replace(next_palette, file_search_results=()),
+            pending_file_search_request_id=request_id,
+            next_request_id=request_id + 1,
+        )
+        return done(
+            next_state,
+            RunFileSearchEffect(
+                request_id=request_id,
+                root_path=state.current_path,
+                query=normalized_query,
+                show_hidden=state.show_hidden,
+            ),
         )
 
     if isinstance(action, SubmitCommandPalette):
         if state.command_palette is None:
             return done(state)
-        items = get_filtered_command_palette_items(state)
+        items = get_command_palette_items(state)
         if not items:
             return done(
                 replace(
                     state,
-                    notification=NotificationState(level="warning", message="No matching command"),
+                    notification=NotificationState(
+                        level="warning",
+                        message=(
+                            "No matching files"
+                            if state.command_palette.source == "file_search"
+                            else "No matching command"
+                        ),
+                    ),
                 )
             )
         selected_item = items[
@@ -285,11 +324,20 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             ui_mode="BROWSING",
             notification=None,
             command_palette=None,
+            pending_file_search_request_id=None,
         )
         if selected_item.id == "create_file":
             return reduce_app_state(next_state, BeginCreateInput("file"))
         if selected_item.id == "create_dir":
             return reduce_app_state(next_state, BeginCreateInput("dir"))
+        if selected_item.id == "find_file":
+            return done(
+                replace(
+                    state,
+                    notification=None,
+                    command_palette=CommandPaletteState(source="file_search"),
+                )
+            )
         if selected_item.id == "copy_path":
             target_paths = select_target_paths(state)
             if not target_paths:
@@ -307,6 +355,15 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             return reduce_app_state(next_state, ToggleHiddenFiles())
         if selected_item.id == "open_terminal":
             return reduce_app_state(next_state, OpenTerminalAtPath(next_state.current_path))
+        if selected_item.id.startswith("file_search_result:") and selected_item.path is not None:
+            return reduce_app_state(
+                next_state,
+                RequestBrowserSnapshot(
+                    str(Path(selected_item.path).parent),
+                    cursor_path=selected_item.path,
+                    blocking=True,
+                ),
+            )
         return done(next_state)
 
     if isinstance(action, SetPendingInputValue):
@@ -327,6 +384,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 notification=None,
                 pending_input=None,
                 command_palette=None,
+                pending_file_search_request_id=None,
                 delete_confirmation=None,
                 name_conflict=None,
             )
@@ -815,6 +873,37 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 name_conflict=None,
                 pending_paste_request_id=None,
                 ui_mode="BROWSING",
+            )
+        )
+
+    if isinstance(action, FileSearchCompleted):
+        if (
+            action.request_id != state.pending_file_search_request_id
+            or state.command_palette is None
+            or state.command_palette.source != "file_search"
+            or state.command_palette.query.strip() != action.query
+        ):
+            return done(state)
+        return done(
+            replace(
+                state,
+                command_palette=replace(
+                    state.command_palette,
+                    file_search_results=action.results,
+                    cursor_index=0,
+                ),
+                pending_file_search_request_id=None,
+            )
+        )
+
+    if isinstance(action, FileSearchFailed):
+        if action.request_id != state.pending_file_search_request_id:
+            return done(state)
+        return done(
+            replace(
+                state,
+                notification=NotificationState(level="error", message=action.message),
+                pending_file_search_request_id=None,
             )
         )
 

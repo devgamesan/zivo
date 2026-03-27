@@ -30,6 +30,7 @@ from peneo.state import (
     ClipboardPasteCompleted,
     ClipboardPasteFailed,
     ClipboardPasteNeedsResolution,
+    CommandPaletteState,
     ConfirmDeleteTargets,
     ConfirmFilterInput,
     CopyTargets,
@@ -42,6 +43,8 @@ from peneo.state import (
     ExternalLaunchFailed,
     FileMutationCompleted,
     FileMutationFailed,
+    FileSearchCompleted,
+    FileSearchResultState,
     GoToParentDirectory,
     LoadBrowserSnapshotEffect,
     LoadChildPaneSnapshotEffect,
@@ -62,6 +65,7 @@ from peneo.state import (
     RunClipboardPasteEffect,
     RunExternalLaunchEffect,
     RunFileMutationEffect,
+    RunFileSearchEffect,
     SetCommandPaletteQuery,
     SetCursorPath,
     SetFilterQuery,
@@ -389,7 +393,7 @@ def test_move_command_palette_cursor_clamps_to_visible_commands() -> None:
     next_state = _reduce_state(state, MoveCommandPaletteCursor(delta=10))
 
     assert next_state.command_palette is not None
-    assert next_state.command_palette.cursor_index == 5
+    assert next_state.command_palette.cursor_index == 6
 
 
 def test_set_command_palette_query_resets_cursor() -> None:
@@ -417,9 +421,19 @@ def test_submit_command_palette_runs_create_file_flow() -> None:
     )
 
 
-def test_submit_command_palette_runs_copy_path_flow() -> None:
+def test_submit_command_palette_enters_find_file_mode() -> None:
     state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
     state = _reduce_state(state, MoveCommandPaletteCursor(delta=2))
+
+    next_state = _reduce_state(state, SubmitCommandPalette())
+
+    assert next_state.ui_mode == "PALETTE"
+    assert next_state.command_palette == CommandPaletteState(source="file_search")
+
+
+def test_submit_command_palette_runs_copy_path_flow() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = _reduce_state(state, MoveCommandPaletteCursor(delta=3))
 
     result = reduce_app_state(state, SubmitCommandPalette())
 
@@ -500,7 +514,7 @@ def test_submit_command_palette_uses_selected_paths_for_copy_path() -> None:
         ),
     )
     state = _reduce_state(state, BeginCommandPalette())
-    state = _reduce_state(state, MoveCommandPaletteCursor(delta=2))
+    state = _reduce_state(state, MoveCommandPaletteCursor(delta=3))
 
     result = reduce_app_state(state, SubmitCommandPalette())
 
@@ -514,6 +528,94 @@ def test_submit_command_palette_uses_selected_paths_for_copy_path() -> None:
                     "/home/tadashi/develop/peneo/src",
                 ),
             ),
+        ),
+    )
+
+
+def test_set_command_palette_query_starts_file_search_effect() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = _reduce_state(state, MoveCommandPaletteCursor(delta=2))
+    state = _reduce_state(state, SubmitCommandPalette())
+
+    result = reduce_app_state(state, SetCommandPaletteQuery("read"))
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.source == "file_search"
+    assert result.state.command_palette.query == "read"
+    assert result.state.pending_file_search_request_id == 1
+    assert result.effects == (
+        RunFileSearchEffect(
+            request_id=1,
+            root_path="/home/tadashi/develop/peneo",
+            query="read",
+            show_hidden=False,
+        ),
+    )
+
+
+def test_file_search_completed_updates_palette_results() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = _reduce_state(state, MoveCommandPaletteCursor(delta=2))
+    state = _reduce_state(state, SubmitCommandPalette())
+    search_state = replace(
+        state,
+        command_palette=replace(state.command_palette, query="read"),
+        pending_file_search_request_id=4,
+    )
+
+    next_state = _reduce_state(
+        search_state,
+        FileSearchCompleted(
+            request_id=4,
+            query="read",
+            results=(
+                FileSearchResultState(
+                    path="/home/tadashi/develop/peneo/README.md",
+                    display_path="README.md",
+                ),
+            ),
+        ),
+    )
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.file_search_results == (
+        FileSearchResultState(
+            path="/home/tadashi/develop/peneo/README.md",
+            display_path="README.md",
+        ),
+    )
+    assert next_state.pending_file_search_request_id is None
+
+
+def test_submit_command_palette_file_search_result_requests_snapshot() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = _reduce_state(state, MoveCommandPaletteCursor(delta=2))
+    state = _reduce_state(state, SubmitCommandPalette())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            query="read",
+            file_search_results=(
+                FileSearchResultState(
+                    path="/home/tadashi/develop/peneo/docs/README.md",
+                    display_path="docs/README.md",
+                ),
+            ),
+            cursor_index=0,
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.ui_mode == "BUSY"
+    assert result.state.command_palette is None
+    assert result.effects == (
+        LoadBrowserSnapshotEffect(
+            request_id=1,
+            path="/home/tadashi/develop/peneo/docs",
+            cursor_path="/home/tadashi/develop/peneo/docs/README.md",
+            blocking=True,
         ),
     )
 

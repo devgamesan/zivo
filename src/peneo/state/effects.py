@@ -56,12 +56,23 @@ class RunExternalLaunchEffect:
     request: ExternalLaunchRequest
 
 
+@dataclass(frozen=True)
+class RunFileSearchEffect:
+    """Execute a recursive filename search outside the reducer."""
+
+    request_id: int
+    root_path: str
+    query: str
+    show_hidden: bool
+
+
 Effect = (
     LoadBrowserSnapshotEffect
     | LoadChildPaneSnapshotEffect
     | RunClipboardPasteEffect
     | RunFileMutationEffect
     | RunExternalLaunchEffect
+    | RunFileSearchEffect
 )
 
 

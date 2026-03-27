@@ -86,7 +86,7 @@ The main keys are listed below.
 | Filter input | `Backspace` | Delete one character |
 | Filter input | `Enter` / `↓` | Apply the filter and return to list navigation |
 | Filter input | `Esc` | Clear the filter |
-| Command palette | Text input / `↑` / `↓` / `k` / `j` / `Enter` / `Esc` | Filter, move, run, or cancel commands |
+| Command palette | Text input / `↑` / `↓` / `k` / `j` / `Enter` / `Esc` | Filter commands, or search and jump to files |
 | Name input | Text input / `Backspace` / `Enter` / `Esc` | Edit, confirm, or cancel rename/create input |
 | Confirmation dialog | `Enter` / `Esc` | Confirm or cancel delete |
 | Confirmation dialog | `o` / `s` / `r` / `Esc` | Resolve a paste conflict with overwrite / skip / rename / cancel |
@@ -98,9 +98,12 @@ The currently available commands are:
 
 - `Create file`
 - `Create directory`
+- `Find file`
 - `Copy path`
 - `Open terminal here`
 - `Show hidden files` / `Hide hidden files`
+
+`Find file` searches recursively under the current directory using a case-insensitive partial match on the filename, then jumps to the selected result by opening its parent directory and focusing that file. Hidden paths are excluded unless hidden-file visibility is enabled.
 
 Commands still under development may appear dimmed and cannot be executed yet.
 

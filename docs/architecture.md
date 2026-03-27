@@ -136,13 +136,15 @@ sequenceDiagram
 ### `src/peneo/state/command_palette.py`
 
 - コマンドパレット候補の構築と query フィルタリングを担当する
-- 現在の palette には `Create file`、`Create directory`、`Copy path`、`Show/Hide hidden files`、`Open terminal here` がある
+- 現在の palette には `Create file`、`Create directory`、`Find file`、`Copy path`、`Show/Hide hidden files`、`Open terminal here` がある
+- `Find file` 選択後は palette をファイル検索モードに切り替え、現在ディレクトリ以下を再帰検索した結果を同じ UI で表示する
 - `Run shell command` は候補として見える場合があるが、現時点では `enabled=False` のプレースホルダ
 
 ### `src/peneo/services/`
 
 - `browser_snapshot.py`: 実 filesystem から 3 ペイン用 snapshot を構築
 - `clipboard_operations.py`: copy / cut / paste の実処理と競合検出を担当
+- `file_search.py`: 現在ディレクトリ以下の再帰ファイル検索を担当し、hidden 設定に応じて結果を絞る
 - `file_mutations.py`: rename / create / trash delete を担当
 - `external_launcher.py`: 既定アプリ起動、現在のターミナル内エディタ起動、ターミナル起動、システムクリップボードへのパスコピーを担当
 
@@ -167,6 +169,7 @@ stateDiagram-v2
     BROWSING --> RENAME: F2
     BROWSING --> PALETTE: :
     PALETTE --> CREATE: Enter on create command
+    PALETTE --> PALETTE: Enter on Find file / type file-search query
     PALETTE --> BROWSING: Enter on other command / Esc
     FILTER --> BROWSING: Enter / Down / Esc
     RENAME --> BUSY: Enter

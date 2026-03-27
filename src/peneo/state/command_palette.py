@@ -13,14 +13,28 @@ class CommandPaletteItem:
     label: str
     shortcut: str | None
     enabled: bool
+    path: str | None = None
 
 
-def get_filtered_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, ...]:
-    """Return visible command palette items filtered by the active query."""
+def get_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, ...]:
+    """Return visible command palette items for the active palette source."""
 
-    query = ""
-    if state.command_palette is not None:
-        query = state.command_palette.query
+    if state.command_palette is None:
+        return ()
+
+    if state.command_palette.source == "file_search":
+        return tuple(
+            CommandPaletteItem(
+                id=f"file_search_result:{index}",
+                label=result.display_path,
+                shortcut=None,
+                enabled=True,
+                path=result.path,
+            )
+            for index, result in enumerate(state.command_palette.file_search_results)
+        )
+
+    query = state.command_palette.query
 
     return tuple(
         item for item in _build_command_palette_items(state) if _matches_query(item, query)
@@ -30,7 +44,7 @@ def get_filtered_command_palette_items(state: AppState) -> tuple[CommandPaletteI
 def normalize_command_palette_cursor(state: AppState, cursor_index: int) -> int:
     """Clamp the palette cursor to the current filtered item list."""
 
-    items = get_filtered_command_palette_items(state)
+    items = get_command_palette_items(state)
     if not items:
         return 0
     return max(0, min(len(items) - 1, cursor_index))
@@ -52,6 +66,12 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
         CommandPaletteItem(
             id="create_dir",
             label="Create directory",
+            shortcut=None,
+            enabled=True,
+        ),
+        CommandPaletteItem(
+            id="find_file",
+            label="Find file",
             shortcut=None,
             enabled=True,
         ),
