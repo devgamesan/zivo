@@ -1,5 +1,6 @@
 """Rename and create filesystem mutation service."""
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import sleep
@@ -35,7 +36,7 @@ class LiveFileMutationService:
         return self._execute_create(request)
 
     def _execute_rename(self, request: RenameRequest) -> FileMutationResult:
-        source_path = Path(request.source_path).expanduser().resolve()
+        source_path = _absolute_entry_path(request.source_path)
         destination_path = source_path.parent / request.new_name
         self.adapter.move_path(str(source_path), str(destination_path))
         return FileMutationResult(
@@ -44,7 +45,7 @@ class LiveFileMutationService:
         )
 
     def _execute_create(self, request: CreatePathRequest) -> FileMutationResult:
-        target_path = Path(request.parent_dir).expanduser().resolve() / request.name
+        target_path = _absolute_entry_path(request.parent_dir) / request.name
         if request.kind == "file":
             self.adapter.create_file(str(target_path))
             message = f"Created file {request.name}"
@@ -117,7 +118,7 @@ class FakeFileMutationService:
             return result
 
         if isinstance(request, RenameRequest):
-            source_path = Path(request.source_path).expanduser().resolve()
+            source_path = _absolute_entry_path(request.source_path)
             return FileMutationResult(
                 path=str(source_path.parent / request.new_name),
                 message=f"Renamed to {request.new_name}",
@@ -131,10 +132,14 @@ class FakeFileMutationService:
                 removed_paths=request.paths,
             )
 
-        target_path = Path(request.parent_dir).expanduser().resolve() / request.name
+        target_path = _absolute_entry_path(request.parent_dir) / request.name
         message = (
             f"Created file {request.name}"
             if request.kind == "file"
             else f"Created directory {request.name}"
         )
         return FileMutationResult(path=str(target_path), message=message)
+
+
+def _absolute_entry_path(path: str) -> Path:
+    return Path(os.path.abspath(os.path.expanduser(path)))

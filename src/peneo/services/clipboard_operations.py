@@ -1,5 +1,6 @@
 """Clipboard-backed file operation service."""
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from time import sleep
@@ -115,7 +116,7 @@ class LiveClipboardOperationService:
 
     @staticmethod
     def _destination_for_source(source_path: str, destination_dir: str) -> str:
-        return str(Path(destination_dir).expanduser().resolve() / Path(source_path).name)
+        return str(_absolute_entry_path(destination_dir) / Path(source_path).name)
 
 
 @dataclass(frozen=True)
@@ -152,3 +153,7 @@ class FakeClipboardOperationService:
                 )
             )
         return result
+
+
+def _absolute_entry_path(path: str) -> Path:
+    return Path(os.path.abspath(os.path.expanduser(path)))

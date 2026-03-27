@@ -30,6 +30,43 @@ def test_local_file_operation_adapter_copies_directory_recursively(tmp_path) -> 
     assert (destination / "guide.txt").read_text(encoding="utf-8") == "guide\n"
 
 
+def test_local_file_operation_adapter_copies_symlink_without_following_target(tmp_path) -> None:
+    source_dir = tmp_path / "source"
+    source_dir.mkdir()
+    target = source_dir / "target.txt"
+    target.write_text("secret\n", encoding="utf-8")
+    link = source_dir / "link.txt"
+    link.symlink_to(target)
+    destination = tmp_path / "copied-link.txt"
+
+    adapter = LocalFileOperationAdapter()
+
+    adapter.copy_path(str(link), str(destination))
+
+    assert destination.is_symlink()
+    assert destination.resolve() == target.resolve()
+    assert destination.read_text(encoding="utf-8") == "secret\n"
+
+
+def test_local_file_operation_adapter_copies_nested_symlinks_without_following_target(
+    tmp_path,
+) -> None:
+    source_dir = tmp_path / "docs"
+    source_dir.mkdir()
+    target = tmp_path / "target.txt"
+    target.write_text("secret\n", encoding="utf-8")
+    (source_dir / "link.txt").symlink_to(target)
+    destination = tmp_path / "docs-copy"
+
+    adapter = LocalFileOperationAdapter()
+
+    adapter.copy_path(str(source_dir), str(destination))
+
+    copied_link = destination / "link.txt"
+    assert copied_link.is_symlink()
+    assert copied_link.resolve() == target.resolve()
+
+
 def test_local_file_operation_adapter_rejects_copy_to_same_path(tmp_path) -> None:
     source = tmp_path / "README.md"
     source.write_text("plain\n", encoding="utf-8")
@@ -61,6 +98,23 @@ def test_local_file_operation_adapter_rejects_move_to_same_path(tmp_path) -> Non
 
     with pytest.raises(OSError, match="Source and destination are the same path"):
         adapter.move_path(str(source), str(source))
+
+
+def test_local_file_operation_adapter_moves_symlink_without_following_target(tmp_path) -> None:
+    target = tmp_path / "target.txt"
+    target.write_text("secret\n", encoding="utf-8")
+    link = tmp_path / "link.txt"
+    link.symlink_to(target)
+    destination = tmp_path / "renamed-link.txt"
+
+    adapter = LocalFileOperationAdapter()
+
+    adapter.move_path(str(link), str(destination))
+
+    assert link.exists() is False
+    assert destination.is_symlink()
+    assert target.exists()
+    assert target.read_text(encoding="utf-8") == "secret\n"
 
 
 def test_local_file_operation_adapter_creates_file_and_directory(tmp_path) -> None:
@@ -112,6 +166,15 @@ def test_local_file_operation_adapter_generates_unique_file_and_directory_names(
     assert renamed_directory == str(tmp_path / "docs copy")
 
 
+def test_local_file_operation_adapter_path_exists_recognizes_broken_symlink(tmp_path) -> None:
+    broken = tmp_path / "broken.txt"
+    broken.symlink_to(tmp_path / "missing-target.txt")
+
+    adapter = LocalFileOperationAdapter()
+
+    assert adapter.path_exists(str(broken)) is True
+
+
 def test_local_file_operation_adapter_send_to_trash_uses_send2trash(tmp_path, monkeypatch) -> None:
     trashed: list[str] = []
     target = tmp_path / "README.md"
@@ -125,7 +188,27 @@ def test_local_file_operation_adapter_send_to_trash_uses_send2trash(tmp_path, mo
 
     adapter.send_to_trash(str(target))
 
-    assert trashed == [str(target.resolve())]
+    assert trashed == [str(target.absolute())]
+
+
+def test_local_file_operation_adapter_send_to_trash_keeps_symlink_identity(
+    tmp_path, monkeypatch
+) -> None:
+    trashed: list[str] = []
+    target = tmp_path / "target.txt"
+    target.write_text("plain\n", encoding="utf-8")
+    link = tmp_path / "link.txt"
+    link.symlink_to(target)
+
+    def fake_send2trash(path: str) -> None:
+        trashed.append(path)
+
+    monkeypatch.setattr(file_operations_module, "send2trash", fake_send2trash)
+    adapter = LocalFileOperationAdapter()
+
+    adapter.send_to_trash(str(link))
+
+    assert trashed == [str(link.absolute())]
 
 
 def test_local_file_operation_adapter_send_to_trash_converts_oserror(
