@@ -1,40 +1,42 @@
 # Plain
 
-Plain は、GUI のエクスプローラーに近い感覚で使えることを目指している、Textual ベースの TUI ファイルマネージャです。  
-Vim 風の操作を前提にせず、ヘルプを読み込まなくても主要操作にたどり着ける構成を目指しています。
+[日本語版 README](README.ja.md)
+
+Plain is a Textual-based TUI file manager that aims to feel closer to a GUI explorer.
+It is designed so you can reach the main actions without having to study a Vim-style key map first.
 
 ![Plain screenshot](docs/resources/screen1.png)
 
-_現在の 3 ペイン UI。親ディレクトリ、現在のディレクトリ、子ディレクトリを並べて表示します。_
+_Current three-pane UI showing the parent, current, and child directories side by side._
 
-## 特徴
+## Features
 
-- 親 / 現在 / 子ディレクトリを並べた 3 ペイン表示
-- ディレクトリ移動、選択、コピー、カット、貼り付け、削除、リネーム、新規作成をキーボードだけで操作
-- フィルタ入力、ソート切り替え、隠しファイル表示切り替えをサポート
-- 使用頻度の低い操作はコマンドパレットにまとめ、普段使うキーを増やしすぎない構成
-- ファイルは OS の既定アプリで開き、必要なら `e` で現在のターミナル内エディタを起動し、ターミナルも現在ディレクトリで起動可能
+- Three-pane layout for parent / current / child directories
+- Keyboard-only navigation, selection, copy, cut, paste, delete, rename, and create flows
+- Filter input, sort switching, and hidden-file visibility toggle
+- Less frequent actions grouped into a command palette so everyday keys stay small in number
+- Files open with the OS default app, `e` opens the current file in the editor inside the current terminal, and a terminal can also be launched in the current directory
 
-## 現在できること
+## Current Capabilities
 
-- ディレクトリの閲覧と移動
-- ファイル / ディレクトリの複数選択
+- Browse directories and move through the filesystem
+- Multi-select files and directories
 - copy / cut / paste
-- ゴミ箱への削除
-- 単一対象のリネーム
-- 新規ファイル / 新規ディレクトリ作成
-- ファイル名フィルタ
-- 名前 / 更新日時 / サイズでのソート切り替え
-- ディレクトリ優先表示の ON / OFF
-- パスのクリップボードコピー
-- 現在ディレクトリでのターミナル起動
-- 隠しファイル表示切り替え
-- ファイルの既定アプリ起動
-- ファイルの現在のターミナル内エディタ起動
+- Move items to trash
+- Rename a single target
+- Create files and directories
+- Filter by file name
+- Switch sorting by name / modified time / size
+- Toggle directories-first ordering
+- Copy paths to the system clipboard
+- Launch a terminal in the current directory
+- Toggle hidden-file visibility
+- Open files with the OS default app
+- Open files in the editor inside the current terminal
 
-## インストール
+## Installation
 
-`uv` が入っている環境で、リポジトリを clone してからツールとしてインストールします。
+With `uv` installed, clone the repository and install Plain as a tool.
 
 ```bash
 git clone https://github.com/devgamesan/plain.git
@@ -42,55 +44,56 @@ cd plain
 uv tool install --from . plain
 ```
 
-更新時は最新を pull したあとに同じコマンドを再実行してください。
+To update, pull the latest changes and run the same install command again.
 
-## 起動
+## Run
 
 ```bash
 plain
 ```
 
-開発中にローカル checkout から直接起動したい場合は、リポジトリ直下で次を使えます。
+To launch directly from a local checkout during development, run this from the repository root:
 
 ```bash
 uv run plain
 ```
 
-## 基本操作
+## Basic Operations
 
-主要キーは次のとおりです。
+The main keys are listed below.
 
-| 状態 | キー | 動作 |
+| State | Key | Behavior |
 | --- | --- | --- |
-| 通常時 | `↑` / `↓` | カーソル移動 |
-| 通常時 | `←` / `Backspace` | 親ディレクトリへ移動 |
-| 通常時 | `→` | ディレクトリなら入る |
-| 通常時 | `Enter` | ディレクトリなら入る、ファイルなら既定アプリで開く |
-| 通常時 | `e` | カーソル中のファイルを現在のターミナル内エディタで開く |
-| 通常時 | `F5` | 現在ディレクトリを再読み込み |
-| 通常時 | `Space` | 選択トグル後に次行へ移動 |
-| 通常時 | `y` | 選択中の項目、またはカーソル項目をコピー対象にする |
-| 通常時 | `x` | 選択中の項目、またはカーソル項目をカット対象にする |
-| 通常時 | `p` | 現在ディレクトリへ貼り付け |
-| 通常時 | `Delete` | 選択中の項目、またはカーソル項目をゴミ箱へ移動 |
-| 通常時 | `F2` | 単一対象のリネーム入力を開始 |
-| 通常時 | `/` | フィルタ入力を開始 |
-| 通常時 | `s` | ソート順を循環切り替え |
-| 通常時 | `d` | ディレクトリ優先表示を切り替え |
-| 通常時 | `Esc` | フィルタ有効時はフィルタ解除、そうでなければ選択解除 |
-| 通常時 | `:` | コマンドパレットを開く |
-| フィルタ入力中 | 文字入力 | フィルタ文字列を更新 |
-| フィルタ入力中 | `Backspace` | 1 文字削除 |
-| フィルタ入力中 | `Enter` / `↓` | フィルタを適用して一覧操作へ戻る |
-| フィルタ入力中 | `Esc` | フィルタを解除する |
-| コマンドパレット表示中 | 文字入力 / `↑` / `↓` / `Enter` / `Esc` | コマンドを絞り込み、選択、実行、キャンセル |
-| 名前入力中 | 文字入力 / `Backspace` / `Enter` / `Esc` | リネームや新規作成の入力値を編集、確定、キャンセル |
-| 確認ダイアログ表示中 | `Enter` / `Esc` | 削除確認を確定 / 中止 |
-| 確認ダイアログ表示中 | `o` / `s` / `r` / `Esc` | 貼り付け競合を overwrite / skip / rename / cancel |
+| Normal | `↑` / `↓` | Move the cursor |
+| Normal | `←` / `Backspace` | Move to the parent directory |
+| Normal | `→` | Enter the item if it is a directory |
+| Normal | `Enter` | Enter a directory, or open a file with the default app |
+| Normal | `e` | Open the focused file in the editor inside the current terminal |
+| Normal | `F5` | Reload the current directory |
+| Normal | `Space` | Toggle selection, then move to the next row |
+| Normal | `y` | Copy the selected items, or the focused item if nothing is selected |
+| Normal | `x` | Cut the selected items, or the focused item if nothing is selected |
+| Normal | `p` | Paste into the current directory |
+| Normal | `Delete` | Move the selected items, or the focused item, to trash |
+| Normal | `F2` | Start rename input for a single target |
+| Normal | `/` | Start filter input |
+| Normal | `s` | Cycle the sort order |
+| Normal | `d` | Toggle directories-first ordering |
+| Normal | `Esc` | Clear the active filter, otherwise clear the selection |
+| Normal | `:` | Open the command palette |
+| Filter input | Text input | Update the filter string |
+| Filter input | `Backspace` | Delete one character |
+| Filter input | `Enter` / `↓` | Apply the filter and return to list navigation |
+| Filter input | `Esc` | Clear the filter |
+| Command palette | Text input / `↑` / `↓` / `Enter` / `Esc` | Filter, move, run, or cancel commands |
+| Name input | Text input / `Backspace` / `Enter` / `Esc` | Edit, confirm, or cancel rename/create input |
+| Confirmation dialog | `Enter` / `Esc` | Confirm or cancel delete |
+| Confirmation dialog | `o` / `s` / `r` / `Esc` | Resolve a paste conflict with overwrite / skip / rename / cancel |
 
-## コマンドパレット
+## Command Palette
 
-使用頻度の低い操作は `:` で開くコマンドパレットにまとめています。現在使える主なコマンドは次のとおりです。
+Less frequent actions are grouped in the command palette opened with `:`.
+The currently available commands are:
 
 - `Create file`
 - `Create directory`
@@ -98,30 +101,29 @@ uv run plain
 - `Open terminal here`
 - `Show hidden files` / `Hide hidden files`
 
-実装途中のコマンドは候補に表示されても dim 表示になり、実行できません。
+Commands still under development may appear dimmed and cannot be executed yet.
 
-## 対応環境と注意
+## Platform Notes
 
-- 現時点で動作確認している OS は Ubuntu のみです。
-- コード上は Linux / macOS / Windows 向けの外部起動処理を持っていますが、動作確認済みとは限りません。
-- まだ開発途中です。挙動やキーバインドは今後見直す可能性があります。
-- 英語版 README はまだ用意していません。
+- The project is currently verified only on Ubuntu.
+- The code contains external-launch implementations for Linux / macOS / Windows, but not every platform path is fully validated.
+- The application is still under active development, so behavior and keybindings may change.
 
-## 関連ドキュメント
+## Related Documents
 
-- 実装構造: [docs/architecture.md](docs/architecture.md)
-- MVP メモ: [docs/spec_mvp.md](docs/spec_mvp.md)
-- 性能確認メモ: [docs/performance.md](docs/performance.md)
+- Implementation structure: [docs/architecture.en.md](docs/architecture.en.md)
+- MVP notes: [docs/spec_mvp.en.md](docs/spec_mvp.en.md)
+- Performance notes: [docs/performance.en.md](docs/performance.en.md)
 
-## 開発者向け
+## Development
 
-開発環境を作る場合は次を実行します。
+To prepare the development environment:
 
 ```bash
 uv sync --python 3.12 --dev
 ```
 
-テストと静的検査:
+Lint and test:
 
 ```bash
 uv run ruff check .
