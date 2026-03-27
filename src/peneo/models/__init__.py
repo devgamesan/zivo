@@ -18,6 +18,7 @@ from .file_operations import (
     TrashDeleteRequest,
 )
 from .shell_data import (
+    AttributeDialogState,
     CommandPaletteItemViewState,
     CommandPaletteViewState,
     ConflictDialogState,
@@ -31,6 +32,7 @@ from .shell_data import (
 )
 
 __all__ = [
+    "AttributeDialogState",
     "CommandPaletteItemViewState",
     "CommandPaletteViewState",
     "ConflictDialogState",

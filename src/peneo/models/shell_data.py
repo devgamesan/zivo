@@ -96,6 +96,15 @@ class ConflictDialogState:
 
 
 @dataclass(frozen=True)
+class AttributeDialogState:
+    """Display data for the read-only attribute dialog."""
+
+    title: str
+    lines: tuple[str, ...]
+    options: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ThreePaneShellData:
     """Complete display state for the shell UI."""
 
@@ -110,6 +119,7 @@ class ThreePaneShellData:
     command_palette: CommandPaletteViewState | None
     status: StatusBarState
     conflict_dialog: ConflictDialogState | None = None
+    attribute_dialog: AttributeDialogState | None = None
 
 
 def build_dummy_shell_data() -> ThreePaneShellData:
@@ -149,4 +159,5 @@ def build_dummy_shell_data() -> ThreePaneShellData:
         ),
         command_palette=None,
         status=StatusBarState(message=None, message_level=None),
+        attribute_dialog=None,
     )

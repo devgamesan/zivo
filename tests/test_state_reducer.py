@@ -11,6 +11,7 @@ from peneo.models import (
     TrashDeleteRequest,
 )
 from peneo.state import (
+    AttributeInspectionState,
     BeginCommandPalette,
     BeginCreateInput,
     BeginDeleteTargets,
@@ -37,6 +38,7 @@ from peneo.state import (
     CutTargets,
     DeleteConfirmationState,
     DirectoryEntryState,
+    DismissAttributeDialog,
     DismissNameConflict,
     EnterCursorDirectory,
     ExternalLaunchCompleted,
@@ -393,7 +395,7 @@ def test_move_command_palette_cursor_clamps_to_visible_commands() -> None:
     next_state = _reduce_state(state, MoveCommandPaletteCursor(delta=10))
 
     assert next_state.command_palette is not None
-    assert next_state.command_palette.cursor_index == 7
+    assert next_state.command_palette.cursor_index == 8
 
 
 def test_set_command_palette_query_resets_cursor() -> None:
@@ -409,6 +411,7 @@ def test_set_command_palette_query_resets_cursor() -> None:
 
 def test_submit_command_palette_runs_create_file_flow() -> None:
     state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("create file"))
 
     next_state = _reduce_state(state, SubmitCommandPalette())
 
@@ -423,7 +426,7 @@ def test_submit_command_palette_runs_create_file_flow() -> None:
 
 def test_submit_command_palette_enters_find_file_mode() -> None:
     state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, MoveCommandPaletteCursor(delta=2))
+    state = _reduce_state(state, SetCommandPaletteQuery("find"))
 
     next_state = _reduce_state(state, SubmitCommandPalette())
 
@@ -433,7 +436,7 @@ def test_submit_command_palette_enters_find_file_mode() -> None:
 
 def test_submit_command_palette_runs_copy_path_flow() -> None:
     state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, MoveCommandPaletteCursor(delta=3))
+    state = _reduce_state(state, SetCommandPaletteQuery("copy"))
 
     result = reduce_app_state(state, SubmitCommandPalette())
 
@@ -449,6 +452,39 @@ def test_submit_command_palette_runs_copy_path_flow() -> None:
             ),
         ),
     )
+
+
+def test_submit_command_palette_opens_attribute_dialog_for_single_target() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("attr"))
+
+    next_state = _reduce_state(state, SubmitCommandPalette())
+
+    assert next_state.ui_mode == "DETAIL"
+    assert next_state.command_palette is None
+    assert next_state.attribute_inspection is not None
+    assert next_state.attribute_inspection.name == "docs"
+    assert next_state.attribute_inspection.kind == "dir"
+    assert next_state.attribute_inspection.path == "/home/tadashi/develop/peneo/docs"
+    assert next_state.attribute_inspection.permissions_mode is None
+
+
+def test_dismiss_attribute_dialog_returns_to_browsing() -> None:
+    initial_state = build_initial_app_state()
+    state = replace(
+        initial_state,
+        ui_mode="DETAIL",
+        attribute_inspection=AttributeInspectionState(
+            name="docs",
+            kind="dir",
+            path="/home/tadashi/develop/peneo/docs",
+        ),
+    )
+
+    next_state = _reduce_state(state, DismissAttributeDialog())
+
+    assert next_state.ui_mode == "BROWSING"
+    assert next_state.attribute_inspection is None
 
 
 def test_submit_command_palette_opens_current_directory_in_file_manager() -> None:
@@ -534,7 +570,7 @@ def test_submit_command_palette_uses_selected_paths_for_copy_path() -> None:
         ),
     )
     state = _reduce_state(state, BeginCommandPalette())
-    state = _reduce_state(state, MoveCommandPaletteCursor(delta=3))
+    state = _reduce_state(state, SetCommandPaletteQuery("copy"))
 
     result = reduce_app_state(state, SubmitCommandPalette())
 
@@ -554,7 +590,7 @@ def test_submit_command_palette_uses_selected_paths_for_copy_path() -> None:
 
 def test_set_command_palette_query_starts_file_search_effect() -> None:
     state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, MoveCommandPaletteCursor(delta=2))
+    state = _reduce_state(state, SetCommandPaletteQuery("find"))
     state = _reduce_state(state, SubmitCommandPalette())
 
     result = reduce_app_state(state, SetCommandPaletteQuery("read"))
@@ -575,7 +611,7 @@ def test_set_command_palette_query_starts_file_search_effect() -> None:
 
 def test_file_search_completed_updates_palette_results() -> None:
     state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, MoveCommandPaletteCursor(delta=2))
+    state = _reduce_state(state, SetCommandPaletteQuery("find"))
     state = _reduce_state(state, SubmitCommandPalette())
     search_state = replace(
         state,
@@ -609,7 +645,7 @@ def test_file_search_completed_updates_palette_results() -> None:
 
 def test_submit_command_palette_file_search_result_requests_snapshot() -> None:
     state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, MoveCommandPaletteCursor(delta=2))
+    state = _reduce_state(state, SetCommandPaletteQuery("find"))
     state = _reduce_state(state, SubmitCommandPalette())
     state = replace(
         state,

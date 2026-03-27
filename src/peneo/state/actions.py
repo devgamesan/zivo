@@ -262,6 +262,11 @@ class DismissNameConflict:
 
 
 @dataclass(frozen=True)
+class DismissAttributeDialog:
+    """Dismiss the pending read-only attribute dialog."""
+
+
+@dataclass(frozen=True)
 class SetFilterQuery:
     """Update the active filter query."""
 
@@ -427,6 +432,7 @@ Action = (
     | ResolvePasteConflict
     | CancelPasteConflict
     | DismissNameConflict
+    | DismissAttributeDialog
     | SetFilterQuery
     | ToggleHiddenFiles
     | SetSort

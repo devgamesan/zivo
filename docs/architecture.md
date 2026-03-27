@@ -22,7 +22,7 @@ widget 側に操作分岐を持たせず、状態遷移は `state/` に寄せる
 flowchart LR
     subgraph UI["UI (`src/peneo/app.py`, `src/peneo/ui`)"]
         App["PeneoApp"]
-        Widgets["CurrentPathBar / MainPane / SidePane / CommandPalette / ConflictDialog / HelpBar / StatusBar"]
+        Widgets["CurrentPathBar / MainPane / SidePane / CommandPalette / ConflictDialog / AttributeDialog / HelpBar / StatusBar"]
     end
 
     subgraph State["State (`src/peneo/state`)"]
@@ -130,13 +130,14 @@ sequenceDiagram
 
 - `AppState` から `ThreePaneShellData` を組み立てる
 - 中央ペインにだけ filter / sort を適用し、親・子ペインは名前順 + ディレクトリ優先で固定表示する
-- help bar、status bar、input bar、command palette、conflict dialog の表示文言もここで整形する
+- help bar、status bar、input bar、command palette、conflict dialog、attribute dialog の表示文言もここで整形する
 - cut 対象の dim 表示や summary 行の `item_count / selected_count / sort_label` も selector 側で組み立てる
 
 ### `src/peneo/state/command_palette.py`
 
 - コマンドパレット候補の構築と query フィルタリングを担当する
-- 現在の palette には `Create file`、`Create directory`、`Find file`、`Copy path`、`Open in file manager`、`Show/Hide hidden files`、`Open terminal here` がある
+- 現在の palette には `Find file`、`Show attributes`、`Copy path`、`Open in file manager`、`Open terminal here`、`Show/Hide hidden files`、`Create file`、`Create directory` がある
+- `Show attributes` は単一対象がある場合にだけ表示し、`Name` / `Type` / `Path` / `Size` / `Modified` / `Hidden` / `Permissions` を持つ read-only の属性ダイアログを開く
 - `Find file` 選択後は palette をファイル検索モードに切り替え、現在ディレクトリ以下を再帰検索した結果を同じ UI で表示する
 - `Run shell command` は候補として見える場合があるが、現時点では `enabled=False` のプレースホルダ
 
@@ -216,7 +217,7 @@ stateDiagram-v2
 - ファイルの既定アプリ起動
 - ファイルの現在のターミナル内エディタ起動
 - コマンドパレットからの path copy、既定ファイラー起動、terminal 起動、hidden files 切り替え
-- status bar / help bar / input bar / conflict dialog の状態連動表示
+- status bar / help bar / input bar / conflict dialog / attribute dialog の状態連動表示
 
 ## 7. 現時点で未接続または未実装の範囲
 

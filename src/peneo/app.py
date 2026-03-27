@@ -63,6 +63,7 @@ from peneo.state import (
     select_shell_data,
 )
 from peneo.ui import (
+    AttributeDialog,
     CommandPalette,
     ConflictDialog,
     CurrentPathBar,
@@ -208,6 +209,32 @@ class PeneoApp(App[None]):
         color: $warning;
         text-style: bold;
     }
+
+    #attribute-dialog {
+        display: none;
+        height: auto;
+        min-height: 8;
+        margin: 0 2;
+        padding: 1 2;
+        border: round $accent;
+        background: $surface;
+    }
+
+    #attribute-dialog-title {
+        text-style: bold;
+        color: $accent;
+    }
+
+    #attribute-dialog-lines {
+        margin: 0 0 1 0;
+    }
+
+    #attribute-dialog-options {
+        padding: 0 1;
+        background: $boost;
+        color: $accent;
+        text-style: bold;
+    }
     """
 
     def __init__(
@@ -242,6 +269,7 @@ class PeneoApp(App[None]):
         yield self._build_body(shell)
         yield CommandPalette(shell.command_palette, id="command-palette")
         yield ConflictDialog(shell.conflict_dialog, id="conflict-dialog")
+        yield AttributeDialog(shell.attribute_dialog, id="attribute-dialog")
         yield HelpBar(shell.help, id="help-bar")
         yield StatusBar(shell.status, id="status-bar")
 
@@ -690,6 +718,7 @@ class PeneoApp(App[None]):
             help_bar = self.query_one("#help-bar", HelpBar)
             status_bar = self.query_one("#status-bar", StatusBar)
             conflict_dialog = self.query_one("#conflict-dialog", ConflictDialog)
+            attribute_dialog = self.query_one("#attribute-dialog", AttributeDialog)
         except NoMatches:
             selectors = (
                 "#current-path-bar",
@@ -698,6 +727,7 @@ class PeneoApp(App[None]):
                 "#help-bar",
                 "#status-bar",
                 "#conflict-dialog",
+                "#attribute-dialog",
             )
             for selector in selectors:
                 try:
@@ -710,6 +740,7 @@ class PeneoApp(App[None]):
             await self.mount(HelpBar(shell.help, id="help-bar"))
             await self.mount(StatusBar(shell.status, id="status-bar"))
             await self.mount(ConflictDialog(shell.conflict_dialog, id="conflict-dialog"))
+            await self.mount(AttributeDialog(shell.attribute_dialog, id="attribute-dialog"))
             return
 
         current_path_bar.set_path(shell.current_path)
@@ -722,6 +753,7 @@ class PeneoApp(App[None]):
         help_bar.set_state(shell.help)
         status_bar.set_state(shell.status)
         conflict_dialog.set_state(shell.conflict_dialog)
+        attribute_dialog.set_state(shell.attribute_dialog)
 
 
 def create_app(

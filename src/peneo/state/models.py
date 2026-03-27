@@ -25,6 +25,7 @@ class DirectoryEntryState:
     size_bytes: int | None = None
     modified_at: datetime | None = None
     hidden: bool = False
+    permissions_mode: int | None = None
 
 
 @dataclass(frozen=True)
@@ -85,6 +86,19 @@ class NameConflictState:
 
     kind: NameConflictKind
     name: str
+
+
+@dataclass(frozen=True)
+class AttributeInspectionState:
+    """Pending read-only attribute dialog state."""
+
+    name: str
+    kind: EntryKind
+    path: str
+    size_bytes: int | None = None
+    modified_at: datetime | None = None
+    hidden: bool = False
+    permissions_mode: int | None = None
 
 
 @dataclass(frozen=True)
@@ -161,6 +175,7 @@ class AppState:
     paste_conflict: PasteConflictState | None = None
     delete_confirmation: DeleteConfirmationState | None = None
     name_conflict: NameConflictState | None = None
+    attribute_inspection: AttributeInspectionState | None = None
     post_reload_notification: NotificationState | None = None
     pending_browser_snapshot_request_id: int | None = None
     pending_child_pane_request_id: int | None = None

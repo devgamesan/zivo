@@ -1,9 +1,12 @@
 """Selectors that convert AppState into display models."""
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
+from stat import S_IMODE, filemode
 
 from peneo.models import (
+    AttributeDialogState,
     CommandPaletteItemViewState,
     CommandPaletteViewState,
     ConflictDialogState,
@@ -60,6 +63,7 @@ def select_shell_data(state: AppState) -> ThreePaneShellData:
         command_palette=select_command_palette_state(state),
         status=select_status_bar_state(state),
         conflict_dialog=select_conflict_dialog_state(state),
+        attribute_dialog=select_attribute_dialog_state(state),
     )
 
 
@@ -140,6 +144,8 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
         if state.name_conflict is not None:
             return HelpBarState("enter return to input | esc return to input")
         return HelpBarState("resolve conflict in dialog")
+    if state.ui_mode == "DETAIL":
+        return HelpBarState("enter close | esc close")
     if state.ui_mode == "FILTER":
         return HelpBarState("type filter | enter/down apply | esc clear")
     if state.ui_mode == "RENAME":
@@ -293,6 +299,30 @@ def select_conflict_dialog_state(state: AppState) -> ConflictDialogState | None:
             for resolution in state.paste_conflict.available_resolutions
         )
         + ("esc cancel",),
+    )
+
+
+def select_attribute_dialog_state(state: AppState) -> AttributeDialogState | None:
+    """Return dialog content when the app is showing read-only attributes."""
+
+    if state.attribute_inspection is None:
+        return None
+
+    entry = state.attribute_inspection
+    kind_label = "Directory" if entry.kind == "dir" else "File"
+    hidden_label = "Yes" if entry.hidden else "No"
+    return AttributeDialogState(
+        title=f"Attributes: {entry.name}",
+        lines=(
+            f"Name: {entry.name}",
+            f"Type: {kind_label}",
+            f"Path: {entry.path}",
+            f"Size: {_format_size_label(entry.size_bytes)}",
+            f"Modified: {_format_modified_label_from_timestamp(entry.modified_at)}",
+            f"Hidden: {hidden_label}",
+            f"Permissions: {_format_permissions_label(entry.permissions_mode)}",
+        ),
+        options=("enter close", "esc close"),
     )
 
 
@@ -505,6 +535,19 @@ def _format_modified_label(entry: DirectoryEntryState) -> str:
     if entry.modified_at is None:
         return "-"
     return entry.modified_at.strftime("%Y-%m-%d %H:%M")
+
+
+def _format_modified_label_from_timestamp(value: datetime | None) -> str:
+    if value is None:
+        return "-"
+    return value.strftime("%Y-%m-%d %H:%M")
+
+
+def _format_permissions_label(mode: int | None) -> str:
+    if mode is None:
+        return "-"
+    normalized_mode = S_IMODE(mode)
+    return f"{filemode(mode)} ({normalized_mode:03o})"
 
 
 def _format_current_entry_name_detail(

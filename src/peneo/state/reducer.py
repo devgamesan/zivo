@@ -37,6 +37,7 @@ from .actions import (
     ConfirmFilterInput,
     CopyTargets,
     CutTargets,
+    DismissAttributeDialog,
     DismissNameConflict,
     EnterCursorDirectory,
     ExternalLaunchCompleted,
@@ -85,6 +86,7 @@ from .effects import (
 )
 from .models import (
     AppState,
+    AttributeInspectionState,
     ClipboardState,
     CommandPaletteState,
     DeleteConfirmationState,
@@ -122,6 +124,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 pending_file_search_request_id=None,
                 delete_confirmation=None,
                 name_conflict=None,
+                attribute_inspection=None,
             )
         )
 
@@ -139,6 +142,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 command_palette=None,
                 delete_confirmation=None,
                 name_conflict=None,
+                attribute_inspection=None,
             )
         )
 
@@ -160,6 +164,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 pending_file_search_request_id=None,
                 delete_confirmation=None,
                 name_conflict=None,
+                attribute_inspection=None,
             )
         )
 
@@ -178,6 +183,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                     paste_conflict=None,
                     delete_confirmation=DeleteConfirmationState(paths=action.paths),
                     name_conflict=None,
+                    attribute_inspection=None,
                 )
             )
         return _run_file_mutation_request(
@@ -187,6 +193,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 paste_conflict=None,
                 delete_confirmation=None,
                 name_conflict=None,
+                attribute_inspection=None,
             ),
             TrashDeleteRequest(paths=action.paths),
         )
@@ -206,6 +213,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 pending_file_search_request_id=None,
                 delete_confirmation=None,
                 name_conflict=None,
+                attribute_inspection=None,
             )
         )
 
@@ -220,6 +228,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 pending_file_search_request_id=None,
                 delete_confirmation=None,
                 name_conflict=None,
+                attribute_inspection=None,
             )
         )
 
@@ -232,6 +241,17 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 command_palette=None,
                 pending_file_search_request_id=None,
                 name_conflict=None,
+                attribute_inspection=None,
+            )
+        )
+
+    if isinstance(action, DismissAttributeDialog):
+        return done(
+            replace(
+                state,
+                ui_mode="BROWSING",
+                notification=None,
+                attribute_inspection=None,
             )
         )
 
@@ -312,6 +332,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 notification=None,
                 command_palette=None,
                 pending_file_search_request_id=None,
+                attribute_inspection=None,
             )
             return reduce_app_state(
                 next_state,
@@ -349,17 +370,45 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             notification=None,
             command_palette=None,
             pending_file_search_request_id=None,
+            attribute_inspection=None,
         )
-        if selected_item.id == "create_file":
-            return reduce_app_state(next_state, BeginCreateInput("file"))
-        if selected_item.id == "create_dir":
-            return reduce_app_state(next_state, BeginCreateInput("dir"))
         if selected_item.id == "find_file":
             return done(
                 replace(
                     state,
                     notification=None,
                     command_palette=CommandPaletteState(source="file_search"),
+                    attribute_inspection=None,
+                )
+            )
+        if selected_item.id == "show_attributes":
+            entry = _single_target_entry(state)
+            if entry is None:
+                return done(
+                    replace(
+                        state,
+                        notification=NotificationState(
+                            level="warning",
+                            message="Show attributes requires a single target",
+                        ),
+                    )
+                )
+            return done(
+                replace(
+                    state,
+                    ui_mode="DETAIL",
+                    notification=None,
+                    command_palette=None,
+                    pending_file_search_request_id=None,
+                    attribute_inspection=AttributeInspectionState(
+                        name=entry.name,
+                        kind=entry.kind,
+                        path=entry.path,
+                        size_bytes=entry.size_bytes,
+                        modified_at=entry.modified_at,
+                        hidden=entry.hidden,
+                        permissions_mode=entry.permissions_mode,
+                    ),
                 )
             )
         if selected_item.id == "copy_path":
@@ -377,10 +426,14 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             )
         if selected_item.id == "open_file_manager":
             return reduce_app_state(next_state, OpenPathWithDefaultApp(next_state.current_path))
-        if selected_item.id == "toggle_hidden":
-            return reduce_app_state(next_state, ToggleHiddenFiles())
         if selected_item.id == "open_terminal":
             return reduce_app_state(next_state, OpenTerminalAtPath(next_state.current_path))
+        if selected_item.id == "toggle_hidden":
+            return reduce_app_state(next_state, ToggleHiddenFiles())
+        if selected_item.id == "create_file":
+            return reduce_app_state(next_state, BeginCreateInput("file"))
+        if selected_item.id == "create_dir":
+            return reduce_app_state(next_state, BeginCreateInput("dir"))
         return done(next_state)
 
     if isinstance(action, SetPendingInputValue):
@@ -404,6 +457,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 pending_file_search_request_id=None,
                 delete_confirmation=None,
                 name_conflict=None,
+                attribute_inspection=None,
             )
         )
 
@@ -1184,6 +1238,13 @@ def _current_entry_for_path(
         if entry.path == path:
             return entry
     return None
+
+
+def _single_target_entry(state: AppState) -> DirectoryEntryState | None:
+    target_paths = select_target_paths(state)
+    if len(target_paths) != 1:
+        return None
+    return _current_entry_for_path(state, target_paths[0])
 
 
 def _normalize_cursor_path(
