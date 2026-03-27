@@ -29,6 +29,26 @@ class StubForegroundRunner:
             raise OSError(f"{command[0]} failed")
 
 
+@dataclass
+class StubExternalLaunchAdapter:
+    opened_paths: list[str] = field(default_factory=list)
+    edited_paths: list[str] = field(default_factory=list)
+    terminal_paths: list[str] = field(default_factory=list)
+    clipboard_payloads: list[str] = field(default_factory=list)
+
+    def open_with_default_app(self, path: str) -> None:
+        self.opened_paths.append(path)
+
+    def open_in_editor(self, path: str) -> None:
+        self.edited_paths.append(path)
+
+    def open_terminal(self, path: str) -> None:
+        self.terminal_paths.append(path)
+
+    def copy_to_clipboard(self, text: str) -> None:
+        self.clipboard_payloads.append(text)
+
+
 def test_local_external_launch_adapter_uses_xdg_open_on_linux(tmp_path) -> None:
     readme = tmp_path / "README.md"
     readme.write_text("plain\n", encoding="utf-8")
@@ -126,6 +146,47 @@ def test_local_external_launch_adapter_copies_to_clipboard_on_linux() -> None:
     ]
 
 
+def test_local_external_launch_adapter_raises_last_terminal_error_when_all_candidates_fail(
+    tmp_path,
+) -> None:
+    runner = StubCommandRunner(
+        failing_commands={
+            "konsole",
+            "gnome-terminal",
+            "xfce4-terminal",
+            "xterm",
+            "x-terminal-emulator",
+        }
+    )
+    adapter = LocalExternalLaunchAdapter(
+        system_name_resolver=lambda: "Linux",
+        command_available=lambda command: (
+            command
+            if command
+            in {"konsole", "gnome-terminal", "xfce4-terminal", "xterm", "x-terminal-emulator"}
+            else None
+        ),
+        command_runner=runner,
+    )
+
+    with pytest.raises(OSError, match="x-terminal-emulator failed"):
+        adapter.open_terminal(str(tmp_path))
+
+
+def test_local_external_launch_adapter_reports_invalid_editor_value(tmp_path) -> None:
+    readme = tmp_path / "README.md"
+    readme.write_text("plain\n", encoding="utf-8")
+    adapter = LocalExternalLaunchAdapter(
+        system_name_resolver=lambda: "Linux",
+        command_available=lambda command: command if command == "nvim" else None,
+        command_runner=StubCommandRunner(),
+        environment_variable=lambda name: "'" if name == "EDITOR" else None,
+    )
+
+    with pytest.raises(OSError, match="Invalid EDITOR value"):
+        adapter.open_in_editor(str(readme))
+
+
 def test_local_external_launch_adapter_uses_clipboard_fallback_when_commands_missing() -> None:
     copied: list[str] = []
 
@@ -152,6 +213,38 @@ def test_live_external_launch_service_formats_open_error(tmp_path) -> None:
 
     with pytest.raises(OSError, match=f"Failed to open {missing.resolve()}: Not found: "):
         service.execute(ExternalLaunchRequest(kind="open_file", path=str(missing)))
+
+
+def test_live_external_launch_service_opens_file_with_adapter() -> None:
+    adapter = StubExternalLaunchAdapter()
+    service = LiveExternalLaunchService(adapter=adapter)
+
+    service.execute(ExternalLaunchRequest(kind="open_file", path="/tmp/plain/README.md"))
+
+    assert adapter.opened_paths == ["/tmp/plain/README.md"]
+
+
+def test_live_external_launch_service_opens_terminal_with_adapter() -> None:
+    adapter = StubExternalLaunchAdapter()
+    service = LiveExternalLaunchService(adapter=adapter)
+
+    service.execute(ExternalLaunchRequest(kind="open_terminal", path="/tmp/plain"))
+
+    assert adapter.terminal_paths == ["/tmp/plain"]
+
+
+def test_live_external_launch_service_copies_paths_with_expected_payload() -> None:
+    adapter = StubExternalLaunchAdapter()
+    service = LiveExternalLaunchService(adapter=adapter)
+
+    service.execute(
+        ExternalLaunchRequest(
+            kind="copy_paths",
+            paths=("/tmp/plain/docs", "/tmp/plain/README.md"),
+        )
+    )
+
+    assert adapter.clipboard_payloads == ["/tmp/plain/docs\n/tmp/plain/README.md"]
 
 
 def test_live_external_launch_service_formats_editor_error(tmp_path) -> None:
