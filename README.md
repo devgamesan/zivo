@@ -14,7 +14,7 @@ _Current three-pane UI showing the parent, current, and child directories side b
 - Three-pane layout for parent / current / child directories so surrounding filesystem context stays visible
 - Common actions stay visible in the on-screen help, while less frequent actions live in the command palette
 - Keyboard-only navigation, multi-selection, copy, cut, paste, delete-to-trash, rename, and create flows
-- Filter input, recursive file search from the command palette, sort switching, and hidden-file visibility toggle
+- Filter input, recursive file search from the command palette, attribute inspection, sort switching, and hidden-file visibility toggle
 - Files open with the OS default app, directories can be opened in the OS file manager, `e` opens the current file in the editor inside the current terminal, and a terminal can also be launched in the current directory
 - Optional shell integration via `peneo-cd` can return your shell to the last directory after quitting
 - Safer file operations with trash deletion and overwrite / skip / rename conflict resolution during paste
@@ -29,6 +29,7 @@ _Current three-pane UI showing the parent, current, and child directories side b
 - Create files and directories
 - Filter by file name
 - Search files recursively from the command palette
+- Inspect file and directory attributes from the command palette
 - Switch sorting by name / modified time / size
 - Toggle directories-first ordering
 - Copy paths to the system clipboard
@@ -118,15 +119,18 @@ The main keys are listed below.
 Less frequent actions are grouped in the command palette opened with `:`.
 The currently available commands are:
 
-- `Create file`
-- `Create directory`
 - `Find file`
+- `Show attributes` (single target only)
 - `Copy path`
 - `Open in file manager`
 - `Open terminal here`
 - `Show hidden files` / `Hide hidden files`
+- `Create file`
+- `Create directory`
 
 `Find file` searches recursively under the current directory using a case-insensitive partial match on the filename, then jumps to the selected result by opening its parent directory and focusing that file. Hidden paths are excluded unless hidden-file visibility is enabled. When there are many hits, the palette shows a moving window around the current cursor so you can inspect all matches with the arrow keys without clipping the list.
+
+`Show attributes` opens a read-only dialog for the current cursor target or a single selected entry and shows `Name`, `Type`, `Path`, `Size`, `Modified`, and `Hidden`.
 
 Commands still under development may appear dimmed and cannot be executed yet.
 

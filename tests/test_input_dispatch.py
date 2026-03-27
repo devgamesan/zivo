@@ -16,6 +16,7 @@ from peneo.state import (
     CopyTargets,
     CutTargets,
     DeleteConfirmationState,
+    DismissAttributeDialog,
     DismissNameConflict,
     EnterCursorDirectory,
     ExitCurrentPath,
@@ -536,6 +537,14 @@ def test_name_conflict_confirm_escape_returns_to_input() -> None:
     actions = dispatch_key_input(state, key="escape")
 
     assert actions == (SetNotification(None), DismissNameConflict())
+
+
+def test_detail_enter_closes_attribute_dialog() -> None:
+    state = replace(build_initial_app_state(), ui_mode="DETAIL")
+
+    actions = dispatch_key_input(state, key="enter")
+
+    assert actions == (SetNotification(None), DismissAttributeDialog())
 
 
 def test_confirm_o_selects_overwrite_resolution() -> None:

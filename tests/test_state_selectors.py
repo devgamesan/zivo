@@ -3,6 +3,7 @@ from dataclasses import replace
 import peneo.state.selectors as selectors_module
 from peneo.models import PasteConflict, PasteRequest
 from peneo.state import (
+    AttributeInspectionState,
     BeginCommandPalette,
     BeginCreateInput,
     BeginFilterInput,
@@ -23,6 +24,7 @@ from peneo.state import (
     SetSort,
     ToggleSelection,
     build_initial_app_state,
+    select_attribute_dialog_state,
     select_child_entries,
     select_command_palette_state,
     select_conflict_dialog_state,
@@ -415,16 +417,18 @@ def test_select_command_palette_state_marks_selected_and_enabled_items() -> None
     palette_state = select_command_palette_state(state)
 
     assert palette_state is not None
+    assert palette_state.title == "Command Palette (1-8 / 9)"
     assert [item.label for item in palette_state.items[:3]] == [
-        "Create file",
-        "Create directory",
         "Find file",
+        "Show attributes",
+        "Copy path",
     ]
     assert palette_state.items[0].selected is True
-    assert palette_state.items[2].enabled is True
+    assert palette_state.items[1].enabled is True
     assert any(
         item.label == "Open in file manager" and item.enabled for item in palette_state.items
     )
+    assert any(item.label == "Create file" and item.enabled for item in palette_state.items)
     assert any(item.label == "Open terminal here" and item.enabled for item in palette_state.items)
 
 
@@ -458,6 +462,32 @@ def test_select_command_palette_state_uses_hidden_toggle_label_from_state() -> N
 
     assert visible_palette_state is not None
     assert [item.label for item in visible_palette_state.items] == ["Hide hidden files"]
+
+
+def test_select_attribute_dialog_state_formats_selected_entry() -> None:
+    state = replace(
+        build_initial_app_state(),
+        attribute_inspection=AttributeInspectionState(
+            name="README.md",
+            kind="file",
+            path="/home/tadashi/develop/peneo/README.md",
+            size_bytes=2_150,
+            modified_at=build_initial_app_state().current_pane.entries[3].modified_at,
+            hidden=False,
+        ),
+    )
+
+    dialog = select_attribute_dialog_state(state)
+
+    assert dialog is not None
+    assert dialog.title == "Attributes: README.md"
+    assert "Name: README.md" in dialog.lines
+    assert "Type: File" in dialog.lines
+    assert "Path: /home/tadashi/develop/peneo/README.md" in dialog.lines
+    assert "Size: 2.1 KB" in dialog.lines
+    assert "Hidden: No" in dialog.lines
+    assert dialog.options == ("enter close", "esc close")
+
 
 def test_select_command_palette_state_for_file_search_results() -> None:
     state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
@@ -708,3 +738,11 @@ def test_select_help_bar_for_delete_confirmation() -> None:
     help_state = select_help_bar_state(state)
 
     assert help_state.text == "enter confirm delete | esc cancel"
+
+
+def test_select_help_bar_for_attribute_dialog() -> None:
+    state = replace(build_initial_app_state(), ui_mode="DETAIL")
+
+    help_state = select_help_bar_state(state)
+
+    assert help_state.text == "enter close | esc close"

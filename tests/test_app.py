@@ -27,6 +27,7 @@ from peneo.services import (
 )
 from peneo.state import BrowserSnapshot, DirectoryEntryState, FileSearchResultState, PaneState
 from peneo.ui import (
+    AttributeDialog,
     CommandPalette,
     ConflictDialog,
     CurrentPathBar,
@@ -118,6 +119,17 @@ async def _wait_for_command_palette(app, timeout: float = 0.5) -> CommandPalette
     while True:
         try:
             return app.query_one("#command-palette", CommandPalette)
+        except NoMatches:
+            if asyncio.get_running_loop().time() >= deadline:
+                raise
+            await asyncio.sleep(0.01)
+
+
+async def _wait_for_attribute_dialog(app, timeout: float = 0.5) -> AttributeDialog:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
+        try:
+            return app.query_one("#attribute-dialog", AttributeDialog)
         except NoMatches:
             if asyncio.get_running_loop().time() >= deadline:
                 raise
@@ -1060,7 +1072,7 @@ async def test_app_colon_shows_command_palette() -> None:
 
         assert app.app_state.ui_mode == "PALETTE"
         assert palette.display is True
-        assert "Create file" in str(items.renderable)
+        assert "Find file" in str(items.renderable)
 
 
 @pytest.mark.asyncio
@@ -1080,6 +1092,7 @@ async def test_app_command_palette_create_file_opens_context_input() -> None:
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
         await pilot.press(":")
+        await pilot.press("c", "r", "e", "a", "t", "e")
         await pilot.press("enter")
         await asyncio.sleep(0.05)
 
@@ -1132,8 +1145,6 @@ async def test_app_command_palette_find_file_jumps_to_matching_parent_directory(
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
         await pilot.press(":")
-        await pilot.press("down")
-        await pilot.press("down")
         await pilot.press("enter")
         await pilot.press("r", "e", "a", "d")
         await asyncio.sleep(0.05)
@@ -1142,6 +1153,48 @@ async def test_app_command_palette_find_file_jumps_to_matching_parent_directory(
 
         assert app.app_state.current_path == docs_path
         assert app.app_state.current_pane.cursor_path == f"{docs_path}/README.md"
+
+
+@pytest.mark.asyncio
+async def test_app_command_palette_show_attributes_opens_read_only_dialog() -> None:
+    path = "/tmp/peneo-command-palette-attributes"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (
+                    DirectoryEntryState(f"{path}/docs", "docs", "dir"),
+                    DirectoryEntryState(f"{path}/README.md", "README.md", "file", size_bytes=120),
+                ),
+                child_path=f"{path}/docs",
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press(":")
+        await pilot.press("a", "t", "t", "r")
+        await pilot.press("enter")
+        await asyncio.sleep(0.05)
+
+        dialog = await _wait_for_attribute_dialog(app)
+        title = dialog.query_one("#attribute-dialog-title", Static)
+        lines = dialog.query_one("#attribute-dialog-lines", Static)
+
+        assert app.app_state.ui_mode == "DETAIL"
+        assert dialog.display is True
+        assert "Attributes: docs" in str(title.renderable)
+        assert "Name: docs" in str(lines.renderable)
+        assert "Type: Directory" in str(lines.renderable)
+        assert f"Path: {path}/docs" in str(lines.renderable)
+        assert "Hidden: No" in str(lines.renderable)
+
+        await pilot.press("enter")
+        await asyncio.sleep(0.05)
+
+        assert app.app_state.ui_mode == "BROWSING"
 
 
 @pytest.mark.asyncio
@@ -1750,6 +1803,7 @@ async def test_app_create_name_conflict_dialog_returns_to_input(tmp_path) -> Non
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, str(tmp_path))
         await pilot.press(":")
+        await pilot.press("c", "r", "e", "a", "t", "e")
         await pilot.press("enter")
         await asyncio.sleep(0.05)
         await pilot.press("d", "o", "c", "s", "enter")

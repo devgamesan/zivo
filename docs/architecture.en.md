@@ -22,7 +22,7 @@ The design keeps branching logic out of widgets and centralizes state transition
 flowchart LR
     subgraph UI["UI (`src/peneo/app.py`, `src/peneo/ui`)"]
         App["PeneoApp"]
-        Widgets["CurrentPathBar / MainPane / SidePane / CommandPalette / ConflictDialog / HelpBar / StatusBar"]
+        Widgets["CurrentPathBar / MainPane / SidePane / CommandPalette / ConflictDialog / AttributeDialog / HelpBar / StatusBar"]
     end
 
     subgraph State["State (`src/peneo/state`)"]
@@ -130,13 +130,14 @@ sequenceDiagram
 
 - Builds `ThreePaneShellData` from `AppState`
 - Applies filter and sort only to the main pane, while parent and child panes stay fixed to name order plus directories-first
-- Formats the display text for the help bar, status bar, input bar, command palette, and conflict dialog
+- Formats the display text for the help bar, status bar, input bar, command palette, conflict dialog, and attribute dialog
 - Also assembles cut-item dimming and the summary line fields such as `item_count`, `selected_count`, and `sort_label`
 
 ### `src/peneo/state/command_palette.py`
 
 - Builds command palette candidates and filters them by query
-- The current palette includes `Create file`, `Create directory`, `Find file`, `Copy path`, `Open in file manager`, `Show/Hide hidden files`, and `Open terminal here`
+- The current palette includes `Find file`, `Show attributes`, `Copy path`, `Open in file manager`, `Open terminal here`, `Show/Hide hidden files`, `Create file`, and `Create directory`
+- `Show attributes` appears only for a single target and opens a read-only attribute dialog
 - `Run shell command` may appear as a candidate, but it is still a placeholder with `enabled=False`
 
 ### `src/peneo/services/`
@@ -213,7 +214,7 @@ Notes:
 - Opens files with the OS default app
 - Opens files in the editor inside the current terminal
 - Provides path copy, terminal launch, and hidden-files toggle from the command palette
-- Keeps status bar / help bar / input bar / conflict dialog synchronized with application state
+- Keeps status bar / help bar / input bar / conflict dialog / attribute dialog synchronized with application state
 
 ## 7. Areas Still Unwired Or Unimplemented
 

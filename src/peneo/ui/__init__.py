@@ -1,5 +1,6 @@
 """Textual UI components for Peneo."""
 
+from .attribute_dialog import AttributeDialog
 from .command_palette import CommandPalette
 from .conflict_dialog import ConflictDialog
 from .current_path_bar import CurrentPathBar
@@ -10,6 +11,7 @@ from .status_bar import StatusBar
 from .summary_bar import SummaryBar
 
 __all__ = [
+    "AttributeDialog",
     "CommandPalette",
     "ConflictDialog",
     "CurrentPathBar",

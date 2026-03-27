@@ -16,6 +16,7 @@ from .actions import (
     ConfirmFilterInput,
     CopyTargets,
     CutTargets,
+    DismissAttributeDialog,
     DismissNameConflict,
     EnterCursorDirectory,
     ExitCurrentPath,
@@ -95,6 +96,9 @@ def dispatch_key_input(
 
     if state.ui_mode == "CONFIRM":
         return _dispatch_confirm_input(state, key)
+
+    if state.ui_mode == "DETAIL":
+        return _dispatch_detail_input(key)
 
     if state.ui_mode == "BUSY":
         return _warn("Input ignored while processing")
@@ -302,6 +306,13 @@ def _dispatch_pending_input(
         return _supported(SetPendingInputValue(f"{current_value}{character}"))
 
     return _warn("Use Enter to apply or Esc to cancel")
+
+
+def _dispatch_detail_input(key: str) -> DispatchedActions:
+    if key in {"enter", "escape"}:
+        return _supported(DismissAttributeDialog())
+
+    return _warn("Use Enter or Esc to close the attributes dialog")
 
 
 def _visible_paths(state: AppState) -> tuple[str, ...]:

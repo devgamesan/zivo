@@ -63,24 +63,22 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
 
     items = [
         CommandPaletteItem(
-            id="create_file",
-            label="Create file",
-            shortcut=None,
-            enabled=True,
-        ),
-        CommandPaletteItem(
-            id="create_dir",
-            label="Create directory",
-            shortcut=None,
-            enabled=True,
-        ),
-        CommandPaletteItem(
             id="find_file",
             label="Find file",
             shortcut=None,
             enabled=True,
         ),
     ]
+
+    if has_single_target:
+        items.append(
+            CommandPaletteItem(
+                id="show_attributes",
+                label="Show attributes",
+                shortcut=None,
+                enabled=True,
+            )
+        )
 
     if has_target:
         items.append(
@@ -91,23 +89,42 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
                 enabled=True,
             )
         )
-    items.append(
-        CommandPaletteItem(
-            id="open_file_manager",
-            label="Open in file manager",
-            shortcut=None,
-            enabled=True,
-        )
+
+    items.extend(
+        [
+            CommandPaletteItem(
+                id="open_file_manager",
+                label="Open in file manager",
+                shortcut=None,
+                enabled=True,
+            ),
+            CommandPaletteItem(
+                id="open_terminal",
+                label="Open terminal here",
+                shortcut=None,
+                enabled=True,
+            ),
+            CommandPaletteItem(
+                id="toggle_hidden",
+                label=_hidden_files_label(state),
+                shortcut=None,
+                enabled=True,
+            ),
+            CommandPaletteItem(
+                id="create_file",
+                label="Create file",
+                shortcut=None,
+                enabled=True,
+            ),
+            CommandPaletteItem(
+                id="create_dir",
+                label="Create directory",
+                shortcut=None,
+                enabled=True,
+            )
+        ]
     )
 
-    items.append(
-        CommandPaletteItem(
-            id="toggle_hidden",
-            label=_hidden_files_label(state),
-            shortcut=None,
-            enabled=True,
-        )
-    )
     if has_single_target:
         items.append(
             CommandPaletteItem(
@@ -117,15 +134,6 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
                 enabled=False,
             )
         )
-
-    items.append(
-        CommandPaletteItem(
-            id="open_terminal",
-            label="Open terminal here",
-            shortcut=None,
-            enabled=True,
-        )
-    )
 
     return tuple(items)
 
