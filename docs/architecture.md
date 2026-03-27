@@ -221,6 +221,8 @@ stateDiagram-v2
 - `Run shell command` は command palette にプレースホルダがあるが実行不可
 - ファイル内容プレビュー、編集、Git 連携、タブ機能、キーバインドカスタマイズは未実装
 
+filesystem mutation は、UI が選択している entry path をそのまま trust boundary として扱う。選択対象が symlink の場合でも最終パス要素を canonicalize せず、delete / rename / move / copy / overwrite / trash は symlink 自体に作用させる。
+
 ## 8. 拡張時の差し込み方
 
 新しい操作を追加する場合は、基本的に次の順で差し込みます。

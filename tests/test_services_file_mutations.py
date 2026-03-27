@@ -76,6 +76,25 @@ def test_file_mutation_service_renames_single_path() -> None:
     assert result.message == "Renamed to docs-old"
 
 
+def test_file_mutation_service_renames_symlink_without_following_target(tmp_path) -> None:
+    target = tmp_path / "target.txt"
+    target.write_text("secret\n", encoding="utf-8")
+    link = tmp_path / "link.txt"
+    link.symlink_to(target)
+    service = LiveFileMutationService()
+
+    result = service.execute(
+        RenameRequest(source_path=str(link), new_name="renamed-link.txt")
+    )
+
+    renamed = tmp_path / "renamed-link.txt"
+    assert link.exists() is False
+    assert renamed.is_symlink()
+    assert target.exists()
+    assert result.path == str(renamed)
+    assert result.message == "Renamed to renamed-link.txt"
+
+
 def test_file_mutation_service_raises_rename_error() -> None:
     adapter = StubFileOperationAdapter(failing_paths={"/tmp/peneo/docs-old"})
     service = LiveFileMutationService(adapter=adapter)
@@ -143,3 +162,17 @@ def test_file_mutation_service_raises_when_all_deletes_fail() -> None:
 
     with pytest.raises(OSError, match="Failed to trash docs"):
         service.execute(TrashDeleteRequest(paths=("/tmp/peneo/docs",)))
+
+
+def test_file_mutation_service_trashes_symlink_without_following_target(tmp_path) -> None:
+    target = tmp_path / "target.txt"
+    target.write_text("secret\n", encoding="utf-8")
+    link = tmp_path / "link.txt"
+    link.symlink_to(target)
+    service = LiveFileMutationService()
+
+    result = service.execute(TrashDeleteRequest(paths=(str(link),)))
+
+    assert link.exists() is False
+    assert target.exists()
+    assert result.removed_paths == (str(link),)

@@ -109,6 +109,7 @@ Commands still under development may appear dimmed and cannot be executed yet.
 - The project is currently verified only on Ubuntu.
 - The code contains external-launch implementations for Linux / macOS / Windows, but not every platform path is fully validated.
 - The application is still under active development, so behavior and keybindings may change.
+- File mutations operate on the selected directory entry. If the selected item is a symlink, Peneo mutates the symlink itself instead of silently following and mutating the link target.
 
 ## Related Documents
 
