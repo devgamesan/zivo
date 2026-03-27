@@ -64,7 +64,6 @@ class LiveFileSearchService:
                         display_path=str(child.relative_to(root)),
                     )
                 )
-
         results.sort(key=lambda result: result.display_path.casefold())
         return tuple(results)
 

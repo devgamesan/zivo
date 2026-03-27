@@ -291,19 +291,43 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
     if isinstance(action, SubmitCommandPalette):
         if state.command_palette is None:
             return done(state)
+        if state.command_palette.source == "file_search":
+            results = state.command_palette.file_search_results
+            if not results:
+                return done(
+                    replace(
+                        state,
+                        notification=NotificationState(
+                            level="warning",
+                            message="No matching files",
+                        ),
+                    )
+                )
+            selected_result = results[
+                normalize_command_palette_cursor(state, state.command_palette.cursor_index)
+            ]
+            next_state = replace(
+                state,
+                ui_mode="BROWSING",
+                notification=None,
+                command_palette=None,
+                pending_file_search_request_id=None,
+            )
+            return reduce_app_state(
+                next_state,
+                RequestBrowserSnapshot(
+                    str(Path(selected_result.path).parent),
+                    cursor_path=selected_result.path,
+                    blocking=True,
+                ),
+            )
+
         items = get_command_palette_items(state)
         if not items:
             return done(
                 replace(
                     state,
-                    notification=NotificationState(
-                        level="warning",
-                        message=(
-                            "No matching files"
-                            if state.command_palette.source == "file_search"
-                            else "No matching command"
-                        ),
-                    ),
+                    notification=NotificationState(level="warning", message="No matching command"),
                 )
             )
         selected_item = items[
@@ -355,15 +379,6 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             return reduce_app_state(next_state, ToggleHiddenFiles())
         if selected_item.id == "open_terminal":
             return reduce_app_state(next_state, OpenTerminalAtPath(next_state.current_path))
-        if selected_item.id.startswith("file_search_result:") and selected_item.path is not None:
-            return reduce_app_state(
-                next_state,
-                RequestBrowserSnapshot(
-                    str(Path(selected_item.path).parent),
-                    cursor_path=selected_item.path,
-                    blocking=True,
-                ),
-            )
         return done(next_state)
 
     if isinstance(action, SetPendingInputValue):

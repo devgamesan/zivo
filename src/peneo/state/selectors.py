@@ -15,9 +15,10 @@ from peneo.models import (
 )
 
 from .command_palette import get_command_palette_items, normalize_command_palette_cursor
-from .models import AppState, DirectoryEntryState, SortState
+from .models import AppState, DirectoryEntryState, FileSearchResultState, SortState
 
 SIDE_PANE_SORT = SortState(field="name", descending=False, directories_first=True)
+FILE_SEARCH_VISIBLE_WINDOW = 8
 
 
 def select_shell_data(state: AppState) -> ThreePaneShellData:
@@ -180,10 +181,30 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
     if state.ui_mode != "PALETTE" or state.command_palette is None:
         return None
 
-    items = get_command_palette_items(state)
     cursor_index = normalize_command_palette_cursor(state, state.command_palette.cursor_index)
+    if state.command_palette.source == "file_search":
+        visible_results, title = _select_file_search_window(
+            state.command_palette.file_search_results,
+            cursor_index,
+        )
+        return CommandPaletteViewState(
+            title=title,
+            query=state.command_palette.query,
+            items=tuple(
+                CommandPaletteItemViewState(
+                    label=result.display_path,
+                    shortcut=None,
+                    enabled=True,
+                    selected=index == cursor_index,
+                )
+                for index, result in visible_results
+            ),
+            empty_message="No matching files",
+        )
+
+    items = get_command_palette_items(state)
     return CommandPaletteViewState(
-        title=_command_palette_title(state),
+        title="Command Palette",
         query=state.command_palette.query,
         items=tuple(
             CommandPaletteItemViewState(
@@ -194,7 +215,7 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
             )
             for index, item in enumerate(items)
         ),
-        empty_message=_command_palette_empty_message(state),
+        empty_message="No matching commands",
     )
 
 
@@ -354,16 +375,24 @@ def _format_sort_label(sort: SortState) -> str:
     return f"{sort.field} {direction} dirs:{directories}"
 
 
-def _command_palette_title(state: AppState) -> str:
-    if state.command_palette is not None and state.command_palette.source == "file_search":
-        return "Find File"
-    return "Command Palette"
+def _select_file_search_window(
+    results: tuple[FileSearchResultState, ...],
+    cursor_index: int,
+) -> tuple[tuple[tuple[int, FileSearchResultState], ...], str]:
+    total = len(results)
+    if total == 0:
+        return (), "Find File"
 
-
-def _command_palette_empty_message(state: AppState) -> str:
-    if state.command_palette is not None and state.command_palette.source == "file_search":
-        return "No matching files"
-    return "No matching commands"
+    start = max(
+        0,
+        min(
+            cursor_index - (FILE_SEARCH_VISIBLE_WINDOW // 2),
+            max(0, total - FILE_SEARCH_VISIBLE_WINDOW),
+        ),
+    )
+    end = min(total, start + FILE_SEARCH_VISIBLE_WINDOW)
+    visible_results = tuple((index, results[index]) for index in range(start, end))
+    return visible_results, f"Find File ({start + 1}-{end} / {total})"
 
 
 def _get_current_cursor_entry(state: AppState) -> DirectoryEntryState | None:

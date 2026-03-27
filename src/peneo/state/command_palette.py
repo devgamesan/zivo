@@ -44,10 +44,15 @@ def get_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, ...]
 def normalize_command_palette_cursor(state: AppState, cursor_index: int) -> int:
     """Clamp the palette cursor to the current filtered item list."""
 
-    items = get_command_palette_items(state)
-    if not items:
+    if state.command_palette is None:
         return 0
-    return max(0, min(len(items) - 1, cursor_index))
+    if state.command_palette.source == "file_search":
+        item_count = len(state.command_palette.file_search_results)
+    else:
+        item_count = len(get_command_palette_items(state))
+    if item_count == 0:
+        return 0
+    return max(0, min(item_count - 1, cursor_index))
 
 
 def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, ...]:

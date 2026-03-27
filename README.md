@@ -103,7 +103,7 @@ The currently available commands are:
 - `Open terminal here`
 - `Show hidden files` / `Hide hidden files`
 
-`Find file` searches recursively under the current directory using a case-insensitive partial match on the filename, then jumps to the selected result by opening its parent directory and focusing that file. Hidden paths are excluded unless hidden-file visibility is enabled.
+`Find file` searches recursively under the current directory using a case-insensitive partial match on the filename, then jumps to the selected result by opening its parent directory and focusing that file. Hidden paths are excluded unless hidden-file visibility is enabled. When there are many hits, the palette shows a moving window around the current cursor so you can inspect all matches with the arrow keys without clipping the list.
 
 Commands still under development may appear dimmed and cannot be executed yet.
 
