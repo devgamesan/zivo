@@ -223,14 +223,6 @@ def test_browsing_backspace_goes_to_parent_directory() -> None:
     assert actions == (SetNotification(None), GoToParentDirectory())
 
 
-def test_browsing_ctrl_h_goes_to_parent_directory() -> None:
-    state = build_initial_app_state()
-
-    actions = dispatch_key_input(state, key="ctrl+h")
-
-    assert actions == (SetNotification(None), GoToParentDirectory())
-
-
 def test_browsing_f5_reloads_current_directory() -> None:
     state = build_initial_app_state()
 

@@ -48,7 +48,6 @@ BROWSING_KEYMAP = {
     "/": "begin_filter",
     "left": "go_to_parent",
     "backspace": "go_to_parent",
-    "ctrl+h": "go_to_parent",
     "f5": "reload_directory",
     "f2": "begin_rename",
     ":": "begin_command_palette",
@@ -140,7 +139,7 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
     if key == "p":
         return _supported(PasteClipboard())
 
-    if key in {"left", "backspace", "ctrl+h"}:
+    if key in {"left", "backspace"}:
         return _supported(GoToParentDirectory())
 
     if key == "f5":
