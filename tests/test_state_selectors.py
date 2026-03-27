@@ -5,10 +5,12 @@ from peneo.state import (
     BeginCommandPalette,
     BeginCreateInput,
     BeginFilterInput,
+    CommandPaletteState,
     ConfirmFilterInput,
     CutTargets,
     DeleteConfirmationState,
     DirectoryEntryState,
+    FileSearchResultState,
     NameConflictState,
     NotificationState,
     PaneState,
@@ -397,7 +399,7 @@ def test_select_command_palette_state_marks_selected_and_enabled_items() -> None
     assert [item.label for item in palette_state.items[:3]] == [
         "Create file",
         "Create directory",
-        "Copy path",
+        "Find file",
     ]
     assert palette_state.items[0].selected is True
     assert palette_state.items[2].enabled is True
@@ -434,6 +436,87 @@ def test_select_command_palette_state_uses_hidden_toggle_label_from_state() -> N
 
     assert visible_palette_state is not None
     assert [item.label for item in visible_palette_state.items] == ["Hide hidden files"]
+
+
+def test_select_command_palette_state_for_file_search_results() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = replace(
+        state,
+        command_palette=CommandPaletteState(
+            source="file_search",
+            query="read",
+            file_search_results=(
+                FileSearchResultState(
+                    path="/home/tadashi/develop/peneo/README.md",
+                    display_path="README.md",
+                ),
+            ),
+        ),
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert palette_state.title == "Find File (1-1 / 1)"
+    assert palette_state.empty_message == "No matching files"
+    assert [item.label for item in palette_state.items] == ["README.md"]
+
+
+def test_select_command_palette_state_shows_searching_message_while_file_search_is_pending(
+) -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = replace(
+        state,
+        command_palette=CommandPaletteState(
+            source="file_search",
+            query=".py",
+            file_search_results=(),
+        ),
+        pending_file_search_request_id=7,
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert palette_state.title == "Find File"
+    assert palette_state.empty_message == "Searching files..."
+    assert palette_state.items == ()
+
+
+def test_select_command_palette_state_windows_large_file_search_results() -> None:
+    results = tuple(
+        FileSearchResultState(
+            path=f"/home/tadashi/develop/peneo/src/module_{index}.py",
+            display_path=f"src/module_{index}.py",
+        )
+        for index in range(20)
+    )
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = replace(
+        state,
+        command_palette=CommandPaletteState(
+            source="file_search",
+            query=".py",
+            cursor_index=10,
+            file_search_results=results,
+        ),
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert palette_state.title == "Find File (7-14 / 20)"
+    assert [item.label for item in palette_state.items] == [
+        "src/module_6.py",
+        "src/module_7.py",
+        "src/module_8.py",
+        "src/module_9.py",
+        "src/module_10.py",
+        "src/module_11.py",
+        "src/module_12.py",
+        "src/module_13.py",
+    ]
+    assert palette_state.items[4].selected is True
 
 
 def test_select_input_bar_state_for_create_mode() -> None:

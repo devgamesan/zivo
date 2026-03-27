@@ -15,6 +15,7 @@ from peneo.models import (
 from .models import (
     AppState,
     BrowserSnapshot,
+    FileSearchResultState,
     NotificationState,
     PaneState,
     SortField,
@@ -99,6 +100,24 @@ class SetCommandPaletteQuery:
 @dataclass(frozen=True)
 class SubmitCommandPalette:
     """Run the currently selected command palette command."""
+
+
+@dataclass(frozen=True)
+class FileSearchCompleted:
+    """Apply completed file-search results to the command palette."""
+
+    request_id: int
+    query: str
+    results: tuple[FileSearchResultState, ...]
+
+
+@dataclass(frozen=True)
+class FileSearchFailed:
+    """Apply a terminal file-search failure."""
+
+    request_id: int
+    query: str
+    message: str
 
 
 @dataclass(frozen=True)
@@ -378,6 +397,8 @@ Action = (
     | MoveCommandPaletteCursor
     | SetCommandPaletteQuery
     | SubmitCommandPalette
+    | FileSearchCompleted
+    | FileSearchFailed
     | SetPendingInputValue
     | SubmitPendingInput
     | CancelPendingInput

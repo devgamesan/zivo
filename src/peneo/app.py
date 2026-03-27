@@ -23,10 +23,12 @@ from peneo.services import (
     ClipboardOperationService,
     ExternalLaunchService,
     FileMutationService,
+    FileSearchService,
     LiveBrowserSnapshotLoader,
     LiveClipboardOperationService,
     LiveExternalLaunchService,
     LiveFileMutationService,
+    LiveFileSearchService,
 )
 from peneo.state import (
     Action,
@@ -43,6 +45,8 @@ from peneo.state import (
     ExternalLaunchFailed,
     FileMutationCompleted,
     FileMutationFailed,
+    FileSearchCompleted,
+    FileSearchFailed,
     LoadBrowserSnapshotEffect,
     LoadChildPaneSnapshotEffect,
     ReduceResult,
@@ -50,6 +54,7 @@ from peneo.state import (
     RunClipboardPasteEffect,
     RunExternalLaunchEffect,
     RunFileMutationEffect,
+    RunFileSearchEffect,
     build_placeholder_app_state,
     dispatch_key_input,
     iter_bound_keys,
@@ -210,6 +215,7 @@ class PeneoApp(App[None]):
         clipboard_service: ClipboardOperationService | None = None,
         file_mutation_service: FileMutationService | None = None,
         external_launch_service: ExternalLaunchService | None = None,
+        file_search_service: FileSearchService | None = None,
         *,
         initial_path: str | Path | None = None,
     ) -> None:
@@ -220,6 +226,7 @@ class PeneoApp(App[None]):
         self._clipboard_service = clipboard_service or LiveClipboardOperationService()
         self._file_mutation_service = file_mutation_service or LiveFileMutationService()
         self._external_launch_service = external_launch_service or LiveExternalLaunchService()
+        self._file_search_service = file_search_service or LiveFileSearchService()
         self._pending_workers: dict[str, Effect] = {}
 
     @property
@@ -345,6 +352,8 @@ class PeneoApp(App[None]):
                     self.call_next(self._run_foreground_external_launch, effect)
                 else:
                     self._schedule_external_launch(effect)
+            elif isinstance(effect, RunFileSearchEffect):
+                self._schedule_file_search(effect)
 
     def _schedule_browser_snapshot(self, effect: LoadBrowserSnapshotEffect) -> None:
         worker = self.run_worker(
@@ -409,6 +418,23 @@ class PeneoApp(App[None]):
             group="external-launch",
             description=str(effect.request),
             exit_on_error=False,
+            thread=True,
+        )
+        self._pending_workers[worker.name] = effect
+
+    def _schedule_file_search(self, effect: RunFileSearchEffect) -> None:
+        worker = self.run_worker(
+            partial(
+                self._file_search_service.search,
+                effect.root_path,
+                effect.query,
+                show_hidden=effect.show_hidden,
+            ),
+            name=f"file-search:{effect.request_id}",
+            group="file-search",
+            description=effect.query,
+            exit_on_error=False,
+            exclusive=True,
             thread=True,
         )
         self._pending_workers[worker.name] = effect
@@ -569,6 +595,18 @@ class PeneoApp(App[None]):
                 )
                 return
 
+            if isinstance(effect, RunFileSearchEffect):
+                await self.dispatch_actions(
+                    (
+                        FileSearchCompleted(
+                            request_id=effect.request_id,
+                            query=effect.query,
+                            results=event.worker.result,
+                        ),
+                    )
+                )
+                return
+
         message = str(event.worker.error) or "Operation failed"
         if isinstance(effect, LoadBrowserSnapshotEffect):
             await self.dispatch_actions(
@@ -610,6 +648,18 @@ class PeneoApp(App[None]):
                     ExternalLaunchFailed(
                         request_id=effect.request_id,
                         request=effect.request,
+                        message=message,
+                    ),
+                )
+            )
+            return
+
+        if isinstance(effect, RunFileSearchEffect):
+            await self.dispatch_actions(
+                (
+                    FileSearchFailed(
+                        request_id=effect.request_id,
+                        query=effect.query,
                         message=message,
                     ),
                 )
@@ -675,6 +725,7 @@ def create_app(
     clipboard_service: ClipboardOperationService | None = None,
     file_mutation_service: FileMutationService | None = None,
     external_launch_service: ExternalLaunchService | None = None,
+    file_search_service: FileSearchService | None = None,
     *,
     initial_path: str | Path | None = None,
 ) -> PeneoApp:
@@ -685,5 +736,6 @@ def create_app(
         clipboard_service=clipboard_service,
         file_mutation_service=file_mutation_service,
         external_launch_service=external_launch_service,
+        file_search_service=file_search_service,
         initial_path=initial_path,
     )

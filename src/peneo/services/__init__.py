@@ -21,17 +21,21 @@ from .file_mutations import (
     FileMutationService,
     LiveFileMutationService,
 )
+from .file_search import FakeFileSearchService, FileSearchService, LiveFileSearchService
 
 __all__ = [
     "BrowserSnapshotLoader",
     "ClipboardOperationService",
     "ExternalLaunchService",
+    "FileSearchService",
     "FakeFileMutationService",
+    "FakeFileSearchService",
     "FakeBrowserSnapshotLoader",
     "FakeClipboardOperationService",
     "FakeExternalLaunchService",
     "FileMutationService",
     "LiveExternalLaunchService",
+    "LiveFileSearchService",
     "LiveFileMutationService",
     "LiveClipboardOperationService",
     "LiveBrowserSnapshotLoader",

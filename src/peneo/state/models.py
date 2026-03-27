@@ -12,6 +12,7 @@ UiMode = Literal["BROWSING", "FILTER", "RENAME", "CREATE", "PALETTE", "CONFIRM",
 SortField = Literal["name", "modified", "size"]
 ClipboardMode = Literal["copy", "cut", "none"]
 NameConflictKind = Literal["rename", "create_file", "create_dir"]
+CommandPaletteSource = Literal["commands", "file_search"]
 
 
 @dataclass(frozen=True)
@@ -113,11 +114,21 @@ class PendingInputState:
 
 
 @dataclass(frozen=True)
+class FileSearchResultState:
+    """A single file-search result shown in the command palette."""
+
+    path: str
+    display_path: str
+
+
+@dataclass(frozen=True)
 class CommandPaletteState:
     """Transient palette search and cursor state."""
 
+    source: CommandPaletteSource = "commands"
     query: str = ""
     cursor_index: int = 0
+    file_search_results: tuple[FileSearchResultState, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -155,6 +166,7 @@ class AppState:
     pending_child_pane_request_id: int | None = None
     pending_paste_request_id: int | None = None
     pending_file_mutation_request_id: int | None = None
+    pending_file_search_request_id: int | None = None
     next_request_id: int = 1
 
 

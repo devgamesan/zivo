@@ -80,9 +80,10 @@ class CommandPaletteItemViewState:
 class CommandPaletteViewState:
     """Display data for the command palette."""
 
+    title: str
     query: str
     items: tuple[CommandPaletteItemViewState, ...]
-    empty_message: str = "No matching commands"
+    empty_message: str
 
 
 @dataclass(frozen=True)

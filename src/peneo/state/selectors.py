@@ -14,10 +14,11 @@ from peneo.models import (
     ThreePaneShellData,
 )
 
-from .command_palette import get_filtered_command_palette_items, normalize_command_palette_cursor
-from .models import AppState, DirectoryEntryState, SortState
+from .command_palette import get_command_palette_items, normalize_command_palette_cursor
+from .models import AppState, DirectoryEntryState, FileSearchResultState, SortState
 
 SIDE_PANE_SORT = SortState(field="name", descending=False, directories_first=True)
+FILE_SEARCH_VISIBLE_WINDOW = 8
 
 
 def select_shell_data(state: AppState) -> ThreePaneShellData:
@@ -133,6 +134,8 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
     if state.ui_mode == "CREATE":
         return HelpBarState("type name | enter apply | esc cancel")
     if state.ui_mode == "PALETTE":
+        if state.command_palette is not None and state.command_palette.source == "file_search":
+            return HelpBarState("type filename | enter jump | esc cancel")
         return HelpBarState("type command | enter run | esc cancel")
     if state.ui_mode == "BUSY":
         return HelpBarState("processing...")
@@ -178,9 +181,30 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
     if state.ui_mode != "PALETTE" or state.command_palette is None:
         return None
 
-    items = get_filtered_command_palette_items(state)
     cursor_index = normalize_command_palette_cursor(state, state.command_palette.cursor_index)
+    if state.command_palette.source == "file_search":
+        visible_results, title = _select_file_search_window(
+            state.command_palette.file_search_results,
+            cursor_index,
+        )
+        return CommandPaletteViewState(
+            title=title,
+            query=state.command_palette.query,
+            items=tuple(
+                CommandPaletteItemViewState(
+                    label=result.display_path,
+                    shortcut=None,
+                    enabled=True,
+                    selected=index == cursor_index,
+                )
+                for index, result in visible_results
+            ),
+            empty_message=_file_search_empty_message(state),
+        )
+
+    items = get_command_palette_items(state)
     return CommandPaletteViewState(
+        title="Command Palette",
         query=state.command_palette.query,
         items=tuple(
             CommandPaletteItemViewState(
@@ -191,6 +215,7 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
             )
             for index, item in enumerate(items)
         ),
+        empty_message="No matching commands",
     )
 
 
@@ -348,6 +373,32 @@ def _format_sort_label(sort: SortState) -> str:
     direction = "desc" if sort.descending else "asc"
     directories = "on" if sort.directories_first else "off"
     return f"{sort.field} {direction} dirs:{directories}"
+
+
+def _select_file_search_window(
+    results: tuple[FileSearchResultState, ...],
+    cursor_index: int,
+) -> tuple[tuple[tuple[int, FileSearchResultState], ...], str]:
+    total = len(results)
+    if total == 0:
+        return (), "Find File"
+
+    start = max(
+        0,
+        min(
+            cursor_index - (FILE_SEARCH_VISIBLE_WINDOW // 2),
+            max(0, total - FILE_SEARCH_VISIBLE_WINDOW),
+        ),
+    )
+    end = min(total, start + FILE_SEARCH_VISIBLE_WINDOW)
+    visible_results = tuple((index, results[index]) for index in range(start, end))
+    return visible_results, f"Find File ({start + 1}-{end} / {total})"
+
+
+def _file_search_empty_message(state: AppState) -> str:
+    if state.pending_file_search_request_id is not None:
+        return "Searching files..."
+    return "No matching files"
 
 
 def _get_current_cursor_entry(state: AppState) -> DirectoryEntryState | None:
