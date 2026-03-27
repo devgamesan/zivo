@@ -142,22 +142,26 @@ class MainPane(Vertical):
         """Replace the rendered rows without remounting the pane."""
 
         next_entries = tuple(entries)
-        if next_entries == self._entries and cursor_index == self._cursor_index:
+        entries_changed = next_entries != self._entries
+        cursor_changed = cursor_index != self._cursor_index
+        if not entries_changed and not cursor_changed:
             return
 
         self._entries = next_entries
         self._cursor_index = cursor_index
         table = self.query_one(DataTable)
-        table.clear()
-        for entry in self._entries:
-            table.add_row(
-                self._render_cell(entry.selection_marker, entry.selected, entry.cut),
-                self._render_cell(entry.kind_label, entry.selected, entry.cut),
-                self._render_cell(self._render_name(entry), entry.selected, entry.cut),
-                self._render_cell(entry.size_label, entry.selected, entry.cut),
-                self._render_cell(entry.modified_label, entry.selected, entry.cut),
-            )
-        self._sync_cursor(table)
+        if entries_changed:
+            table.clear()
+            for entry in self._entries:
+                table.add_row(
+                    self._render_cell(entry.selection_marker, entry.selected, entry.cut),
+                    self._render_cell(entry.kind_label, entry.selected, entry.cut),
+                    self._render_cell(self._render_name(entry), entry.selected, entry.cut),
+                    self._render_cell(entry.size_label, entry.selected, entry.cut),
+                    self._render_cell(entry.modified_label, entry.selected, entry.cut),
+                )
+        if entries_changed or cursor_changed:
+            self._sync_cursor(table)
 
     def set_context_input(self, state: InputBarState | None) -> None:
         """Update the contextual input line without remounting the pane."""

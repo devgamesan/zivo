@@ -1,5 +1,6 @@
 from dataclasses import replace
 
+import peneo.state.selectors as selectors_module
 from peneo.models import PasteConflict, PasteRequest
 from peneo.state import (
     BeginCommandPalette,
@@ -321,6 +322,24 @@ def test_select_shell_data_exposes_visible_cursor_index() -> None:
 
     assert shell.current_path == "/home/tadashi/develop/peneo"
     assert shell.current_cursor_index == 2
+
+
+def test_select_shell_data_reuses_current_visible_entries(monkeypatch) -> None:
+    state = build_initial_app_state()
+    call_count = 0
+    original = selectors_module.select_visible_current_entry_states
+
+    def wrapped(local_state):
+        nonlocal call_count
+        call_count += 1
+        return original(local_state)
+
+    monkeypatch.setattr(selectors_module, "select_visible_current_entry_states", wrapped)
+
+    shell = select_shell_data(state)
+
+    assert call_count == 1
+    assert shell.current_summary.item_count == len(shell.current_entries)
 
 
 def test_select_shell_data_includes_selected_cut_and_contextual_models() -> None:

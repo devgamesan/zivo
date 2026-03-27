@@ -825,6 +825,64 @@ async def test_app_refresh_updates_widgets_in_place() -> None:
 
 
 @pytest.mark.asyncio
+async def test_app_cursor_move_does_not_rebuild_current_table_rows(monkeypatch) -> None:
+    path = "/tmp/peneo-cursor-stable"
+    current_entries = (
+        DirectoryEntryState(f"{path}/docs", "docs", "dir"),
+        DirectoryEntryState(f"{path}/src", "src", "dir"),
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                current_entries,
+                child_path=f"{path}/docs",
+                child_entries=(DirectoryEntryState(f"{path}/docs/spec.md", "spec.md", "file"),),
+            )
+        },
+        child_panes={
+            (path, f"{path}/src"): PaneState(
+                directory_path=f"{path}/src",
+                entries=(DirectoryEntryState(f"{path}/src/main.py", "main.py", "file"),),
+            )
+        },
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await _wait_for_row_count(app, 2)
+
+        current_table = app.query_one("#current-pane-table", DataTable)
+        original_clear = DataTable.clear
+        original_add_row = DataTable.add_row
+        clear_calls = 0
+        add_row_calls = 0
+
+        def counting_clear(self, columns: bool = False):
+            nonlocal clear_calls
+            if self is current_table:
+                clear_calls += 1
+            return original_clear(self, columns=columns)
+
+        def counting_add_row(self, *cells, **kwargs):
+            nonlocal add_row_calls
+            if self is current_table:
+                add_row_calls += 1
+            return original_add_row(self, *cells, **kwargs)
+
+        monkeypatch.setattr(DataTable, "clear", counting_clear)
+        monkeypatch.setattr(DataTable, "add_row", counting_add_row)
+
+        await pilot.press("down")
+        await asyncio.sleep(0.05)
+
+        assert clear_calls == 0
+        assert add_row_calls == 0
+        assert current_table.cursor_row == 1
+
+
+@pytest.mark.asyncio
 async def test_app_refresh_keeps_parent_pane_items_when_entries_are_unchanged() -> None:
     path = "/tmp/peneo-parent-stable"
     current_entries = (

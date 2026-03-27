@@ -5,6 +5,7 @@
 ## 実施日
 
 - 2026-03-27
+- 2026-03-28
 
 ## 確認環境
 
@@ -28,6 +29,12 @@
 - `uv run pytest tests/test_app.py -k 'main_flow_round_trip_on_live_filesystem or large_directory_smoke_with_1000_entries'`
   - `2 passed, 38 deselected in 21.92s`
 - 1000 件規模でも headless の結合スモークは完走し、一覧表示と子ペイン更新が途中で止まる症状は再現しなかった
+- 2026-03-28 の Issue #104 対応で、current pane の visible entries を `select_shell_data()` 内で使い回し、カーソル移動だけでは `MainPane` が `DataTable.clear()` / `add_row()` を呼ばない回帰テストを追加した
+- `uv run python -m pytest tests/test_state_selectors.py -q`
+  - `38 passed in 0.16s`
+- `uv run python -m pytest tests/test_app.py -k 'refresh or large_directory_smoke_with_1000_entries' -q`
+  - `4 passed, 41 deselected in 13.49s`
+- 上記回帰確認では、1000 件一覧のスモークを維持したまま、単一カーソル移動で current pane 行を再構築しないことを検証した
 
 ## 既知の制約
 
@@ -40,4 +47,6 @@
 ```bash
 uv run pytest tests/test_app.py -k large_directory_smoke_with_1000_entries --durations=1 -q
 uv run pytest tests/test_app.py -k main_flow_round_trip_on_live_filesystem -q
+uv run python -m pytest tests/test_state_selectors.py -q
+uv run python -m pytest tests/test_app.py -k 'refresh or large_directory_smoke_with_1000_entries' -q
 ```

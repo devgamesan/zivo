@@ -1,5 +1,6 @@
 """Selectors that convert AppState into display models."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from peneo.models import (
@@ -26,10 +27,18 @@ COMMAND_PALETTE_VISIBLE_WINDOW = 8
 FILE_SEARCH_VISIBLE_WINDOW = 8
 
 
+@dataclass(frozen=True)
+class _CurrentPaneProjection:
+    visible_entries: tuple[DirectoryEntryState, ...]
+    cursor_index: int | None
+    cursor_entry: DirectoryEntryState | None
+    summary: CurrentSummaryState
+
+
 def select_shell_data(state: AppState) -> ThreePaneShellData:
     """Build the display shell data consumed by the UI layer."""
 
-    current_entries = select_visible_current_entry_states(state)
+    current_pane = _select_current_pane_projection(state)
     cut_paths = _select_cut_paths(state)
     return ThreePaneShellData(
         current_path=state.current_path,
@@ -41,14 +50,11 @@ def select_shell_data(state: AppState) -> ThreePaneShellData:
                 selected=entry.path in state.current_pane.selected_paths,
                 cut=entry.path in cut_paths,
             )
-            for entry in current_entries
+            for entry in current_pane.visible_entries
         ),
-        child_entries=select_child_entries(state),
-        current_cursor_index=_find_current_cursor_index(
-            current_entries,
-            state.current_pane.cursor_path,
-        ),
-        current_summary=select_current_summary_state(state),
+        child_entries=_select_child_entries_for_cursor(state, current_pane.cursor_entry),
+        current_cursor_index=current_pane.cursor_index,
+        current_summary=current_pane.summary,
         current_context_input=select_input_bar_state(state),
         help=select_help_bar_state(state),
         command_palette=select_command_palette_state(state),
@@ -89,6 +95,13 @@ def select_child_entries(state: AppState) -> tuple[PaneEntry, ...]:
     """Return display entries for the child pane when the cursor is on a directory."""
 
     cursor_entry = _get_current_cursor_entry(state)
+    return _select_child_entries_for_cursor(state, cursor_entry)
+
+
+def _select_child_entries_for_cursor(
+    state: AppState,
+    cursor_entry: DirectoryEntryState | None,
+) -> tuple[PaneEntry, ...]:
     if cursor_entry is None or cursor_entry.kind != "dir":
         return ()
     if cursor_entry.path != state.child_pane.directory_path:
@@ -106,12 +119,7 @@ def select_child_entries(state: AppState) -> tuple[PaneEntry, ...]:
 def select_current_summary_state(state: AppState) -> CurrentSummaryState:
     """Return the summary model shown near the current pane."""
 
-    visible_entries = select_visible_current_entry_states(state)
-    return CurrentSummaryState(
-        item_count=len(visible_entries),
-        selected_count=len(state.current_pane.selected_paths),
-        sort_label=_format_sort_label(state.sort),
-    )
+    return _select_current_pane_projection(state).summary
 
 
 def select_status_bar_state(state: AppState) -> StatusBarState:
@@ -291,19 +299,18 @@ def select_conflict_dialog_state(state: AppState) -> ConflictDialogState | None:
 def select_target_paths(state: AppState) -> tuple[str, ...]:
     """Return selected paths, or the cursor path when nothing is selected."""
 
-    visible_entries = select_visible_current_entry_states(state)
+    current_pane = _select_current_pane_projection(state)
     selected_paths = tuple(
         entry.path
-        for entry in visible_entries
+        for entry in current_pane.visible_entries
         if entry.path in state.current_pane.selected_paths
     )
     if selected_paths:
         return selected_paths
 
-    cursor_entry = _get_current_cursor_entry(state)
-    if cursor_entry is None:
+    if current_pane.cursor_entry is None:
         return ()
-    return (cursor_entry.path,)
+    return (current_pane.cursor_entry.path,)
 
 
 def select_visible_current_entry_states(state: AppState) -> tuple[DirectoryEntryState, ...]:
@@ -318,6 +325,25 @@ def select_visible_current_entry_states(state: AppState) -> tuple[DirectoryEntry
         )
     )
     return _sort_entries(entries, state.sort)
+
+
+def _select_current_pane_projection(state: AppState) -> _CurrentPaneProjection:
+    visible_entries = select_visible_current_entry_states(state)
+    cursor_index = _find_current_cursor_index(
+        visible_entries,
+        state.current_pane.cursor_path,
+    )
+    cursor_entry = None if cursor_index is None else visible_entries[cursor_index]
+    return _CurrentPaneProjection(
+        visible_entries=visible_entries,
+        cursor_index=cursor_index,
+        cursor_entry=cursor_entry,
+        summary=CurrentSummaryState(
+            item_count=len(visible_entries),
+            selected_count=len(state.current_pane.selected_paths),
+            sort_label=_format_sort_label(state.sort),
+        ),
+    )
 
 
 def _filter_hidden_entries(
@@ -428,11 +454,7 @@ def _file_search_empty_message(state: AppState) -> str:
 
 
 def _get_current_cursor_entry(state: AppState) -> DirectoryEntryState | None:
-    cursor_path = state.current_pane.cursor_path
-    for entry in select_visible_current_entry_states(state):
-        if entry.path == cursor_path:
-            return entry
-    return None
+    return _select_current_pane_projection(state).cursor_entry
 
 
 def _select_cut_paths(state: AppState) -> frozenset[str]:

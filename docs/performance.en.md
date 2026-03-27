@@ -5,6 +5,7 @@ This note records the conditions for the main-flow integration test and the 1000
 ## Date
 
 - 2026-03-27
+- 2026-03-28
 
 ## Environment
 
@@ -28,6 +29,12 @@ This note records the conditions for the main-flow integration test and the 1000
 - `uv run pytest tests/test_app.py -k 'main_flow_round_trip_on_live_filesystem or large_directory_smoke_with_1000_entries'`
   - `2 passed, 38 deselected in 21.92s`
 - Even at the 1000-entry scale, the headless integration smoke test completed successfully, and the symptom where list rendering or child-pane updates stopped midway did not reproduce
+- As part of Issue #104 on 2026-03-28, we added regression coverage to reuse current-pane visible entries inside `select_shell_data()` and to ensure cursor-only movement does not call `DataTable.clear()` / `add_row()` in `MainPane`
+- `uv run python -m pytest tests/test_state_selectors.py -q`
+  - `38 passed in 0.16s`
+- `uv run python -m pytest tests/test_app.py -k 'refresh or large_directory_smoke_with_1000_entries' -q`
+  - `4 passed, 41 deselected in 13.49s`
+- Those checks preserved the 1000-entry smoke case while verifying that a single cursor move no longer rebuilds current-pane rows
 
 ## Known Constraints
 
@@ -40,4 +47,6 @@ This note records the conditions for the main-flow integration test and the 1000
 ```bash
 uv run pytest tests/test_app.py -k large_directory_smoke_with_1000_entries --durations=1 -q
 uv run pytest tests/test_app.py -k main_flow_round_trip_on_live_filesystem -q
+uv run python -m pytest tests/test_state_selectors.py -q
+uv run python -m pytest tests/test_app.py -k 'refresh or large_directory_smoke_with_1000_entries' -q
 ```
