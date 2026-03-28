@@ -2,81 +2,33 @@
 
 [日本語版 README](README.ja.md)
 
-Peneo is a Textual-based TUI file manager designed for desktop environments where terminal work still needs to connect smoothly with GUI applications.
-It aims to feel closer to a GUI explorer than to a keyboard-heavy power-user tool, and keeps common actions visible in the on-screen help so you can start using it without memorizing a Vim-style key map.
-
-![Peneo screenshot](docs/resources/screen1.png)
-
-_Current three-pane UI showing the parent, current, and child directories side by side with mixed project files visible._
+Peneo is a Textual-based TUI file manager for environments where you want to keep working in the terminal while still moving smoothly into GUI applications. Its three-pane layout shows the parent, current, and child directories side by side, aiming to feel closer to a GUI file explorer than to a keyboard-heavy power-user tool. Common actions stay visible in the on-screen help, and files can be opened in the OS default app directly from Peneo.
 
 ## Features
 
-- Three-pane layout for parent / current / child directories so surrounding filesystem context stays visible
-- Optional embedded split terminal below the browser panes, opened and closed with a single shortcut and focused immediately
-- Common actions stay visible in the on-screen help, while less frequent actions live in the command palette
-- Keyboard-only navigation, multi-selection, copy, cut, paste, delete-to-trash, rename, and create flows
-- Filter input, recursive file search from the command palette, attribute inspection, config editing, editor selection, sort switching, and hidden-file visibility toggle
-- Files open with the OS default app, directories can be opened in the OS file manager, `e` opens the current file in the editor inside the current terminal, and a terminal can also be launched in the current directory
-- Optional shell integration via `peneo-cd` can return your shell to the last directory after quitting
-- Safer file operations with trash deletion and overwrite / skip / rename conflict resolution during paste
-
-## Screenshots
-
-The hero image above shows the default overview. The following screens highlight the main workflows in the app.
-
-### Optional Embedded Split Terminal
-
-![Peneo split terminal screenshot](docs/resources/screen-split-terminal.png)
-
-_Split terminal opened with `Ctrl+T`, keeping the browser panes visible while shell output stays in view._
-
-### Multi-selection And Paste Conflict
-
-![Peneo multi-select screenshot](docs/resources/screen-multi-select.png)
-
-_Multiple files selected with `Space`, followed by a paste-conflict dialog for copy workflows._
-
-### Command Palette
-
-![Peneo command palette screenshot](docs/resources/screen-command-palette.png)
-
-_The command palette opened with `:`, showing the main commands without leaving the browser context._
-
-### Filter Input
-
-![Peneo filter screenshot](docs/resources/screen-filter.png)
-
-_Inline filter input opened with `/`, narrowing the current directory contents as you type._
-
-### Attribute Dialog
-
-![Peneo attributes screenshot](docs/resources/screen-attributes.png)
-
-_The read-only attribute dialog showing file details such as path, size, modified time, and permissions._
-
-## Current Capabilities
-
-- Browse directories and move through the filesystem
-- Multi-select files and directories
-- copy / cut / paste
-- Move items to trash
-- Rename a single target
-- Create files and directories
-- Filter by file name
-- Search files recursively from the command palette
-- Inspect file and directory attributes from the command palette
-- Edit startup config values from the command palette and save them back to `config.toml`
-- Switch sorting by name / modified time / size
-- Toggle directories-first ordering
-- Copy paths to the system clipboard
-- Open the current directory in the OS file manager
-- Launch a terminal in the current directory
-- Open an embedded split terminal rooted at the current directory
-- Toggle hidden-file visibility
-- Open files with the OS default app
-- Open files in the editor inside the current terminal
-- Persist display, behavior, editor, and terminal-launch preferences in `config.toml`
-- Optionally return the shell to the last visited directory after quitting
+- Simple three-pane layout for parent / current / child directories. You can navigate directories, multi-select items, copy, cut, paste, move to trash, rename, and create files or directories entirely from the keyboard.
+  ![](docs/resources/screen-entire-screen.png)
+  _Operating the current directory while keeping surrounding hierarchy visible in the three-pane layout._
+- Common actions stay visible in the on-screen help so the interface is easy to pick up without memorizing a large keymap.
+  ![](docs/resources/screen-help-bar.png)
+  _The help bar at the bottom keeps the main keys visible at all times._
+- Less frequent actions are grouped in the command palette.
+  ![](docs/resources/screen-command-palette.png)
+  _The command palette opened with `:`, showing the main commands._
+- An embedded split terminal can be opened below the browser panes. `Ctrl+T` switches quickly between the browser and terminal.
+  ![](docs/resources/screen-split-terminal.png)
+  _The embedded split terminal opened with `Ctrl+T`, keeping the browser panes visible while shell output stays in view._
+- Filter input, recursive file search, and sort switching are supported.
+  ![](docs/resources/screen-filter.png)
+  _Inline filter input opened with `/`, narrowing the current directory contents in place._
+  ![](docs/resources/screen-find-command.png)
+  _`Find file` opened from `:`, searching recursively under the current directory._
+- File and directory attributes can also be inspected.
+  ![](docs/resources/screen-attributes.png)
+  _The attribute dialog showing details such as path, size, modified time, and permissions._
+- Files can be opened with the OS default app. The current directory can also be handed off to the OS file manager or an external terminal, and `e` can launch a terminal editor in the current terminal session when needed.
+  ![](docs/resources/screen-open.png)
+  _Operations for opening files with the default app or handing off the current directory to external applications._
 
 ## Installation
 
@@ -117,7 +69,7 @@ peneo-cd
 
 Use plain `peneo` or `uv run peneo` when you do not need that behavior.
 
-When a file is focused, press `e` to jump into a terminal editor in the current terminal session. Peneo prefers `config.toml` `editor.command` when set, then falls back to `$EDITOR`, then built-in defaults such as `nvim`, `vim`, or `nano`.
+When a file is focused, press `e` to switch into a terminal editor in the current terminal session. Peneo prefers `config.toml` `editor.command` when set, then falls back to `$EDITOR`, then built-in defaults such as `nvim`, `vim`, or `nano`.
 
 ## Configuration File
 
@@ -137,7 +89,7 @@ The supported settings are:
 | `terminal` | `windows` | Array of shell-style command templates | Optional terminal launch commands for Windows and WSL bridge workflows. The config key is accepted even though native Windows runtime is not currently supported. |
 | `editor` | `command` | Shell-style string, for example `nvim -u NONE` | Optional terminal editor command used by `e`. Do not include the file path; Peneo appends it automatically. Unsupported GUI editors or invalid commands are ignored. |
 | `display` | `show_hidden_files` | `true` / `false` | Default hidden-file visibility when the app starts. |
-| `display` | `theme` | `textual-dark` / `textual-light` | Default UI theme applied on startup and after saving from the config editor. |
+| `display` | `theme` | `textual-dark` / `textual-light` | Default UI theme applied on startup and after saving from the settings editor. |
 | `display` | `default_sort_field` | `name` / `modified` / `size` | Default sort field for the main pane. |
 | `display` | `default_sort_descending` | `true` / `false` | Starts the main-pane sort in descending order when enabled. |
 | `display` | `directories_first` | `true` / `false` | Keeps directories grouped before files in the main pane. |
@@ -180,7 +132,7 @@ The main keys are listed below.
 | Normal | `←` / `h` / `Backspace` | Move to the parent directory |
 | Normal | `→` / `l` | Enter the item if it is a directory |
 | Normal | `Enter` | Enter a directory, or open a file with the default app |
-| Normal | `e` | Switch the focused file into the configured terminal editor (`editor.command` -> `$EDITOR` -> built-in defaults) |
+| Normal | `e` | Open the focused file in a terminal editor, using `editor.command` -> `$EDITOR` -> built-in defaults |
 | Normal | `F5` | Reload the current directory |
 | Normal | `Space` | Toggle selection, then move to the next row |
 | Normal | `y` | Copy the selected items, or the focused item if nothing is selected |
@@ -200,14 +152,14 @@ The main keys are listed below.
 | Filter input | `Backspace` | Delete one character |
 | Filter input | `Enter` / `↓` | Apply the filter and return to list navigation |
 | Filter input | `Esc` | Clear the filter |
-| Command palette | Text input / `↑` / `↓` / `k` / `j` / `Enter` / `Esc` | Filter commands, or search and jump to files |
+| Command palette | Text input / `↑` / `↓` / `k` / `j` / `Enter` / `Esc` | Filter, select, run, or cancel commands |
 | Split terminal focus | Text input / arrows / `Enter` / `Backspace` / `Esc` / `Tab` | Send input directly to the embedded shell |
 | Split terminal focus | `Ctrl+T` | Close the embedded split terminal |
 | Name input | Text input / `Backspace` / `Enter` / `Esc` | Edit, confirm, or cancel rename/create input |
 | Confirmation dialog | `Enter` / `Esc` | Confirm or cancel delete |
 | Confirmation dialog | `o` / `s` / `r` / `Esc` | Resolve a paste conflict with overwrite / skip / rename / cancel |
 
-When `e` succeeds, Peneo launches a terminal editor in the current terminal session rather than opening a separate GUI app window. `editor.command` is preferred over `$EDITOR` when both are set.
+`e` switches into a terminal editor in the current terminal session rather than opening a separate GUI app window. If both `editor.command` and `$EDITOR` are set, `editor.command` takes precedence.
 
 ## Command Palette
 
@@ -222,7 +174,7 @@ Less frequent actions are grouped in the command palette opened with `:`.
 | `Open terminal here` | Always | Launches an external terminal rooted at the current directory, using `config.toml` templates before built-in fallbacks. |
 | `Open split terminal` / `Close split terminal` | Always | Toggles the embedded split terminal. The label changes with visibility, and the split terminal keeps the directory where it was started instead of following later browser navigation. |
 | `Show hidden files` / `Hide hidden files` | Always | Toggles hidden-file visibility for the browser panes. The label reflects the current visibility state. |
-| `Edit config` | Always | Opens the config overlay for startup defaults, including the preferred terminal editor, hidden-file visibility, theme, sorting, and paste/delete behavior. Use `↑` / `↓` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
+| `Edit config` | Always | Opens the settings overlay for startup defaults. You can edit the preferred terminal editor, hidden-file visibility, theme, sorting, default paste-conflict behavior, and delete confirmation. Use `↑` / `↓` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
 | `Create file` | Always | Starts the inline create-file flow in the current directory. |
 | `Create directory` | Always | Starts the inline create-directory flow in the current directory. |
 
@@ -234,7 +186,7 @@ Less frequent actions are grouped in the command palette opened with `:`.
 - External-launch behavior includes Linux, macOS, and WSL-aware fallbacks. Native Windows is not a supported runtime for Peneo.
 - `config.toml` can override both the preferred terminal editor and external terminal launch commands before those built-in fallbacks are used.
 - WSL prefers Windows-side bridges such as `wslview`, `explorer.exe`, and `clip.exe` when available, with Linux-side fallbacks kept for WSLg and desktop Linux environments.
-- The application is still under active development, so behavior and keybindings may change.
+- Behavior and keybindings may change in future revisions.
 - File mutations operate on the selected directory entry. If the selected item is a symlink, Peneo mutates the symlink itself instead of silently following and mutating the link target.
 
 ## Related Documents
@@ -256,10 +208,4 @@ Lint and test:
 ```bash
 uv run ruff check .
 uv run pytest
-```
-
-To regenerate the README screenshots:
-
-```bash
-uv run python scripts/generate_readme_screenshots.py
 ```

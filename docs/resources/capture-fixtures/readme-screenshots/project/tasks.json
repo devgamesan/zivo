@@ -1,5 +1,0 @@
-{
-  "build": "uv run peneo",
-  "lint": "uv run ruff check .",
-  "test": "uv run pytest"
-}
