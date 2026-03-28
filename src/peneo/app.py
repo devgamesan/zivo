@@ -1,6 +1,8 @@
 """Application assembly for Peneo."""
 
+import threading
 from collections.abc import Sequence
+from concurrent.futures import CancelledError as FutureCancelledError
 from contextlib import nullcontext
 from functools import partial
 from pathlib import Path
@@ -8,8 +10,9 @@ from pathlib import Path
 from textual import events
 from textual.app import App, ComposeResult, SuspendNotSupported
 from textual.binding import Binding
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.css.query import NoMatches
+from textual.message import Message
 from textual.worker import Worker, WorkerState
 
 from peneo.models import (
@@ -29,6 +32,9 @@ from peneo.services import (
     LiveExternalLaunchService,
     LiveFileMutationService,
     LiveFileSearchService,
+    LiveSplitTerminalService,
+    SplitTerminalService,
+    SplitTerminalSession,
 )
 from peneo.state import (
     Action,
@@ -40,6 +46,7 @@ from peneo.state import (
     ClipboardPasteCompleted,
     ClipboardPasteFailed,
     ClipboardPasteNeedsResolution,
+    CloseSplitTerminalEffect,
     Effect,
     ExitCurrentPath,
     ExternalLaunchCompleted,
@@ -56,6 +63,11 @@ from peneo.state import (
     RunExternalLaunchEffect,
     RunFileMutationEffect,
     RunFileSearchEffect,
+    SplitTerminalExited,
+    SplitTerminalStarted,
+    SplitTerminalStartFailed,
+    StartSplitTerminalEffect,
+    WriteSplitTerminalInputEffect,
     build_placeholder_app_state,
     dispatch_key_input,
     iter_bound_keys,
@@ -70,12 +82,29 @@ from peneo.ui import (
     HelpBar,
     MainPane,
     SidePane,
+    SplitTerminalPane,
     StatusBar,
 )
 
 
 class PeneoApp(App[None]):
     """Three-pane shell with reducer-driven file operations."""
+
+    class SplitTerminalOutput(Message):
+        """Forward PTY output from background threads into the app loop."""
+
+        def __init__(self, session_id: int, data: str) -> None:
+            self.session_id = session_id
+            self.data = data
+            super().__init__()
+
+    class SplitTerminalExitedMessage(Message):
+        """Forward PTY exit notifications into the app loop."""
+
+        def __init__(self, session_id: int, exit_code: int | None) -> None:
+            self.session_id = session_id
+            self.exit_code = exit_code
+            super().__init__()
 
     TITLE = "Peneo"
     SUB_TITLE = "Three-pane shell"
@@ -89,6 +118,11 @@ class PeneoApp(App[None]):
     }
 
     #body {
+        height: 1fr;
+        layout: vertical;
+    }
+
+    #browser-row {
         height: 1fr;
         layout: horizontal;
     }
@@ -240,6 +274,22 @@ class PeneoApp(App[None]):
         color: $accent;
         text-style: bold;
     }
+
+    #split-terminal {
+        display: none;
+        height: 1fr;
+        min-height: 6;
+        border: round $accent;
+        background: $surface;
+    }
+
+    #split-terminal.-visible {
+        display: block;
+    }
+
+    #split-terminal.-focused {
+        border: round $success;
+    }
     """
 
     def __init__(
@@ -249,6 +299,7 @@ class PeneoApp(App[None]):
         file_mutation_service: FileMutationService | None = None,
         external_launch_service: ExternalLaunchService | None = None,
         file_search_service: FileSearchService | None = None,
+        split_terminal_service: SplitTerminalService | None = None,
         *,
         initial_path: str | Path | None = None,
     ) -> None:
@@ -260,7 +311,9 @@ class PeneoApp(App[None]):
         self._file_mutation_service = file_mutation_service or LiveFileMutationService()
         self._external_launch_service = external_launch_service or LiveExternalLaunchService()
         self._file_search_service = file_search_service or LiveFileSearchService()
+        self._split_terminal_service = split_terminal_service or LiveSplitTerminalService()
         self._pending_workers: dict[str, Effect] = {}
+        self._split_terminal_session: SplitTerminalSession | None = None
 
     @property
     def app_state(self) -> AppState:
@@ -283,6 +336,14 @@ class PeneoApp(App[None]):
 
         await self.dispatch_actions((RequestBrowserSnapshot(self._initial_path, blocking=True),))
 
+    def on_unmount(self) -> None:
+        """Ensure the embedded terminal session is stopped when the app exits."""
+
+        if self._split_terminal_session is None:
+            return
+        self._split_terminal_session.close()
+        self._split_terminal_session = None
+
     async def on_key(self, event: events.Key) -> None:
         """Normalize keyboard input into reducer actions."""
 
@@ -295,37 +356,48 @@ class PeneoApp(App[None]):
         """Handle priority key bindings through the central dispatcher."""
 
         character = None
-        if self._app_state.ui_mode in {"FILTER", "RENAME", "CREATE", "PALETTE"}:
+        if self._app_state.ui_mode in {"FILTER", "RENAME", "CREATE", "PALETTE"} or (
+            self._app_state.ui_mode == "BROWSING"
+            and self._app_state.split_terminal.visible
+            and self._app_state.split_terminal.focus_target == "terminal"
+        ):
             if key == "space":
-                if self._app_state.ui_mode in {"RENAME", "CREATE", "PALETTE"}:
+                if self._app_state.ui_mode in {"RENAME", "CREATE", "PALETTE"} or (
+                    self._app_state.ui_mode == "BROWSING"
+                    and self._app_state.split_terminal.focus_target == "terminal"
+                ):
                     character = " "
             elif len(key) == 1 and key.isprintable():
                 character = key
         await self._dispatch_key_press(key, character=character)
 
-    def _build_body(self, shell: ThreePaneShellData) -> Horizontal:
-        return Horizontal(
-            SidePane(
-                "Parent Directory",
-                shell.parent_entries,
-                id="parent-pane",
-                classes="pane side-pane",
+    def _build_body(self, shell: ThreePaneShellData) -> Vertical:
+        return Vertical(
+            Horizontal(
+                SidePane(
+                    "Parent Directory",
+                    shell.parent_entries,
+                    id="parent-pane",
+                    classes="pane side-pane",
+                ),
+                MainPane(
+                    "Current Directory",
+                    shell.current_entries,
+                    summary=shell.current_summary,
+                    cursor_index=shell.current_cursor_index,
+                    context_input=shell.current_context_input,
+                    id="current-pane",
+                    classes="pane main-pane",
+                ),
+                SidePane(
+                    "Child Directory",
+                    shell.child_entries,
+                    id="child-pane",
+                    classes="pane side-pane",
+                ),
+                id="browser-row",
             ),
-            MainPane(
-                "Current Directory",
-                shell.current_entries,
-                summary=shell.current_summary,
-                cursor_index=shell.current_cursor_index,
-                context_input=shell.current_context_input,
-                id="current-pane",
-                classes="pane main-pane",
-            ),
-            SidePane(
-                "Child Directory",
-                shell.child_entries,
-                id="child-pane",
-                classes="pane side-pane",
-            ),
+            SplitTerminalPane(shell.split_terminal, id="split-terminal"),
             id="body",
         )
 
@@ -391,6 +463,12 @@ class PeneoApp(App[None]):
                     self._schedule_external_launch(effect)
             elif isinstance(effect, RunFileSearchEffect):
                 self._schedule_file_search(effect)
+            elif isinstance(effect, StartSplitTerminalEffect):
+                self._start_split_terminal(effect)
+            elif isinstance(effect, WriteSplitTerminalInputEffect):
+                self._write_split_terminal_input(effect)
+            elif isinstance(effect, CloseSplitTerminalEffect):
+                self._close_split_terminal(effect)
 
     def _schedule_browser_snapshot(self, effect: LoadBrowserSnapshotEffect) -> None:
         worker = self.run_worker(
@@ -476,6 +554,59 @@ class PeneoApp(App[None]):
         )
         self._pending_workers[worker.name] = effect
 
+    def _start_split_terminal(self, effect: StartSplitTerminalEffect) -> None:
+        try:
+            session = self._split_terminal_service.start(
+                effect.cwd,
+                on_output=partial(self._handle_split_terminal_output, effect.session_id),
+                on_exit=partial(self._handle_split_terminal_exit, effect.session_id),
+            )
+        except OSError as error:
+            self.call_next(
+                self.dispatch_actions,
+                (
+                    SplitTerminalStartFailed(
+                        session_id=effect.session_id,
+                        message=str(error) or "Failed to open split terminal",
+                    ),
+                ),
+            )
+            return
+
+        self._split_terminal_session = session
+        self.call_next(
+            self.dispatch_actions,
+            (
+                SplitTerminalStarted(session_id=effect.session_id, cwd=effect.cwd),
+            ),
+        )
+
+    def _write_split_terminal_input(self, effect: WriteSplitTerminalInputEffect) -> None:
+        if self._app_state.split_terminal.session_id != effect.session_id:
+            return
+        if self._split_terminal_session is None:
+            return
+        try:
+            self._split_terminal_session.write(effect.data)
+        except OSError as error:
+            self.call_next(
+                self.dispatch_actions,
+                (
+                    SplitTerminalStartFailed(
+                        session_id=effect.session_id,
+                        message=str(error) or "Failed to write to split terminal",
+                    ),
+                ),
+            )
+
+    def _close_split_terminal(self, effect: CloseSplitTerminalEffect) -> None:
+        if self._split_terminal_session is None:
+            return
+        try:
+            self._split_terminal_session.close()
+        finally:
+            self._split_terminal_session = None
+
     def _schedule_system_clipboard_copy(self, effect: RunExternalLaunchEffect) -> None:
         try:
             self.copy_to_clipboard("\n".join(effect.request.paths))
@@ -545,6 +676,56 @@ class PeneoApp(App[None]):
                     request=effect.request,
                 ),
             ),
+        )
+
+    def _handle_split_terminal_output(self, session_id: int, data: str) -> None:
+        message = self.SplitTerminalOutput(session_id=session_id, data=data)
+        try:
+            if self._thread_id == threading.get_ident():
+                self.post_message(message)
+                return
+            self.call_from_thread(self.post_message, message)
+        except (RuntimeError, FutureCancelledError):
+            return
+
+    def _handle_split_terminal_exit(self, session_id: int, exit_code: int | None) -> None:
+        message = self.SplitTerminalExitedMessage(session_id=session_id, exit_code=exit_code)
+        try:
+            if self._thread_id == threading.get_ident():
+                self.post_message(message)
+                return
+            self.call_from_thread(self.post_message, message)
+        except (RuntimeError, FutureCancelledError):
+            return
+
+    async def on_peneo_app_split_terminal_output(
+        self,
+        message: SplitTerminalOutput,
+    ) -> None:
+        split_terminal_state = self._app_state.split_terminal
+        if (
+            not split_terminal_state.visible
+            or split_terminal_state.session_id != message.session_id
+        ):
+            return
+        try:
+            split_terminal = self.query_one("#split-terminal", SplitTerminalPane)
+        except NoMatches:
+            return
+        split_terminal.append_output(message.data)
+
+    async def on_peneo_app_split_terminal_exited_message(
+        self,
+        message: SplitTerminalExitedMessage,
+    ) -> None:
+        self._split_terminal_session = None
+        await self.dispatch_actions(
+            (
+                SplitTerminalExited(
+                    session_id=message.session_id,
+                    exit_code=message.exit_code,
+                ),
+            )
         )
 
     async def on_worker_state_changed(self, event: Worker.StateChanged) -> None:
@@ -712,6 +893,13 @@ class PeneoApp(App[None]):
             )
         )
 
+    async def on_resize(self, event: events.Resize) -> None:
+        """Keep the split-terminal PTY dimensions roughly aligned with the viewport."""
+
+        if self._split_terminal_session is None or not self._app_state.split_terminal.visible:
+            return
+        self.call_after_refresh(self._resize_split_terminal_session)
+
     async def _refresh_shell(self) -> None:
         shell = select_shell_data(self._app_state)
         try:
@@ -719,6 +907,7 @@ class PeneoApp(App[None]):
             parent_pane = self.query_one("#parent-pane", SidePane)
             current_pane = self.query_one("#current-pane", MainPane)
             child_pane = self.query_one("#child-pane", SidePane)
+            split_terminal = self.query_one("#split-terminal", SplitTerminalPane)
             command_palette = self.query_one("#command-palette", CommandPalette)
             help_bar = self.query_one("#help-bar", HelpBar)
             status_bar = self.query_one("#status-bar", StatusBar)
@@ -728,6 +917,7 @@ class PeneoApp(App[None]):
             selectors = (
                 "#current-path-bar",
                 "#body",
+                "#split-terminal",
                 "#command-palette",
                 "#help-bar",
                 "#status-bar",
@@ -754,11 +944,35 @@ class PeneoApp(App[None]):
         current_pane.set_entries(shell.current_entries, shell.current_cursor_index)
         current_pane.set_context_input(shell.current_context_input)
         await child_pane.set_entries(shell.child_entries)
+        split_terminal.set_state(shell.split_terminal)
+        self._resize_split_terminal_session()
         command_palette.set_state(shell.command_palette)
         help_bar.set_state(shell.help)
         status_bar.set_state(shell.status)
         conflict_dialog.set_state(shell.conflict_dialog)
         attribute_dialog.set_state(shell.attribute_dialog)
+
+        if (
+            self._app_state.ui_mode == "BROWSING"
+            and self._app_state.split_terminal.visible
+            and self._app_state.split_terminal.focus_target == "terminal"
+        ):
+            self.set_focus(split_terminal)
+        else:
+            try:
+                self.set_focus(current_pane.query_one("#current-pane-table"))
+            except NoMatches:
+                pass
+
+    def _resize_split_terminal_session(self) -> None:
+        if self._split_terminal_session is None or not self._app_state.split_terminal.visible:
+            return
+        try:
+            split_terminal = self.query_one("#split-terminal", SplitTerminalPane)
+        except NoMatches:
+            return
+        columns, rows = split_terminal.terminal_dimensions()
+        self._split_terminal_session.resize(columns=columns, rows=rows)
 
 
 def create_app(
@@ -767,6 +981,7 @@ def create_app(
     file_mutation_service: FileMutationService | None = None,
     external_launch_service: ExternalLaunchService | None = None,
     file_search_service: FileSearchService | None = None,
+    split_terminal_service: SplitTerminalService | None = None,
     *,
     initial_path: str | Path | None = None,
 ) -> PeneoApp:
@@ -778,5 +993,6 @@ def create_app(
         file_mutation_service=file_mutation_service,
         external_launch_service=external_launch_service,
         file_search_service=file_search_service,
+        split_terminal_service=split_terminal_service,
         initial_path=initial_path,
     )

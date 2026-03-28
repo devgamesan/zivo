@@ -31,6 +31,7 @@ from peneo.state import (
     ClipboardPasteCompleted,
     ClipboardPasteFailed,
     ClipboardPasteNeedsResolution,
+    CloseSplitTerminalEffect,
     CommandPaletteState,
     ConfirmDeleteTargets,
     ConfirmFilterInput,
@@ -47,6 +48,7 @@ from peneo.state import (
     FileMutationFailed,
     FileSearchCompleted,
     FileSearchResultState,
+    FocusSplitTerminal,
     GoToParentDirectory,
     LoadBrowserSnapshotEffect,
     LoadChildPaneSnapshotEffect,
@@ -68,17 +70,24 @@ from peneo.state import (
     RunExternalLaunchEffect,
     RunFileMutationEffect,
     RunFileSearchEffect,
+    SendSplitTerminalInput,
     SetCommandPaletteQuery,
     SetCursorPath,
     SetFilterQuery,
     SetPendingInputValue,
     SetSort,
     SetUiMode,
+    SplitTerminalExited,
+    SplitTerminalOutputReceived,
+    SplitTerminalStarted,
+    StartSplitTerminalEffect,
     SubmitCommandPalette,
     SubmitPendingInput,
     ToggleHiddenFiles,
     ToggleSelection,
     ToggleSelectionAndAdvance,
+    ToggleSplitTerminal,
+    WriteSplitTerminalInputEffect,
     build_initial_app_state,
     reduce_app_state,
 )
@@ -552,6 +561,159 @@ def test_submit_command_palette_runs_open_terminal_flow() -> None:
                 path="/home/tadashi/develop/peneo",
             ),
         ),
+    )
+
+
+def test_submit_command_palette_toggles_split_terminal() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("split"))
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.ui_mode == "BROWSING"
+    assert result.state.split_terminal.visible is True
+    assert result.state.split_terminal.status == "starting"
+    assert result.effects == (
+        StartSplitTerminalEffect(
+            session_id=1,
+            cwd="/home/tadashi/develop/peneo",
+        ),
+    )
+
+
+def test_toggle_split_terminal_starts_embedded_session() -> None:
+    result = reduce_app_state(build_initial_app_state(), ToggleSplitTerminal())
+
+    assert result.state.split_terminal.visible is True
+    assert result.state.split_terminal.status == "starting"
+    assert result.state.split_terminal.cwd == "/home/tadashi/develop/peneo"
+    assert result.state.split_terminal.session_id == 1
+    assert result.effects == (
+        StartSplitTerminalEffect(
+            session_id=1,
+            cwd="/home/tadashi/develop/peneo",
+        ),
+    )
+
+
+def test_toggle_split_terminal_closes_active_session() -> None:
+    state = replace(
+        build_initial_app_state(),
+        split_terminal=replace(
+            build_initial_app_state().split_terminal,
+            visible=True,
+            status="running",
+            session_id=7,
+            output="prompt> ",
+        ),
+    )
+
+    result = reduce_app_state(state, ToggleSplitTerminal())
+
+    assert result.state.split_terminal.visible is False
+    assert result.effects == (CloseSplitTerminalEffect(session_id=7),)
+
+
+def test_focus_split_terminal_switches_focus_target() -> None:
+    state = replace(
+        build_initial_app_state(),
+        split_terminal=replace(
+            build_initial_app_state().split_terminal,
+            visible=True,
+            status="running",
+            session_id=3,
+        ),
+    )
+
+    next_state = _reduce_state(state, FocusSplitTerminal("terminal"))
+
+    assert next_state.split_terminal.focus_target == "terminal"
+
+
+def test_toggle_split_terminal_opens_with_terminal_focus() -> None:
+    result = reduce_app_state(build_initial_app_state(), ToggleSplitTerminal())
+
+    assert result.state.split_terminal.visible is True
+    assert result.state.split_terminal.focus_target == "terminal"
+
+
+def test_send_split_terminal_input_emits_write_effect() -> None:
+    state = replace(
+        build_initial_app_state(),
+        split_terminal=replace(
+            build_initial_app_state().split_terminal,
+            visible=True,
+            status="running",
+            session_id=5,
+        ),
+    )
+
+    result = reduce_app_state(state, SendSplitTerminalInput("ls\n"))
+
+    assert result.effects == (
+        WriteSplitTerminalInputEffect(session_id=5, data="ls\n"),
+    )
+
+
+def test_split_terminal_started_marks_session_running() -> None:
+    state = replace(
+        build_initial_app_state(),
+        split_terminal=replace(
+            build_initial_app_state().split_terminal,
+            visible=True,
+            status="starting",
+            session_id=5,
+        ),
+    )
+
+    next_state = _reduce_state(
+        state,
+        SplitTerminalStarted(session_id=5, cwd="/home/tadashi/develop/peneo"),
+    )
+
+    assert next_state.split_terminal.status == "running"
+    assert next_state.notification == NotificationState(
+        level="info",
+        message="Split terminal opened",
+    )
+
+
+def test_split_terminal_output_received_does_not_mutate_reducer_state() -> None:
+    state = replace(
+        build_initial_app_state(),
+        split_terminal=replace(
+            build_initial_app_state().split_terminal,
+            visible=True,
+            status="running",
+            session_id=5,
+            output="hello",
+        ),
+    )
+
+    next_state = _reduce_state(state, SplitTerminalOutputReceived(session_id=5, data=" world"))
+
+    assert next_state == state
+
+
+def test_split_terminal_exited_resets_state_and_notifies() -> None:
+    state = replace(
+        build_initial_app_state(),
+        split_terminal=replace(
+            build_initial_app_state().split_terminal,
+            visible=True,
+            status="running",
+            focus_target="terminal",
+            session_id=5,
+            output="prompt",
+        ),
+    )
+
+    next_state = _reduce_state(state, SplitTerminalExited(session_id=5, exit_code=0))
+
+    assert next_state.split_terminal.visible is False
+    assert next_state.notification == NotificationState(
+        level="info",
+        message="Split terminal closed (exit 0)",
     )
 
 

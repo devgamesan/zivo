@@ -13,6 +13,8 @@ SortField = Literal["name", "modified", "size"]
 ClipboardMode = Literal["copy", "cut", "none"]
 NameConflictKind = Literal["rename", "create_file", "create_dir"]
 CommandPaletteSource = Literal["commands", "file_search"]
+SplitTerminalStatus = Literal["closed", "starting", "running"]
+SplitTerminalFocusTarget = Literal["browser", "terminal"]
 
 
 @dataclass(frozen=True)
@@ -146,6 +148,18 @@ class CommandPaletteState:
 
 
 @dataclass(frozen=True)
+class SplitTerminalState:
+    """Embedded split-terminal session state."""
+
+    visible: bool = False
+    focus_target: SplitTerminalFocusTarget = "browser"
+    status: SplitTerminalStatus = "closed"
+    cwd: str | None = None
+    session_id: int | None = None
+    output: str = ""
+
+
+@dataclass(frozen=True)
 class BrowserSnapshot:
     """Pane snapshot payload returned from async loaders."""
 
@@ -172,6 +186,7 @@ class AppState:
     notification: NotificationState | None = None
     pending_input: PendingInputState | None = None
     command_palette: CommandPaletteState | None = None
+    split_terminal: SplitTerminalState = SplitTerminalState()
     paste_conflict: PasteConflictState | None = None
     delete_confirmation: DeleteConfirmationState | None = None
     name_conflict: NameConflictState | None = None

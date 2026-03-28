@@ -14,6 +14,7 @@ from peneo.models import (
     HelpBarState,
     InputBarState,
     PaneEntry,
+    SplitTerminalViewState,
     StatusBarState,
     ThreePaneShellData,
 )
@@ -59,6 +60,7 @@ def select_shell_data(state: AppState) -> ThreePaneShellData:
         current_cursor_index=current_pane.cursor_index,
         current_summary=current_pane.summary,
         current_context_input=select_input_bar_state(state),
+        split_terminal=select_split_terminal_state(state),
         help=select_help_bar_state(state),
         command_palette=select_command_palette_state(state),
         status=select_status_bar_state(state),
@@ -129,6 +131,11 @@ def select_current_summary_state(state: AppState) -> CurrentSummaryState:
 def select_status_bar_state(state: AppState) -> StatusBarState:
     """Return a status bar model derived from app state."""
 
+    if state.notification is None and state.split_terminal.visible:
+        return StatusBarState(
+            message="Split terminal active",
+            message_level="info",
+        )
     return StatusBarState(
         message=state.notification.message if state.notification else None,
         message_level=state.notification.level if state.notification else None,
@@ -138,6 +145,8 @@ def select_status_bar_state(state: AppState) -> StatusBarState:
 def select_help_bar_state(state: AppState) -> HelpBarState:
     """Return the help content for the active mode."""
 
+    if state.split_terminal.visible:
+        return HelpBarState(("type in terminal | ctrl+t close",))
     if state.ui_mode == "CONFIRM":
         if state.delete_confirmation is not None:
             return HelpBarState(("enter confirm delete | esc cancel",))
@@ -160,7 +169,7 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
         return HelpBarState(("processing...",))
     return HelpBarState(
         (
-            "Enter open | e edit | / filter | : palette | q quit",
+            "Enter open | e edit | / filter | : palette | q quit | ctrl+t split",
             "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename",
         )
     )
@@ -237,6 +246,32 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
             for index, item in visible_items
         ),
         empty_message="No matching commands",
+    )
+
+
+def select_split_terminal_state(state: AppState) -> SplitTerminalViewState:
+    """Return display data for the embedded split terminal pane."""
+
+    split_terminal = state.split_terminal
+    if not split_terminal.visible:
+        return SplitTerminalViewState(
+            visible=False,
+            title="Split Terminal",
+            status="closed",
+            body="",
+            focused=False,
+        )
+
+    if split_terminal.status == "starting":
+        body = "Starting shell..."
+    else:
+        body = "Shell ready."
+    return SplitTerminalViewState(
+        visible=True,
+        title="Split Terminal",
+        status=split_terminal.status,
+        body=body,
+        focused=split_terminal.focus_target == "terminal",
     )
 
 

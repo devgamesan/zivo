@@ -19,6 +19,7 @@ from .models import (
     NotificationState,
     PaneState,
     SortField,
+    SplitTerminalFocusTarget,
     UiMode,
 )
 
@@ -193,6 +194,25 @@ class OpenTerminalAtPath:
     """Open a new terminal rooted at the supplied directory path."""
 
     path: str
+
+
+@dataclass(frozen=True)
+class ToggleSplitTerminal:
+    """Open or close the embedded split terminal."""
+
+
+@dataclass(frozen=True)
+class FocusSplitTerminal:
+    """Move input focus between the browser and split terminal."""
+
+    target: SplitTerminalFocusTarget
+
+
+@dataclass(frozen=True)
+class SendSplitTerminalInput:
+    """Write input bytes into the active split terminal session."""
+
+    data: str
 
 
 @dataclass(frozen=True)
@@ -396,6 +416,38 @@ class ExternalLaunchFailed:
     message: str
 
 
+@dataclass(frozen=True)
+class SplitTerminalStarted:
+    """Mark the split terminal session as ready."""
+
+    session_id: int
+    cwd: str
+
+
+@dataclass(frozen=True)
+class SplitTerminalStartFailed:
+    """Apply an embedded split-terminal startup error."""
+
+    session_id: int
+    message: str
+
+
+@dataclass(frozen=True)
+class SplitTerminalOutputReceived:
+    """Append output from the active split terminal session."""
+
+    session_id: int
+    data: str
+
+
+@dataclass(frozen=True)
+class SplitTerminalExited:
+    """Apply embedded split-terminal process exit."""
+
+    session_id: int
+    exit_code: int | None
+
+
 Action = (
     InitializeState
     | SetUiMode
@@ -423,6 +475,9 @@ Action = (
     | OpenPathWithDefaultApp
     | OpenPathInEditor
     | OpenTerminalAtPath
+    | ToggleSplitTerminal
+    | FocusSplitTerminal
+    | SendSplitTerminalInput
     | ToggleSelection
     | ToggleSelectionAndAdvance
     | ClearSelection
@@ -449,4 +504,8 @@ Action = (
     | FileMutationFailed
     | ExternalLaunchCompleted
     | ExternalLaunchFailed
+    | SplitTerminalStarted
+    | SplitTerminalStartFailed
+    | SplitTerminalOutputReceived
+    | SplitTerminalExited
 )

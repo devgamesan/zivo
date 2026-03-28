@@ -35,6 +35,7 @@ from peneo.state import (
     select_input_bar_state,
     select_parent_entries,
     select_shell_data,
+    select_split_terminal_state,
     select_status_bar_state,
     select_target_paths,
     select_visible_current_entry_states,
@@ -398,11 +399,11 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
     help_state = select_help_bar_state(state)
 
     assert help_state.lines == (
-        "Enter open | e edit | / filter | : palette | q quit",
+        "Enter open | e edit | / filter | : palette | q quit | ctrl+t split",
         "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename",
     )
     assert help_state.text == (
-        "Enter open | e edit | / filter | : palette | q quit\n"
+        "Enter open | e edit | / filter | : palette | q quit | ctrl+t split\n"
         "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename"
     )
 
@@ -413,6 +414,58 @@ def test_select_help_bar_for_busy_mode() -> None:
     help_state = select_help_bar_state(state)
 
     assert help_state.text == "processing..."
+
+
+def test_select_help_bar_for_split_terminal_focus() -> None:
+    state = replace(
+        build_initial_app_state(),
+        split_terminal=replace(
+            build_initial_app_state().split_terminal,
+            visible=True,
+            status="running",
+            focus_target="terminal",
+        ),
+    )
+
+    help_state = select_help_bar_state(state)
+
+    assert help_state.text == "type in terminal | ctrl+t close"
+
+
+def test_select_status_bar_shows_split_terminal_focus_when_idle() -> None:
+    state = replace(
+        build_initial_app_state(),
+        split_terminal=replace(
+            build_initial_app_state().split_terminal,
+            visible=True,
+            status="running",
+            focus_target="terminal",
+        ),
+    )
+
+    status = select_status_bar_state(state)
+
+    assert status.message == "Split terminal active"
+    assert status.message_level == "info"
+
+
+def test_select_split_terminal_state_builds_terminal_view() -> None:
+    state = replace(
+        build_initial_app_state(),
+        split_terminal=replace(
+            build_initial_app_state().split_terminal,
+            visible=True,
+            status="running",
+            focus_target="terminal",
+        ),
+    )
+
+    terminal_state = select_split_terminal_state(state)
+
+    assert terminal_state.visible is True
+    assert terminal_state.focused is True
+    assert terminal_state.title == "Split Terminal"
+    assert terminal_state.body == "Shell ready."
 
 
 def test_select_command_palette_state_marks_selected_and_enabled_items() -> None:
@@ -434,6 +487,7 @@ def test_select_command_palette_state_marks_selected_and_enabled_items() -> None
     )
     assert any(item.label == "Create file" and item.enabled for item in palette_state.items)
     assert any(item.label == "Open terminal here" and item.enabled for item in palette_state.items)
+    assert any(item.label == "Open split terminal" and item.enabled for item in palette_state.items)
 
 
 def test_select_command_palette_state_filters_query() -> None:

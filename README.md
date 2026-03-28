@@ -12,6 +12,7 @@ _Current three-pane UI showing the parent, current, and child directories side b
 ## Features
 
 - Three-pane layout for parent / current / child directories so surrounding filesystem context stays visible
+- Optional embedded split terminal below the browser panes, opened and closed with a single shortcut and focused immediately
 - Common actions stay visible in the on-screen help, while less frequent actions live in the command palette
 - Keyboard-only navigation, multi-selection, copy, cut, paste, delete-to-trash, rename, and create flows
 - Filter input, recursive file search from the command palette, attribute inspection, sort switching, and hidden-file visibility toggle
@@ -35,6 +36,7 @@ _Current three-pane UI showing the parent, current, and child directories side b
 - Copy paths to the system clipboard
 - Open the current directory in the OS file manager
 - Launch a terminal in the current directory
+- Open an embedded split terminal rooted at the current directory
 - Toggle hidden-file visibility
 - Open files with the OS default app
 - Open files in the editor inside the current terminal
@@ -105,11 +107,15 @@ The main keys are listed below.
 | Normal | `q` | Quit the app |
 | Normal | `Esc` | Clear the active filter, otherwise clear the selection |
 | Normal | `:` | Open the command palette |
+| Normal | `Ctrl+T` | Open or close the embedded split terminal |
+| Normal (with split terminal open) | Text input and browser shortcuts | Disabled while the split terminal owns input |
 | Filter input | Text input | Update the filter string |
 | Filter input | `Backspace` | Delete one character |
 | Filter input | `Enter` / `↓` | Apply the filter and return to list navigation |
 | Filter input | `Esc` | Clear the filter |
 | Command palette | Text input / `↑` / `↓` / `k` / `j` / `Enter` / `Esc` | Filter commands, or search and jump to files |
+| Split terminal focus | Text input / arrows / `Enter` / `Backspace` / `Esc` / `Tab` | Send input directly to the embedded shell |
+| Split terminal focus | `Ctrl+T` | Close the embedded split terminal |
 | Name input | Text input / `Backspace` / `Enter` / `Esc` | Edit, confirm, or cancel rename/create input |
 | Confirmation dialog | `Enter` / `Esc` | Confirm or cancel delete |
 | Confirmation dialog | `o` / `s` / `r` / `Esc` | Resolve a paste conflict with overwrite / skip / rename / cancel |
@@ -124,6 +130,7 @@ The currently available commands are:
 - `Copy path`
 - `Open in file manager`
 - `Open terminal here`
+- `Open split terminal` / `Close split terminal`
 - `Show hidden files` / `Hide hidden files`
 - `Create file`
 - `Create directory`
@@ -132,12 +139,15 @@ The currently available commands are:
 
 `Show attributes` opens a read-only dialog for the current cursor target or a single selected entry and shows `Name`, `Type`, `Path`, `Size`, `Modified`, `Hidden`, and `Permissions`.
 
+`Open split terminal` starts an embedded shell rooted at the current directory. The split terminal does not automatically follow later directory changes in the browser pane; open a new split session if you need a shell in another directory.
+
 Commands still under development may appear dimmed and cannot be executed yet.
 
 ## Platform Notes
 
 - The project is currently verified only on Ubuntu.
 - GUI integration paths such as default-app launch, file-manager launch, and terminal launch are currently validated primarily in that environment.
+- The embedded split terminal currently targets POSIX environments such as Ubuntu/Linux.
 - The code contains external-launch implementations for Linux / macOS / Windows, but not every platform path is fully validated.
 - The application is still under active development, so behavior and keybindings may change.
 - File mutations operate on the selected directory entry. If the selected item is a symlink, Peneo mutates the symlink itself instead of silently following and mutating the link target.

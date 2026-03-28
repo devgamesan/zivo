@@ -28,6 +28,7 @@ from .actions import (
     PasteClipboard,
     ReloadDirectory,
     ResolvePasteConflict,
+    SendSplitTerminalInput,
     SetCommandPaletteQuery,
     SetFilterQuery,
     SetNotification,
@@ -36,6 +37,7 @@ from .actions import (
     SubmitCommandPalette,
     SubmitPendingInput,
     ToggleSelectionAndAdvance,
+    ToggleSplitTerminal,
 )
 from .models import AppState, DirectoryEntryState, NotificationState
 from .selectors import select_target_paths, select_visible_current_entry_states
@@ -64,6 +66,7 @@ BROWSING_KEYMAP = {
     "right": "enter_directory",
     "l": "enter_directory",
     "enter": "enter_or_open",
+    "ctrl+t": "toggle_split_terminal",
     "y": "copy_targets",
     "x": "cut_targets",
     "p": "paste_clipboard",
@@ -90,6 +93,9 @@ def dispatch_key_input(
     character: str | None = None,
 ) -> DispatchedActions:
     """Return reducer actions for the current mode and key press."""
+
+    if _terminal_has_focus(state):
+        return _dispatch_split_terminal_input(key=key, character=character)
 
     if state.ui_mode == "FILTER":
         return _dispatch_filter_input(state, key=key, character=character)
@@ -166,6 +172,9 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
     if command == "begin_command_palette":
         return _supported(BeginCommandPalette())
 
+    if command == "toggle_split_terminal":
+        return _supported(ToggleSplitTerminal())
+
     if command == "exit_current_path":
         return _supported(ExitCurrentPath())
 
@@ -204,6 +213,78 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
         return ()
 
     return ()
+
+
+def _dispatch_split_terminal_input(
+    *,
+    key: str,
+    character: str | None,
+) -> DispatchedActions:
+    if key == "tab":
+        return _supported(SendSplitTerminalInput("\t"))
+
+    if key == "ctrl+t":
+        return _supported(ToggleSplitTerminal())
+
+    if key == "enter":
+        return _supported(SendSplitTerminalInput("\r"))
+
+    if key == "backspace":
+        return _supported(SendSplitTerminalInput("\x7f"))
+
+    if key == "delete":
+        return _supported(SendSplitTerminalInput("\x1b[3~"))
+
+    if key == "escape":
+        return _supported(SendSplitTerminalInput("\x1b"))
+
+    if key == "home":
+        return _supported(SendSplitTerminalInput("\x1b[H"))
+
+    if key == "end":
+        return _supported(SendSplitTerminalInput("\x1b[F"))
+
+    if key == "pageup":
+        return _supported(SendSplitTerminalInput("\x1b[5~"))
+
+    if key == "pagedown":
+        return _supported(SendSplitTerminalInput("\x1b[6~"))
+
+    if key == "up":
+        return _supported(SendSplitTerminalInput("\x1b[A"))
+
+    if key == "down":
+        return _supported(SendSplitTerminalInput("\x1b[B"))
+
+    if key == "left":
+        return _supported(SendSplitTerminalInput("\x1b[D"))
+
+    if key == "right":
+        return _supported(SendSplitTerminalInput("\x1b[C"))
+
+    if key == "ctrl+c":
+        return _supported(SendSplitTerminalInput("\x03"))
+
+    control_character = _terminal_control_character(key)
+    if control_character is not None:
+        return _supported(SendSplitTerminalInput(control_character))
+
+    if character and character.isprintable():
+        return _supported(SendSplitTerminalInput(character))
+
+    return ()
+
+
+def _terminal_control_character(key: str) -> str | None:
+    if not key.startswith("ctrl+") or key == "ctrl+t":
+        return None
+
+    suffix = key[5:]
+    if len(suffix) != 1 or not suffix.isalpha():
+        return None
+
+    letter = suffix.lower()
+    return chr(ord(letter) - ord("a") + 1)
 
 
 def _dispatch_command_palette_input(
@@ -333,6 +414,14 @@ def _supported(*actions: Action) -> DispatchedActions:
 
 def _warn(message: str) -> DispatchedActions:
     return (SetNotification(NotificationState(level="warning", message=message)),)
+
+
+def _terminal_has_focus(state: AppState) -> bool:
+    return (
+        state.ui_mode == "BROWSING"
+        and state.split_terminal.visible
+        and state.split_terminal.focus_target == "terminal"
+    )
 
 
 def _next_sort_action(state: AppState) -> SetSort:

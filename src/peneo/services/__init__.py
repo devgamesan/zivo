@@ -22,6 +22,12 @@ from .file_mutations import (
     LiveFileMutationService,
 )
 from .file_search import FakeFileSearchService, FileSearchService, LiveFileSearchService
+from .split_terminal import (
+    FakeSplitTerminalService,
+    LiveSplitTerminalService,
+    SplitTerminalService,
+    SplitTerminalSession,
+)
 
 __all__ = [
     "BrowserSnapshotLoader",
@@ -39,5 +45,9 @@ __all__ = [
     "LiveFileMutationService",
     "LiveClipboardOperationService",
     "LiveBrowserSnapshotLoader",
+    "LiveSplitTerminalService",
+    "FakeSplitTerminalService",
+    "SplitTerminalService",
+    "SplitTerminalSession",
     "snapshot_from_app_state",
 ]

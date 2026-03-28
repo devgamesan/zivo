@@ -50,6 +50,17 @@ class StatusBarState:
 
 
 @dataclass(frozen=True)
+class SplitTerminalViewState:
+    """Display state for the embedded split terminal pane."""
+
+    visible: bool
+    title: str
+    status: str
+    body: str
+    focused: bool = False
+
+
+@dataclass(frozen=True)
 class HelpBarState:
     """Compact help summary rendered above the status bar."""
 
@@ -121,6 +132,7 @@ class ThreePaneShellData:
     current_cursor_index: int | None
     current_summary: CurrentSummaryState
     current_context_input: InputBarState | None
+    split_terminal: SplitTerminalViewState
     help: HelpBarState
     command_palette: CommandPaletteViewState | None
     status: StatusBarState
@@ -159,6 +171,13 @@ def build_dummy_shell_data() -> ThreePaneShellData:
             sort_label="name asc dirs:on",
         ),
         current_context_input=None,
+        split_terminal=SplitTerminalViewState(
+            visible=False,
+            title="Split Terminal",
+            status="closed",
+            body="",
+            focused=False,
+        ),
         help=HelpBarState(
             (
                 "Enter open | e edit | / filter | : palette | q quit",

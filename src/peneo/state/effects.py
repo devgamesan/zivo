@@ -66,6 +66,29 @@ class RunFileSearchEffect:
     show_hidden: bool
 
 
+@dataclass(frozen=True)
+class StartSplitTerminalEffect:
+    """Start a new embedded split-terminal session."""
+
+    session_id: int
+    cwd: str
+
+
+@dataclass(frozen=True)
+class WriteSplitTerminalInputEffect:
+    """Write input into the active embedded split-terminal session."""
+
+    session_id: int
+    data: str
+
+
+@dataclass(frozen=True)
+class CloseSplitTerminalEffect:
+    """Close the active embedded split-terminal session."""
+
+    session_id: int
+
+
 Effect = (
     LoadBrowserSnapshotEffect
     | LoadChildPaneSnapshotEffect
@@ -73,6 +96,9 @@ Effect = (
     | RunFileMutationEffect
     | RunExternalLaunchEffect
     | RunFileSearchEffect
+    | StartSplitTerminalEffect
+    | WriteSplitTerminalInputEffect
+    | CloseSplitTerminalEffect
 )
 
 
