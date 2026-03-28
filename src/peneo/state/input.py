@@ -45,7 +45,11 @@ from .actions import (
     ToggleSplitTerminal,
 )
 from .models import AppState, DirectoryEntryState, NotificationState
-from .selectors import select_target_paths, select_visible_current_entry_states
+from .selectors import (
+    FILE_SEARCH_VISIBLE_WINDOW,
+    select_target_paths,
+    select_visible_current_entry_states,
+)
 
 DispatchedActions = tuple[Action, ...]
 
@@ -313,6 +317,12 @@ def _dispatch_command_palette_input(
 
     if key in {"down", "j"}:
         return _supported(MoveCommandPaletteCursor(delta=1))
+
+    if key == "pageup":
+        return _supported(MoveCommandPaletteCursor(delta=-FILE_SEARCH_VISIBLE_WINDOW))
+
+    if key == "pagedown":
+        return _supported(MoveCommandPaletteCursor(delta=FILE_SEARCH_VISIBLE_WINDOW))
 
     if key == "enter":
         return _supported(SubmitCommandPalette())

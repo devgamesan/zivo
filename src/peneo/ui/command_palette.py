@@ -38,10 +38,16 @@ class CommandPalette(Container):
         items_widget = self.query_one("#command-palette-items", Static)
 
         if state is None:
+            self.remove_class("file-search")
             title_widget.update("Command Palette")
             query_widget.update("")
             items_widget.update("")
             return
+
+        if state.title.startswith("Find File"):
+            self.add_class("file-search")
+        else:
+            self.remove_class("file-search")
 
         title_widget.update(state.title)
         query_text = Text()
