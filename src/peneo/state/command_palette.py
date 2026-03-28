@@ -34,6 +34,18 @@ def get_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, ...]
             for index, result in enumerate(state.command_palette.file_search_results)
         )
 
+    if state.command_palette.source == "grep_search":
+        return tuple(
+            CommandPaletteItem(
+                id=f"grep_search_result:{index}",
+                label=result.display_label,
+                shortcut=None,
+                enabled=True,
+                path=result.path,
+            )
+            for index, result in enumerate(state.command_palette.grep_search_results)
+        )
+
     query = state.command_palette.query
 
     return tuple(
@@ -48,6 +60,8 @@ def normalize_command_palette_cursor(state: AppState, cursor_index: int) -> int:
         return 0
     if state.command_palette.source == "file_search":
         item_count = len(state.command_palette.file_search_results)
+    elif state.command_palette.source == "grep_search":
+        item_count = len(state.command_palette.grep_search_results)
     else:
         item_count = len(get_command_palette_items(state))
     if item_count == 0:

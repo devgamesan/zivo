@@ -26,7 +26,13 @@ from .command_palette import (
     get_command_palette_items,
     normalize_command_palette_cursor,
 )
-from .models import AppState, DirectoryEntryState, FileSearchResultState, SortState
+from .models import (
+    AppState,
+    DirectoryEntryState,
+    FileSearchResultState,
+    GrepSearchResultState,
+    SortState,
+)
 
 SIDE_PANE_SORT = SortState(field="name", descending=False, directories_first=True)
 COMMAND_PALETTE_VISIBLE_WINDOW = 8
@@ -155,12 +161,14 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
     if state.ui_mode == "PALETTE":
         if state.command_palette is not None and state.command_palette.source == "file_search":
             return HelpBarState(("type filename | enter jump | esc cancel",))
+        if state.command_palette is not None and state.command_palette.source == "grep_search":
+            return HelpBarState(("type text / re:pattern | enter jump | esc cancel",))
         return HelpBarState(("type command | enter run | esc cancel",))
     if state.ui_mode == "BUSY":
         return HelpBarState(("processing...",))
     return HelpBarState(
         (
-            "Enter open | e edit | / filter | ctrl+f find | : palette | q quit",
+            "Enter open | e edit | / filter | ctrl+f find | ctrl+g grep | q quit",
             "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename | ctrl+t term",
         )
     )
@@ -220,6 +228,25 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
                 for index, result in visible_results
             ),
             empty_message=_file_search_empty_message(state),
+        )
+    if state.command_palette.source == "grep_search":
+        visible_results, title = _select_grep_search_window(
+            state.command_palette.grep_search_results,
+            cursor_index,
+        )
+        return CommandPaletteViewState(
+            title=title,
+            query=state.command_palette.query,
+            items=tuple(
+                CommandPaletteItemViewState(
+                    label=result.display_label,
+                    shortcut=None,
+                    enabled=True,
+                    selected=index == cursor_index,
+                )
+                for index, result in visible_results
+            ),
+            empty_message=_grep_search_empty_message(state),
         )
 
     items = get_command_palette_items(state)
@@ -598,9 +625,25 @@ def _select_file_search_window(
     results: tuple[FileSearchResultState, ...],
     cursor_index: int,
 ) -> tuple[tuple[tuple[int, FileSearchResultState], ...], str]:
+    return _select_search_window(results, cursor_index, title="Find File")
+
+
+def _select_grep_search_window(
+    results: tuple[GrepSearchResultState, ...],
+    cursor_index: int,
+) -> tuple[tuple[tuple[int, GrepSearchResultState], ...], str]:
+    return _select_search_window(results, cursor_index, title="Grep")
+
+
+def _select_search_window(
+    results: tuple[FileSearchResultState | GrepSearchResultState, ...],
+    cursor_index: int,
+    *,
+    title: str,
+) -> tuple[tuple[tuple[int, FileSearchResultState | GrepSearchResultState], ...], str]:
     total = len(results)
     if total == 0:
-        return (), "Find File"
+        return (), title
 
     start = max(
         0,
@@ -611,7 +654,7 @@ def _select_file_search_window(
     )
     end = min(total, start + FILE_SEARCH_VISIBLE_WINDOW)
     visible_results = tuple((index, results[index]) for index in range(start, end))
-    return visible_results, f"Find File ({start + 1}-{end} / {total})"
+    return visible_results, f"{title} ({start + 1}-{end} / {total})"
 
 
 def _select_command_palette_window(
@@ -644,6 +687,18 @@ def _file_search_empty_message(state: AppState) -> str:
     ):
         return state.command_palette.file_search_error_message
     return "No matching files"
+
+
+def _grep_search_empty_message(state: AppState) -> str:
+    if state.pending_grep_search_request_id is not None:
+        return "Searching matches..."
+    if (
+        state.command_palette is not None
+        and state.command_palette.source == "grep_search"
+        and state.command_palette.grep_search_error_message is not None
+    ):
+        return state.command_palette.grep_search_error_message
+    return "No matching lines"
 
 
 def _get_current_cursor_entry(state: AppState) -> DirectoryEntryState | None:

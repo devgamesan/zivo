@@ -21,6 +21,7 @@ from .actions import (
     BeginDeleteTargets,
     BeginFileSearch,
     BeginFilterInput,
+    BeginGrepSearch,
     BeginRenameInput,
     BrowserSnapshotFailed,
     BrowserSnapshotLoaded,
@@ -54,6 +55,8 @@ from .actions import (
     FileSearchFailed,
     FocusSplitTerminal,
     GoToParentDirectory,
+    GrepSearchCompleted,
+    GrepSearchFailed,
     InitializeState,
     MoveCommandPaletteCursor,
     MoveConfigEditorCursor,
@@ -100,6 +103,7 @@ from .effects import (
     RunExternalLaunchEffect,
     RunFileMutationEffect,
     RunFileSearchEffect,
+    RunGrepSearchEffect,
     StartSplitTerminalEffect,
     WriteSplitTerminalInputEffect,
 )
@@ -128,6 +132,7 @@ _CONFIG_THEMES = ("textual-dark", "textual-light")
 _CONFIG_PASTE_ACTIONS = ("prompt", "overwrite", "skip", "rename")
 _CONFIG_EDITOR_COMMANDS = (None, "nvim", "vim", "nano", "hx", "micro", "emacs -nw")
 _REGEX_FILE_SEARCH_PREFIX = "re:"
+_REGEX_GREP_SEARCH_PREFIX = "re:"
 
 
 def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
@@ -151,6 +156,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 pending_input=None,
                 command_palette=None,
                 pending_file_search_request_id=None,
+                pending_grep_search_request_id=None,
                 delete_confirmation=None,
                 name_conflict=None,
                 attribute_inspection=None,
@@ -191,6 +197,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 ),
                 command_palette=None,
                 pending_file_search_request_id=None,
+                pending_grep_search_request_id=None,
                 delete_confirmation=None,
                 name_conflict=None,
                 attribute_inspection=None,
@@ -209,6 +216,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                     pending_input=None,
                     command_palette=None,
                     pending_file_search_request_id=None,
+                    pending_grep_search_request_id=None,
                     paste_conflict=None,
                     delete_confirmation=DeleteConfirmationState(paths=action.paths),
                     name_conflict=None,
@@ -240,6 +248,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 ),
                 command_palette=None,
                 pending_file_search_request_id=None,
+                pending_grep_search_request_id=None,
                 delete_confirmation=None,
                 name_conflict=None,
                 attribute_inspection=None,
@@ -255,6 +264,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 pending_input=None,
                 command_palette=CommandPaletteState(),
                 pending_file_search_request_id=None,
+                pending_grep_search_request_id=None,
                 delete_confirmation=None,
                 name_conflict=None,
                 attribute_inspection=None,
@@ -270,6 +280,23 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 pending_input=None,
                 command_palette=CommandPaletteState(source="file_search"),
                 pending_file_search_request_id=None,
+                pending_grep_search_request_id=None,
+                delete_confirmation=None,
+                name_conflict=None,
+                attribute_inspection=None,
+            )
+        )
+
+    if isinstance(action, BeginGrepSearch):
+        return done(
+            replace(
+                state,
+                ui_mode="PALETTE",
+                notification=None,
+                pending_input=None,
+                command_palette=CommandPaletteState(source="grep_search"),
+                pending_file_search_request_id=None,
+                pending_grep_search_request_id=None,
                 delete_confirmation=None,
                 name_conflict=None,
                 attribute_inspection=None,
@@ -284,6 +311,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 notification=None,
                 command_palette=None,
                 pending_file_search_request_id=None,
+                pending_grep_search_request_id=None,
                 name_conflict=None,
                 attribute_inspection=None,
             )
@@ -333,7 +361,39 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             query=action.query,
             cursor_index=0,
             file_search_error_message=None,
+            grep_search_error_message=None,
         )
+        if state.command_palette.source == "grep_search":
+            stripped_query = action.query.strip()
+            if not stripped_query:
+                return done(
+                    replace(
+                        state,
+                        command_palette=replace(
+                            next_palette,
+                            grep_search_results=(),
+                            grep_search_error_message=None,
+                        ),
+                        pending_grep_search_request_id=None,
+                    )
+                )
+            request_id = state.next_request_id
+            next_state = replace(
+                state,
+                command_palette=next_palette,
+                pending_grep_search_request_id=request_id,
+                next_request_id=request_id + 1,
+            )
+            return done(
+                next_state,
+                RunGrepSearchEffect(
+                    request_id=request_id,
+                    root_path=state.current_path,
+                    query=stripped_query,
+                    show_hidden=state.show_hidden,
+                ),
+            )
+
         if state.command_palette.source != "file_search":
             return done(replace(state, command_palette=next_palette))
 
@@ -348,6 +408,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                         file_search_error_message=None,
                     ),
                     pending_file_search_request_id=None,
+                    pending_grep_search_request_id=None,
                 )
             )
         is_regex_query = _is_regex_file_search_query(stripped_query)
@@ -370,6 +431,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                         ),
                     ),
                     pending_file_search_request_id=None,
+                    pending_grep_search_request_id=None,
                 )
             )
         request_id = state.next_request_id
@@ -377,6 +439,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             state,
             command_palette=next_palette,
             pending_file_search_request_id=request_id,
+            pending_grep_search_request_id=None,
             next_request_id=request_id + 1,
         )
         return done(
@@ -392,13 +455,14 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
     if isinstance(action, SubmitCommandPalette):
         if state.command_palette is None:
             return done(state)
-        if state.command_palette.source == "file_search":
-            results = state.command_palette.file_search_results
+        if state.command_palette.source in {"file_search", "grep_search"}:
+            if state.command_palette.source == "file_search":
+                results = state.command_palette.file_search_results
+                message = state.command_palette.file_search_error_message or "No matching files"
+            else:
+                results = state.command_palette.grep_search_results
+                message = state.command_palette.grep_search_error_message or "No matching lines"
             if not results:
-                message = (
-                    state.command_palette.file_search_error_message
-                    or "No matching files"
-                )
                 return done(
                     replace(
                         state,
@@ -417,6 +481,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 notification=None,
                 command_palette=None,
                 pending_file_search_request_id=None,
+                pending_grep_search_request_id=None,
                 attribute_inspection=None,
             )
             return reduce_app_state(
@@ -455,6 +520,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             notification=None,
             command_palette=None,
             pending_file_search_request_id=None,
+            pending_grep_search_request_id=None,
             attribute_inspection=None,
         )
         if selected_item.id == "show_attributes":
@@ -476,6 +542,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                     notification=None,
                     command_palette=None,
                     pending_file_search_request_id=None,
+                    pending_grep_search_request_id=None,
                     attribute_inspection=AttributeInspectionState(
                         name=entry.name,
                         kind=entry.kind,
@@ -514,6 +581,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                     notification=None,
                     command_palette=None,
                     pending_file_search_request_id=None,
+                    pending_grep_search_request_id=None,
                     attribute_inspection=None,
                     config_editor=ConfigEditorState(
                         path=state.config_path,
@@ -598,6 +666,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 pending_input=None,
                 command_palette=None,
                 pending_file_search_request_id=None,
+                pending_grep_search_request_id=None,
                 delete_confirmation=None,
                 name_conflict=None,
                 attribute_inspection=None,
@@ -1205,6 +1274,50 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 state,
                 notification=NotificationState(level="error", message=action.message),
                 pending_file_search_request_id=None,
+            )
+        )
+
+    if isinstance(action, GrepSearchCompleted):
+        if (
+            action.request_id != state.pending_grep_search_request_id
+            or state.command_palette is None
+            or state.command_palette.source != "grep_search"
+            or state.command_palette.query.strip() != action.query
+        ):
+            return done(state)
+        return done(
+            replace(
+                state,
+                command_palette=replace(
+                    state.command_palette,
+                    grep_search_results=action.results,
+                    grep_search_error_message=None,
+                    cursor_index=0,
+                ),
+                pending_grep_search_request_id=None,
+            )
+        )
+
+    if isinstance(action, GrepSearchFailed):
+        if action.request_id != state.pending_grep_search_request_id:
+            return done(state)
+        if state.command_palette is not None and action.invalid_query:
+            return done(
+                replace(
+                    state,
+                    command_palette=replace(
+                        state.command_palette,
+                        grep_search_results=(),
+                        grep_search_error_message=action.message,
+                    ),
+                    pending_grep_search_request_id=None,
+                )
+            )
+        return done(
+            replace(
+                state,
+                notification=NotificationState(level="error", message=action.message),
+                pending_grep_search_request_id=None,
             )
         )
 

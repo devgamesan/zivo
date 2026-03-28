@@ -31,13 +31,16 @@ from peneo.services import (
     ExternalLaunchService,
     FileMutationService,
     FileSearchService,
+    GrepSearchService,
     InvalidFileSearchQueryError,
+    InvalidGrepSearchQueryError,
     LiveBrowserSnapshotLoader,
     LiveClipboardOperationService,
     LiveConfigSaveService,
     LiveExternalLaunchService,
     LiveFileMutationService,
     LiveFileSearchService,
+    LiveGrepSearchService,
     LiveSplitTerminalService,
     SplitTerminalService,
     SplitTerminalSession,
@@ -64,6 +67,8 @@ from peneo.state import (
     FileMutationFailed,
     FileSearchCompleted,
     FileSearchFailed,
+    GrepSearchCompleted,
+    GrepSearchFailed,
     LoadBrowserSnapshotEffect,
     LoadChildPaneSnapshotEffect,
     NotificationState,
@@ -74,6 +79,7 @@ from peneo.state import (
     RunExternalLaunchEffect,
     RunFileMutationEffect,
     RunFileSearchEffect,
+    RunGrepSearchEffect,
     SortState,
     SplitTerminalExited,
     SplitTerminalStarted,
@@ -100,6 +106,7 @@ from peneo.ui import (
 )
 
 _FILE_SEARCH_DEBOUNCE_SECONDS = 0.2
+_GREP_SEARCH_DEBOUNCE_SECONDS = 0.2
 
 
 class PeneoApp(App[None]):
@@ -216,7 +223,7 @@ class PeneoApp(App[None]):
         background: $surface;
     }
 
-    #command-palette.file-search {
+    #command-palette.search-mode {
         height: 50%;
         max-height: 50%;
     }
@@ -346,6 +353,7 @@ class PeneoApp(App[None]):
         file_mutation_service: FileMutationService | None = None,
         external_launch_service: ExternalLaunchService | None = None,
         file_search_service: FileSearchService | None = None,
+        grep_search_service: GrepSearchService | None = None,
         split_terminal_service: SplitTerminalService | None = None,
         *,
         app_config: AppConfig | None = None,
@@ -376,12 +384,16 @@ class PeneoApp(App[None]):
             external_launch_service or self._build_external_launch_service(self._app_config)
         )
         self._file_search_service = file_search_service or LiveFileSearchService()
+        self._grep_search_service = grep_search_service or LiveGrepSearchService()
         self._split_terminal_service = split_terminal_service or LiveSplitTerminalService()
         self._pending_workers: dict[str, Effect] = {}
         self._split_terminal_session: SplitTerminalSession | None = None
         self._file_search_timer: Timer | None = None
         self._active_file_search_cancel_event: threading.Event | None = None
         self._active_file_search_request_id: int | None = None
+        self._grep_search_timer: Timer | None = None
+        self._active_grep_search_cancel_event: threading.Event | None = None
+        self._active_grep_search_request_id: int | None = None
 
     @property
     def app_state(self) -> AppState:
@@ -409,6 +421,7 @@ class PeneoApp(App[None]):
         """Ensure the embedded terminal session is stopped when the app exits."""
 
         self._cancel_pending_file_search()
+        self._cancel_pending_grep_search()
         if self._split_terminal_session is None:
             return
         self._split_terminal_session.close()
@@ -493,6 +506,7 @@ class PeneoApp(App[None]):
         previous_state = self._app_state
         changed, effects = self._apply_actions(actions)
         self._sync_file_search_state(previous_state, self._app_state)
+        self._sync_grep_search_state(previous_state, self._app_state)
         if previous_state.config.display.theme != self._app_state.config.display.theme:
             self.theme = self._app_state.config.display.theme
         if previous_state.config != self._app_state.config:
@@ -554,6 +568,8 @@ class PeneoApp(App[None]):
                     self._schedule_external_launch(effect)
             elif isinstance(effect, RunFileSearchEffect):
                 self._schedule_file_search(effect)
+            elif isinstance(effect, RunGrepSearchEffect):
+                self._schedule_grep_search(effect)
             elif isinstance(effect, StartSplitTerminalEffect):
                 self._start_split_terminal(effect)
             elif isinstance(effect, WriteSplitTerminalInputEffect):
@@ -676,6 +692,38 @@ class PeneoApp(App[None]):
         )
         self._pending_workers[worker.name] = effect
 
+    def _schedule_grep_search(self, effect: RunGrepSearchEffect) -> None:
+        self._cancel_grep_search_timer()
+        self._grep_search_timer = self.set_timer(
+            _GREP_SEARCH_DEBOUNCE_SECONDS,
+            partial(self._start_grep_search_worker, effect),
+            name=f"grep-search-debounce:{effect.request_id}",
+        )
+
+    def _start_grep_search_worker(self, effect: RunGrepSearchEffect) -> None:
+        self._grep_search_timer = None
+        if self._app_state.pending_grep_search_request_id != effect.request_id:
+            return
+        cancel_event = threading.Event()
+        self._active_grep_search_cancel_event = cancel_event
+        self._active_grep_search_request_id = effect.request_id
+        worker = self.run_worker(
+            partial(
+                self._grep_search_service.search,
+                effect.root_path,
+                effect.query,
+                show_hidden=effect.show_hidden,
+                is_cancelled=cancel_event.is_set,
+            ),
+            name=f"grep-search:{effect.request_id}",
+            group="grep-search",
+            description=effect.query,
+            exit_on_error=False,
+            exclusive=True,
+            thread=True,
+        )
+        self._pending_workers[worker.name] = effect
+
     def _sync_file_search_state(self, previous_state: AppState, next_state: AppState) -> None:
         if (
             previous_state.pending_file_search_request_id
@@ -683,6 +731,14 @@ class PeneoApp(App[None]):
         ):
             return
         self._cancel_pending_file_search()
+
+    def _sync_grep_search_state(self, previous_state: AppState, next_state: AppState) -> None:
+        if (
+            previous_state.pending_grep_search_request_id
+            == next_state.pending_grep_search_request_id
+        ):
+            return
+        self._cancel_pending_grep_search()
 
     def _cancel_pending_file_search(self) -> None:
         self._cancel_file_search_timer()
@@ -700,6 +756,23 @@ class PeneoApp(App[None]):
         self._active_file_search_cancel_event.set()
         self._active_file_search_cancel_event = None
         self._active_file_search_request_id = None
+
+    def _cancel_pending_grep_search(self) -> None:
+        self._cancel_grep_search_timer()
+        self._cancel_active_grep_search()
+
+    def _cancel_grep_search_timer(self) -> None:
+        if self._grep_search_timer is None:
+            return
+        self._grep_search_timer.stop()
+        self._grep_search_timer = None
+
+    def _cancel_active_grep_search(self) -> None:
+        if self._active_grep_search_cancel_event is None:
+            return
+        self._active_grep_search_cancel_event.set()
+        self._active_grep_search_cancel_event = None
+        self._active_grep_search_request_id = None
 
     def _start_split_terminal(self, effect: StartSplitTerminalEffect) -> None:
         try:
@@ -892,6 +965,12 @@ class PeneoApp(App[None]):
         ):
             self._active_file_search_cancel_event = None
             self._active_file_search_request_id = None
+        if (
+            isinstance(effect, RunGrepSearchEffect)
+            and effect.request_id == self._active_grep_search_request_id
+        ):
+            self._active_grep_search_cancel_event = None
+            self._active_grep_search_request_id = None
 
         if event.state == WorkerState.CANCELLED:
             return
@@ -990,6 +1069,18 @@ class PeneoApp(App[None]):
                 )
                 return
 
+            if isinstance(effect, RunGrepSearchEffect):
+                await self.dispatch_actions(
+                    (
+                        GrepSearchCompleted(
+                            request_id=effect.request_id,
+                            query=effect.query,
+                            results=event.worker.result,
+                        ),
+                    )
+                )
+                return
+
         message = str(event.worker.error) or "Operation failed"
         if isinstance(effect, LoadBrowserSnapshotEffect):
             await self.dispatch_actions(
@@ -1053,6 +1144,20 @@ class PeneoApp(App[None]):
             await self.dispatch_actions(
                 (
                     FileSearchFailed(
+                        request_id=effect.request_id,
+                        query=effect.query,
+                        message=message,
+                        invalid_query=invalid_query,
+                    ),
+                )
+            )
+            return
+
+        if isinstance(effect, RunGrepSearchEffect):
+            invalid_query = isinstance(event.worker.error, InvalidGrepSearchQueryError)
+            await self.dispatch_actions(
+                (
+                    GrepSearchFailed(
                         request_id=effect.request_id,
                         query=effect.query,
                         message=message,
@@ -1164,6 +1269,7 @@ def create_app(
     file_mutation_service: FileMutationService | None = None,
     external_launch_service: ExternalLaunchService | None = None,
     file_search_service: FileSearchService | None = None,
+    grep_search_service: GrepSearchService | None = None,
     split_terminal_service: SplitTerminalService | None = None,
     *,
     app_config: AppConfig | None = None,
@@ -1180,6 +1286,7 @@ def create_app(
         file_mutation_service=file_mutation_service,
         external_launch_service=external_launch_service,
         file_search_service=file_search_service,
+        grep_search_service=grep_search_service,
         split_terminal_service=split_terminal_service,
         app_config=app_config,
         config_path=config_path,

@@ -5,6 +5,7 @@ from peneo.state import (
     BeginDeleteTargets,
     BeginFileSearch,
     BeginFilterInput,
+    BeginGrepSearch,
     BeginRenameInput,
     CancelCommandPalette,
     CancelDeleteConfirmation,
@@ -49,6 +50,7 @@ from peneo.state import (
     ToggleSplitTerminal,
     build_initial_app_state,
     dispatch_key_input,
+    iter_bound_keys,
 )
 
 
@@ -68,6 +70,18 @@ def test_browsing_down_dispatches_move_cursor() -> None:
             "/home/tadashi/develop/peneo/README.md",
         ),
     )
+
+
+def test_iter_bound_keys_includes_printable_text_input_keys() -> None:
+    keys = iter_bound_keys()
+
+    assert "e" in keys
+    assert "T" in keys
+    assert "/" in keys
+    assert ":" in keys
+    assert "space" in keys
+    assert "ctrl+g" in keys
+    assert "enter" in keys
 
 
 def test_browsing_j_dispatches_move_cursor() -> None:
@@ -167,6 +181,15 @@ def test_browsing_ctrl_f_begins_file_search() -> None:
 
     assert len(actions) == 2
     assert isinstance(actions[1], BeginFileSearch)
+
+
+def test_browsing_ctrl_g_begins_grep_search() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="ctrl+g")
+
+    assert len(actions) == 2
+    assert isinstance(actions[1], BeginGrepSearch)
 
 
 def test_filter_q_updates_query_instead_of_exiting() -> None:

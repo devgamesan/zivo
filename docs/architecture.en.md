@@ -136,11 +136,14 @@ sequenceDiagram
 ### `src/peneo/state/command_palette.py`
 
 - Builds command palette candidates and filters them by query
-- The current palette includes `Find file`, `Show attributes`, `Copy path`, `Open in file manager`, `Open terminal here`, `Open/Close split terminal`, `Show/Hide hidden files`, `Edit config`, `Create file`, and `Create directory`
+- The current palette includes `Find file`, `Grep`, `Show attributes`, `Copy path`, `Open in file manager`, `Open terminal here`, `Open/Close split terminal`, `Show/Hide hidden files`, `Edit config`, `Create file`, and `Create directory`
 - `Show attributes` appears only for a single target and opens a read-only attribute dialog with `Name`, `Type`, `Path`, `Size`, `Modified`, `Hidden`, and `Permissions`
 - `Find file` switches the palette into file-search mode and reuses the same UI to show recursive matches under the current directory
   - Plain input runs a case-insensitive partial basename match
   - `re:`-prefixed input is treated as a Python regex against basenames, and invalid regex patterns are surfaced inline in the palette
+- `Grep` switches the palette into content-search mode and renders matches as `relative/path:line:content`
+  - Plain input runs a case-insensitive fixed-string search
+  - `re:`-prefixed input is treated as regex, and invalid patterns are surfaced inline in the palette
 - The split-terminal and hidden-files entries change their labels to reflect the current state
 
 ### `src/peneo/services/`
@@ -149,6 +152,7 @@ sequenceDiagram
 - `clipboard_operations.py`: handles copy / cut / paste execution and conflict detection
 - `config.py`: loads, validates, saves, and renders `config.toml`, including normalized startup editor settings such as `editor.command`
 - `file_search.py`: handles recursive file search under the current directory, interpreting both plain input and `re:` regex input before filtering results according to hidden-file visibility
+- `grep_search.py`: handles recursive content search through `rg`, treating plain input as fixed-string search and `re:` input as regex before applying hidden-file visibility rules
 - `file_mutations.py`: handles rename / create / trash delete
 - `external_launcher.py`: handles default-app open, editor-in-current-terminal launch, terminal launch, and copying a path to the system clipboard, resolving editors in config -> `$EDITOR` -> built-in order
 - `split_terminal.py`: starts PTY-backed embedded terminal sessions, forwards I/O, and reports exit events

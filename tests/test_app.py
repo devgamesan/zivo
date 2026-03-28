@@ -32,6 +32,7 @@ from peneo.services import (
     FakeExternalLaunchService,
     FakeFileMutationService,
     FakeFileSearchService,
+    FakeGrepSearchService,
     FakeSplitTerminalService,
     LiveExternalLaunchService,
 )
@@ -40,6 +41,7 @@ from peneo.state import (
     ConfigSaveCompleted,
     DirectoryEntryState,
     FileSearchResultState,
+    GrepSearchResultState,
     PaneState,
 )
 from peneo.ui import (
@@ -243,6 +245,43 @@ class BlockingFileSearchService:
         key = (root_path, query, show_hidden)
         self.executed_requests.append(key)
         self.started_queries.append(query)
+        if query in self.blocked_queries:
+            while not self.release_event.is_set():
+                if is_cancelled is not None and is_cancelled():
+                    self.cancelled_queries.append(query)
+                    return ()
+                time.sleep(0.01)
+        if is_cancelled is not None and is_cancelled():
+            self.cancelled_queries.append(query)
+            return ()
+        return self.results_by_query.get(key, ())
+
+
+class BlockingGrepSearchService:
+    def __init__(
+        self,
+        *,
+        results_by_query: (
+            dict[tuple[str, str, bool], tuple[GrepSearchResultState, ...]] | None
+        ) = None,
+        blocked_queries: tuple[str, ...] = (),
+    ) -> None:
+        self.results_by_query = results_by_query or {}
+        self.blocked_queries = set(blocked_queries)
+        self.executed_requests: list[tuple[str, str, bool]] = []
+        self.cancelled_queries: list[str] = []
+        self.release_event = threading.Event()
+
+    def search(
+        self,
+        root_path: str,
+        query: str,
+        *,
+        show_hidden: bool,
+        is_cancelled=None,
+    ) -> tuple[GrepSearchResultState, ...]:
+        key = (root_path, query, show_hidden)
+        self.executed_requests.append(key)
         if query in self.blocked_queries:
             while not self.release_event.is_set():
                 if is_cancelled is not None and is_cancelled():
@@ -1134,7 +1173,7 @@ async def test_app_displays_browsing_help_bar() -> None:
         help_bar = app.query_one("#help-bar", HelpBar)
 
         assert str(help_bar.renderable) == (
-            "Enter open | e edit | / filter | ctrl+f find | : palette | q quit\n"
+            "Enter open | e edit | / filter | ctrl+f find | ctrl+g grep | q quit\n"
             "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename | ctrl+t term"
         )
 
@@ -1445,6 +1484,163 @@ async def test_app_file_search_shows_invalid_regex_message_in_palette(tmp_path) 
         items = palette.query_one("#command-palette-items", Static)
 
         assert "Invalid regex: unterminated character set" in str(items.renderable)
+        assert app.app_state.notification is None
+
+
+@pytest.mark.asyncio
+async def test_app_command_palette_grep_jumps_to_matching_parent_directory() -> None:
+    path = "/tmp/peneo-command-palette-grep"
+    docs_path = f"{path}/docs"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (
+                    DirectoryEntryState(docs_path, "docs", "dir"),
+                    DirectoryEntryState(f"{path}/notes.txt", "notes.txt", "file"),
+                ),
+                child_path=docs_path,
+            ),
+            docs_path: _build_snapshot(
+                docs_path,
+                (
+                    DirectoryEntryState(f"{docs_path}/README.md", "README.md", "file"),
+                    DirectoryEntryState(f"{docs_path}/guide.md", "guide.md", "file"),
+                ),
+            ),
+        }
+    )
+    grep_search_service = FakeGrepSearchService(
+        results_by_query={
+            (path, "todo", False): (
+                GrepSearchResultState(
+                    path=f"{docs_path}/README.md",
+                    display_path="docs/README.md",
+                    line_number=12,
+                    line_text="TODO: update docs",
+                ),
+            )
+        }
+    )
+    app = create_app(
+        snapshot_loader=loader,
+        grep_search_service=grep_search_service,
+        initial_path=path,
+    )
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("ctrl+g")
+        await pilot.press("t", "o", "d", "o")
+        await _wait_for_request_count(grep_search_service, 1)
+        await pilot.press("enter")
+        await _wait_for_snapshot_loaded(app, docs_path)
+
+        assert app.app_state.current_path == docs_path
+        assert app.app_state.current_pane.cursor_path == f"{docs_path}/README.md"
+
+
+@pytest.mark.asyncio
+async def test_app_grep_search_debounces_rapid_query_updates(tmp_path) -> None:
+    path = str(tmp_path)
+    (tmp_path / "README.md").write_text("TODO: readme\n", encoding="utf-8")
+    grep_search_service = FakeGrepSearchService(
+        results_by_query={
+            (path, "todo", False): (
+                GrepSearchResultState(
+                    path=f"{path}/README.md",
+                    display_path="README.md",
+                    line_number=1,
+                    line_text="TODO: readme",
+                ),
+            )
+        }
+    )
+    app = create_app(grep_search_service=grep_search_service, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("ctrl+g")
+        await pilot.press("t", "o", "d", "o")
+
+        await asyncio.sleep(0.1)
+        assert grep_search_service.executed_requests == []
+
+        await _wait_for_request_count(grep_search_service, 1, timeout=0.5)
+        assert grep_search_service.executed_requests == [(path, "todo", False)]
+
+
+@pytest.mark.asyncio
+async def test_app_grep_search_cancels_superseded_request_without_notification(tmp_path) -> None:
+    path = str(tmp_path)
+    (tmp_path / "README.md").write_text("TODO: readme\n", encoding="utf-8")
+    (tmp_path / "guide.md").write_text("guide\n", encoding="utf-8")
+    grep_search_service = BlockingGrepSearchService(
+        results_by_query={
+            (path, "todo", False): (
+                GrepSearchResultState(
+                    path=f"{path}/README.md",
+                    display_path="README.md",
+                    line_number=1,
+                    line_text="TODO: readme",
+                ),
+            ),
+            (path, "guide", False): (
+                GrepSearchResultState(
+                    path=f"{path}/guide.md",
+                    display_path="guide.md",
+                    line_number=1,
+                    line_text="guide",
+                ),
+            ),
+        },
+        blocked_queries=("todo",),
+    )
+    app = create_app(grep_search_service=grep_search_service, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("ctrl+g")
+        await pilot.press("t", "o", "d", "o")
+        await _wait_for_request_count(grep_search_service, 1)
+
+        await pilot.press("backspace", "backspace", "backspace", "backspace")
+        await pilot.press("g", "u", "i", "d", "e")
+        await _wait_for_request_count(grep_search_service, 2, timeout=1.0)
+
+        grep_search_service.release_event.set()
+        await asyncio.sleep(0.1)
+
+        assert "todo" in grep_search_service.cancelled_queries
+        assert app.app_state.notification is None
+        assert app.app_state.command_palette is not None
+        assert [
+            result.display_label for result in app.app_state.command_palette.grep_search_results
+        ] == ["guide.md:1: guide"]
+
+
+@pytest.mark.asyncio
+async def test_app_grep_search_shows_invalid_regex_message_in_palette(tmp_path) -> None:
+    path = str(tmp_path)
+    (tmp_path / "README.md").write_text("TODO: readme\n", encoding="utf-8")
+    grep_search_service = FakeGrepSearchService(
+        invalid_query_messages={
+            (path, "re:[", False): "regex parse error",
+        }
+    )
+    app = create_app(grep_search_service=grep_search_service, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("ctrl+g")
+        await pilot.press("r", "e", ":", "[")
+        await _wait_for_request_count(grep_search_service, 1)
+        await asyncio.sleep(0.05)
+
+        palette = await _wait_for_command_palette(app)
+        items = palette.query_one("#command-palette-items", Static)
+
+        assert "regex parse error" in str(items.renderable)
         assert app.app_state.notification is None
 
 

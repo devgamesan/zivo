@@ -18,7 +18,7 @@ Peneo is a Textual-based TUI file manager for environments where you want to kee
 - An embedded split terminal can be opened below the browser panes. `Ctrl+T` switches quickly between the browser and terminal.
   ![](docs/resources/screen-split-terminal.png)
   _The embedded split terminal opened with `Ctrl+T`, keeping the browser panes visible while shell output stays in view._
-- Filter input, recursive file search, and sort switching are supported.
+- Filter input, recursive file search, recursive grep search, and sort switching are supported.
   ![](docs/resources/screen-filter.png)
   _Inline filter input opened with `/`, narrowing the current directory contents in place._
   ![](docs/resources/screen-find-command.png)
@@ -38,6 +38,12 @@ With `uv` installed, clone the repository and install Peneo as a tool.
 git clone https://github.com/devgamesan/peneo.git
 cd peneo
 uv tool install --from . peneo
+```
+
+Recursive grep search opened with `Ctrl+G` depends on `ripgrep` (`rg`) being available on `PATH`. On Ubuntu / Debian-based environments, install it with:
+
+```bash
+sudo apt install ripgrep
 ```
 
 On WSL, also install `wslu` so bridge commands such as `wslview` are available:
@@ -153,6 +159,7 @@ The main keys are listed below.
 | Normal | `Esc` | Clear the active filter, otherwise clear the selection |
 | Normal | `:` | Open the command palette |
 | Normal | `Ctrl+F` | Open recursive file search |
+| Normal | `Ctrl+G` | Open recursive grep search (`ripgrep` / `rg` required on `PATH`) |
 | Normal | `Ctrl+T` | Open or close the embedded split terminal |
 | Normal (with split terminal open) | Text input and browser shortcuts | Disabled while the split terminal owns input |
 | Filter input | Text input | Update the filter string |

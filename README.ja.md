@@ -18,7 +18,7 @@ Peneo は、ターミナルで作業しながら GUI アプリとも自然に行
 - 3 ペインの下に埋め込み split terminal を開けます。`Ctrl+T` でブラウザとターミナルをすばやく切り替えられます。
   ![](docs/resources/screen-split-terminal.png)
   _`Ctrl+T` で埋め込み split terminal を開き、上段のブラウザ 3 ペインを保ったまま下段のシェル出力を確認している状態です。_
-- フィルタ入力、再帰ファイル検索、ソート切り替えをサポートしています。
+- フィルタ入力、再帰ファイル検索、再帰 grep 検索、ソート切り替えをサポートしています。
   ![](docs/resources/screen-filter.png)
   _`/` でフィルタ入力を開き、現在ディレクトリの内容をその場で絞り込んでいる状態です。_
   ![](docs/resources/screen-find-command.png)
@@ -39,6 +39,12 @@ Peneo は、ターミナルで作業しながら GUI アプリとも自然に行
 git clone https://github.com/devgamesan/peneo.git
 cd peneo
 uv tool install --from . peneo
+```
+
+`Ctrl+G` で開く再帰 grep 検索は、`ripgrep` (`rg`) が `PATH` 上にあることを前提にしています。Ubuntu / Debian 系では次でインストールできます。
+
+```bash
+sudo apt install ripgrep
 ```
 
 WSL 環境では、`wslview` などのブリッジコマンドを使えるように `wslu` も追加でインストールしてください。
@@ -153,6 +159,7 @@ paste_conflict_action = "prompt"
 | 通常時 | `Esc` | フィルタ有効時はフィルタ解除、そうでなければ選択解除 |
 | 通常時 | `:` | コマンドパレットを開く |
 | 通常時 | `Ctrl+F` | 再帰ファイル検索を開く |
+| 通常時 | `Ctrl+G` | 再帰 grep 検索を開く（`ripgrep` / `rg` が `PATH` 上に必要） |
 | 通常時 | `Ctrl+T` | 埋め込み split terminal を開閉する |
 | 通常時（split terminal 表示中） | 文字入力やブラウザ操作キー | split terminal が入力を持つ間は無効 |
 | フィルタ入力中 | 文字入力 | フィルタ文字列を更新 |

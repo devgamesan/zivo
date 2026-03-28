@@ -15,6 +15,7 @@ from peneo.state import (
     DeleteConfirmationState,
     DirectoryEntryState,
     FileSearchResultState,
+    GrepSearchResultState,
     NameConflictState,
     NotificationState,
     PaneState,
@@ -449,11 +450,11 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
     help_state = select_help_bar_state(state)
 
     assert help_state.lines == (
-        "Enter open | e edit | / filter | ctrl+f find | : palette | q quit",
+        "Enter open | e edit | / filter | ctrl+f find | ctrl+g grep | q quit",
         "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename | ctrl+t term",
     )
     assert help_state.text == (
-        "Enter open | e edit | / filter | ctrl+f find | : palette | q quit\n"
+        "Enter open | e edit | / filter | ctrl+f find | ctrl+g grep | q quit\n"
         "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename | ctrl+t term"
     )
 
@@ -741,6 +742,52 @@ def test_select_command_palette_state_windows_large_file_search_results() -> Non
         "src/module_15.py",
     ]
     assert palette_state.items[6].selected is True
+
+
+def test_select_command_palette_state_for_grep_search_results() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = replace(
+        state,
+        command_palette=CommandPaletteState(
+            source="grep_search",
+            query="todo",
+            grep_search_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/peneo/src/peneo/app.py",
+                    display_path="src/peneo/app.py",
+                    line_number=42,
+                    line_text="TODO: update palette",
+                ),
+            ),
+        ),
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert palette_state.title == "Grep (1-1 / 1)"
+    assert [item.label for item in palette_state.items] == [
+        "src/peneo/app.py:42: TODO: update palette"
+    ]
+
+
+def test_select_command_palette_state_shows_grep_searching_message() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = replace(
+        state,
+        command_palette=CommandPaletteState(
+            source="grep_search",
+            query="todo",
+            grep_search_results=(),
+        ),
+        pending_grep_search_request_id=9,
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert palette_state.title == "Grep"
+    assert palette_state.empty_message == "Searching matches..."
 
 
 def test_select_input_bar_state_for_create_mode() -> None:

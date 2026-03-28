@@ -17,6 +17,7 @@ from .models import (
     AppState,
     BrowserSnapshot,
     FileSearchResultState,
+    GrepSearchResultState,
     NotificationState,
     PaneState,
     SortField,
@@ -78,6 +79,11 @@ class BeginCreateInput:
 @dataclass(frozen=True)
 class BeginFileSearch:
     """Open the command palette in file search mode."""
+
+
+@dataclass(frozen=True)
+class BeginGrepSearch:
+    """Open the command palette in grep search mode."""
 
 
 @dataclass(frozen=True)
@@ -145,6 +151,25 @@ class FileSearchCompleted:
 @dataclass(frozen=True)
 class FileSearchFailed:
     """Apply a terminal file-search failure."""
+
+    request_id: int
+    query: str
+    message: str
+    invalid_query: bool = False
+
+
+@dataclass(frozen=True)
+class GrepSearchCompleted:
+    """Apply completed grep-search results to the command palette."""
+
+    request_id: int
+    query: str
+    results: tuple[GrepSearchResultState, ...]
+
+
+@dataclass(frozen=True)
+class GrepSearchFailed:
+    """Apply a terminal grep-search failure."""
 
     request_id: int
     query: str
@@ -505,6 +530,7 @@ Action = (
     | BeginRenameInput
     | BeginCreateInput
     | BeginFileSearch
+    | BeginGrepSearch
     | BeginCommandPalette
     | CancelCommandPalette
     | MoveCommandPaletteCursor
@@ -516,6 +542,8 @@ Action = (
     | SaveConfigEditor
     | FileSearchCompleted
     | FileSearchFailed
+    | GrepSearchCompleted
+    | GrepSearchFailed
     | SetPendingInputValue
     | SubmitPendingInput
     | CancelPendingInput

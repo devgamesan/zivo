@@ -35,6 +35,12 @@ from .file_search import (
     InvalidFileSearchQueryError,
     LiveFileSearchService,
 )
+from .grep_search import (
+    FakeGrepSearchService,
+    GrepSearchService,
+    InvalidGrepSearchQueryError,
+    LiveGrepSearchService,
+)
 from .split_terminal import (
     FakeSplitTerminalService,
     LiveSplitTerminalService,
@@ -49,15 +55,19 @@ __all__ = [
     "ConfigSaveService",
     "ExternalLaunchService",
     "FileSearchService",
+    "GrepSearchService",
     "FakeFileMutationService",
     "FakeFileSearchService",
+    "FakeGrepSearchService",
     "InvalidFileSearchQueryError",
+    "InvalidGrepSearchQueryError",
     "FakeBrowserSnapshotLoader",
     "FakeClipboardOperationService",
     "FakeExternalLaunchService",
     "FileMutationService",
     "LiveExternalLaunchService",
     "LiveFileSearchService",
+    "LiveGrepSearchService",
     "LiveFileMutationService",
     "LiveClipboardOperationService",
     "LiveBrowserSnapshotLoader",

@@ -1,11 +1,14 @@
 """Keyboard dispatcher that normalizes Textual input into reducer actions."""
 
+import string
+
 from .actions import (
     Action,
     BeginCommandPalette,
     BeginDeleteTargets,
     BeginFileSearch,
     BeginFilterInput,
+    BeginGrepSearch,
     BeginRenameInput,
     CancelCommandPalette,
     CancelDeleteConfirmation,
@@ -77,6 +80,7 @@ BROWSING_KEYMAP = {
     "enter": "enter_or_open",
     "ctrl+t": "toggle_split_terminal",
     "ctrl+f": "begin_file_search",
+    "ctrl+g": "begin_grep_search",
     "y": "copy_targets",
     "x": "cut_targets",
     "p": "paste_clipboard",
@@ -89,11 +93,15 @@ CONFLICT_KEYMAP = {
     "r": "rename",
 }
 
+PRINTABLE_BINDING_KEYS = tuple((*string.ascii_letters, *string.digits))
+
 
 def iter_bound_keys() -> tuple[str, ...]:
     """Return the keys that should be installed as app bindings."""
 
-    return tuple(dict.fromkeys((*BROWSING_KEYMAP.keys(), *CONFLICT_KEYMAP.keys())))
+    return tuple(
+        dict.fromkeys((*BROWSING_KEYMAP.keys(), *CONFLICT_KEYMAP.keys(), *PRINTABLE_BINDING_KEYS))
+    )
 
 
 def dispatch_key_input(
@@ -187,6 +195,9 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
 
     if command == "begin_file_search":
         return _supported(BeginFileSearch())
+
+    if command == "begin_grep_search":
+        return _supported(BeginGrepSearch())
 
     if command == "toggle_split_terminal":
         return _supported(ToggleSplitTerminal())
@@ -301,6 +312,8 @@ def _terminal_control_character(key: str) -> str | None:
 
     letter = suffix.lower()
     return chr(ord(letter) - ord("a") + 1)
+
+
 
 
 def _dispatch_command_palette_input(

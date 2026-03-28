@@ -19,7 +19,7 @@ UiMode = Literal["BROWSING", "FILTER", "RENAME", "CREATE", "PALETTE", "CONFIRM",
 SortField = Literal["name", "modified", "size"]
 ClipboardMode = Literal["copy", "cut", "none"]
 NameConflictKind = Literal["rename", "create_file", "create_dir"]
-CommandPaletteSource = Literal["commands", "file_search"]
+CommandPaletteSource = Literal["commands", "file_search", "grep_search"]
 SplitTerminalStatus = Literal["closed", "starting", "running"]
 SplitTerminalFocusTarget = Literal["browser", "terminal"]
 ConfigFieldId = Literal[
@@ -165,6 +165,22 @@ class FileSearchResultState:
 
 
 @dataclass(frozen=True)
+class GrepSearchResultState:
+    """A single grep result shown in the command palette."""
+
+    path: str
+    display_path: str
+    line_number: int
+    line_text: str
+
+    @property
+    def display_label(self) -> str:
+        """Return the single-line palette label for the grep match."""
+
+        return f"{self.display_path}:{self.line_number}: {self.line_text}"
+
+
+@dataclass(frozen=True)
 class CommandPaletteState:
     """Transient palette search and cursor state."""
 
@@ -177,6 +193,8 @@ class CommandPaletteState:
     file_search_cache_results: tuple[FileSearchResultState, ...] = ()
     file_search_cache_root_path: str | None = None
     file_search_cache_show_hidden: bool = False
+    grep_search_results: tuple[GrepSearchResultState, ...] = ()
+    grep_search_error_message: str | None = None
 
 
 @dataclass(frozen=True)
@@ -234,6 +252,7 @@ class AppState:
     pending_paste_request_id: int | None = None
     pending_file_mutation_request_id: int | None = None
     pending_file_search_request_id: int | None = None
+    pending_grep_search_request_id: int | None = None
     pending_config_save_request_id: int | None = None
     next_request_id: int = 1
 

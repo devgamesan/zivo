@@ -68,6 +68,16 @@ class RunFileSearchEffect:
 
 
 @dataclass(frozen=True)
+class RunGrepSearchEffect:
+    """Execute a recursive content search outside the reducer."""
+
+    request_id: int
+    root_path: str
+    query: str
+    show_hidden: bool
+
+
+@dataclass(frozen=True)
 class StartSplitTerminalEffect:
     """Start a new embedded split-terminal session."""
 
@@ -106,6 +116,7 @@ Effect = (
     | RunFileMutationEffect
     | RunExternalLaunchEffect
     | RunFileSearchEffect
+    | RunGrepSearchEffect
     | StartSplitTerminalEffect
     | WriteSplitTerminalInputEffect
     | CloseSplitTerminalEffect

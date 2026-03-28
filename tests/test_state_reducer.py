@@ -17,6 +17,7 @@ from peneo.state import (
     BeginDeleteTargets,
     BeginFileSearch,
     BeginFilterInput,
+    BeginGrepSearch,
     BeginRenameInput,
     BrowserSnapshot,
     BrowserSnapshotFailed,
@@ -57,6 +58,9 @@ from peneo.state import (
     FileSearchResultState,
     FocusSplitTerminal,
     GoToParentDirectory,
+    GrepSearchCompleted,
+    GrepSearchFailed,
+    GrepSearchResultState,
     LoadBrowserSnapshotEffect,
     LoadChildPaneSnapshotEffect,
     MoveCommandPaletteCursor,
@@ -79,6 +83,7 @@ from peneo.state import (
     RunExternalLaunchEffect,
     RunFileMutationEffect,
     RunFileSearchEffect,
+    RunGrepSearchEffect,
     SaveConfigEditor,
     SendSplitTerminalInput,
     SetCommandPaletteQuery,
@@ -448,6 +453,13 @@ def test_begin_file_search_enters_find_file_mode() -> None:
 
     assert next_state.ui_mode == "PALETTE"
     assert next_state.command_palette == CommandPaletteState(source="file_search")
+
+
+def test_begin_grep_search_enters_grep_mode() -> None:
+    next_state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+
+    assert next_state.ui_mode == "PALETTE"
+    assert next_state.command_palette == CommandPaletteState(source="grep_search")
 
 
 def test_submit_command_palette_opens_config_editor() -> None:
@@ -954,6 +966,25 @@ def test_set_command_palette_query_starts_file_search_effect() -> None:
     )
 
 
+def test_set_command_palette_query_starts_grep_search_effect() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+
+    result = reduce_app_state(state, SetCommandPaletteQuery("todo"))
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.source == "grep_search"
+    assert result.state.command_palette.query == "todo"
+    assert result.state.pending_grep_search_request_id == 1
+    assert result.effects == (
+        RunGrepSearchEffect(
+            request_id=1,
+            root_path="/home/tadashi/develop/peneo",
+            query="todo",
+            show_hidden=False,
+        ),
+    )
+
+
 def test_set_command_palette_query_reuses_completed_file_search_results_for_prefix_extension(
 ) -> None:
     state = _reduce_state(build_initial_app_state(), BeginFileSearch())
@@ -1226,6 +1257,109 @@ def test_submit_command_palette_file_search_result_requests_snapshot() -> None:
             request_id=1,
             path="/home/tadashi/develop/peneo/docs",
             cursor_path="/home/tadashi/develop/peneo/docs/README.md",
+            blocking=True,
+        ),
+    )
+
+
+def test_grep_search_completed_updates_palette_results() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    search_state = replace(
+        state,
+        command_palette=replace(state.command_palette, query="todo"),
+        pending_grep_search_request_id=4,
+    )
+
+    next_state = _reduce_state(
+        search_state,
+        GrepSearchCompleted(
+            request_id=4,
+            query="todo",
+            results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/peneo/src/peneo/app.py",
+                    display_path="src/peneo/app.py",
+                    line_number=42,
+                    line_text="TODO: update palette",
+                ),
+            ),
+        ),
+    )
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.grep_search_results == (
+        GrepSearchResultState(
+            path="/home/tadashi/develop/peneo/src/peneo/app.py",
+            display_path="src/peneo/app.py",
+            line_number=42,
+            line_text="TODO: update palette",
+        ),
+    )
+    assert next_state.pending_grep_search_request_id is None
+
+
+def test_grep_search_failed_sets_inline_error_for_invalid_regex() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    search_state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            query="re:[",
+            grep_search_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/peneo/src/peneo/app.py",
+                    display_path="src/peneo/app.py",
+                    line_number=42,
+                    line_text="TODO: update palette",
+                ),
+            ),
+        ),
+        pending_grep_search_request_id=4,
+    )
+
+    next_state = _reduce_state(
+        search_state,
+        GrepSearchFailed(
+            request_id=4,
+            query="re:[",
+            message="regex parse error",
+            invalid_query=True,
+        ),
+    )
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.grep_search_results == ()
+    assert next_state.command_palette.grep_search_error_message == "regex parse error"
+    assert next_state.pending_grep_search_request_id is None
+
+
+def test_submit_command_palette_grep_result_requests_snapshot() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            query="todo",
+            grep_search_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/peneo/src/peneo/app.py",
+                    display_path="src/peneo/app.py",
+                    line_number=42,
+                    line_text="TODO: update palette",
+                ),
+            ),
+            cursor_index=0,
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.ui_mode == "BUSY"
+    assert result.effects == (
+        LoadBrowserSnapshotEffect(
+            request_id=1,
+            path="/home/tadashi/develop/peneo/src/peneo",
+            cursor_path="/home/tadashi/develop/peneo/src/peneo/app.py",
             blocking=True,
         ),
     )
