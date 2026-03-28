@@ -696,7 +696,7 @@ class PeneoApp(App[None]):
         self,
         message: SplitTerminalOutput,
     ) -> None:
-        await self.dispatch_actions(
+        changed, effects = self._apply_actions(
             (
                 SplitTerminalOutputReceived(
                     session_id=message.session_id,
@@ -704,6 +704,9 @@ class PeneoApp(App[None]):
                 ),
             )
         )
+        if changed:
+            await self._refresh_split_terminal_only()
+        self._schedule_effects(effects)
 
     async def on_peneo_app_split_terminal_exited_message(
         self,
@@ -954,6 +957,15 @@ class PeneoApp(App[None]):
                 self.set_focus(current_pane.query_one("#current-pane-table"))
             except NoMatches:
                 pass
+
+    async def _refresh_split_terminal_only(self) -> None:
+        try:
+            split_terminal = self.query_one("#split-terminal", SplitTerminalPane)
+        except NoMatches:
+            await self._refresh_shell()
+            return
+        split_terminal.set_state(select_shell_data(self._app_state).split_terminal)
+        self._resize_split_terminal_session()
 
     def _resize_split_terminal_session(self) -> None:
         if self._split_terminal_session is None or not self._app_state.split_terminal.visible:

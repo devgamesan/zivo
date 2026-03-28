@@ -36,6 +36,11 @@ class SplitTerminalPane(Static):
         super().__init__(id=id, classes=classes)
         self.can_focus = True
         self.state = state
+        self._screen: Screen | None = None
+        self._stream: pyte.Stream | None = None
+        self._synced_body: str = ""
+        self._screen_columns = self.DEFAULT_COLUMNS
+        self._screen_rows = self.DEFAULT_ROWS
 
     def compose(self) -> ComposeResult:
         yield Static("", id="split-terminal-title")
@@ -48,6 +53,7 @@ class SplitTerminalPane(Static):
 
     def on_resize(self, _event: events.Resize) -> None:
         if self.state.visible:
+            self._screen_columns = 0
             self._render_body()
 
     def terminal_dimensions(self) -> tuple[int, int]:
@@ -83,13 +89,44 @@ class SplitTerminalPane(Static):
         rendered = Text("")
         if self.state.visible:
             columns, rows = self.terminal_dimensions()
-            rendered = _render_terminal_output(
-                self.state.body,
-                columns=columns,
-                rows=rows,
-                focused=self.state.focused,
-            )
+            self._sync_terminal_screen(self.state.body, columns=columns, rows=rows)
+            if self._screen is not None:
+                rendered = _screen_to_text(self._screen, focused=self.state.focused)
+        else:
+            self._reset_terminal_screen()
         body.update(rendered)
+
+    def _sync_terminal_screen(self, body: str, *, columns: int, rows: int) -> None:
+        if (
+            self._screen is None
+            or self._stream is None
+            or columns != self._screen_columns
+            or rows != self._screen_rows
+            or len(body) < len(self._synced_body)
+            or not body.startswith(self._synced_body)
+        ):
+            self._reset_terminal_screen(columns=columns, rows=rows)
+            if self._stream is not None and body:
+                self._stream.feed(body)
+                self._synced_body = body
+            return
+
+        delta = body[len(self._synced_body) :]
+        if delta and self._stream is not None:
+            self._stream.feed(delta)
+            self._synced_body = body
+
+    def _reset_terminal_screen(
+        self,
+        *,
+        columns: int | None = None,
+        rows: int | None = None,
+    ) -> None:
+        self._screen_columns = columns or self.DEFAULT_COLUMNS
+        self._screen_rows = rows or self.DEFAULT_ROWS
+        self._screen = Screen(self._screen_columns, self._screen_rows)
+        self._stream = pyte.Stream(self._screen, strict=False)
+        self._synced_body = ""
 
 
 _DEFAULT_CHAR = Char(" ")
@@ -113,19 +150,6 @@ _TERMINAL_COLOR_MAP = {
 }
 
 
-def _render_terminal_output(
-    output: str,
-    *,
-    columns: int,
-    rows: int,
-    focused: bool,
-) -> Text:
-    screen = Screen(columns, rows)
-    stream = pyte.Stream(screen, strict=False)
-    stream.feed(output)
-    return _screen_to_text(screen, focused=focused)
-
-
 def _screen_to_text(screen: Screen, *, focused: bool) -> Text:
     text = Text()
     for row in range(screen.lines):
@@ -136,7 +160,7 @@ def _screen_to_text(screen: Screen, *, focused: bool) -> Text:
 
 
 def _screen_row_text(screen: Screen, row: int, *, focused: bool) -> Text:
-    row_buffer = screen.buffer[row]
+    row_buffer = screen.buffer.get(row, {})
     cursor_x = -1
     if focused and not screen.cursor.hidden and row == screen.cursor.y:
         cursor_x = screen.cursor.x
