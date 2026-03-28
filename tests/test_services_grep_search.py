@@ -1,8 +1,16 @@
+import shutil
+
 import pytest
 
 from peneo.services import InvalidGrepSearchQueryError, LiveGrepSearchService
 
+skip_if_no_rg = pytest.mark.skipif(
+    shutil.which("rg") is None,
+    reason="ripgrep (rg) not available",
+)
 
+
+@skip_if_no_rg
 def test_live_grep_search_service_matches_file_contents_recursively(tmp_path) -> None:
     root = tmp_path / "project"
     root.mkdir()
@@ -18,6 +26,7 @@ def test_live_grep_search_service_matches_file_contents_recursively(tmp_path) ->
     assert [result.display_label for result in results] == ["docs/README.md:1: TODO: update docs"]
 
 
+@skip_if_no_rg
 def test_live_grep_search_service_skips_hidden_paths_when_disabled(tmp_path) -> None:
     root = tmp_path / "project"
     root.mkdir()
@@ -34,6 +43,7 @@ def test_live_grep_search_service_skips_hidden_paths_when_disabled(tmp_path) -> 
     assert [result.display_path for result in hidden_on] == [".secret/README.md"]
 
 
+@skip_if_no_rg
 def test_live_grep_search_service_supports_regex_queries_with_re_prefix(tmp_path) -> None:
     root = tmp_path / "project"
     root.mkdir()
@@ -47,6 +57,7 @@ def test_live_grep_search_service_supports_regex_queries_with_re_prefix(tmp_path
     assert [result.display_path for result in results] == ["README.md"]
 
 
+@skip_if_no_rg
 def test_live_grep_search_service_raises_invalid_query_for_bad_regex(tmp_path) -> None:
     root = tmp_path / "project"
     root.mkdir()
