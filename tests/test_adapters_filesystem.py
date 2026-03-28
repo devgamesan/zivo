@@ -44,3 +44,19 @@ def test_local_filesystem_adapter_skips_broken_symlink_entries(tmp_path) -> None
     entries = adapter.list_directory(str(tmp_path))
 
     assert [entry.name for entry in entries] == ["docs"]
+
+
+def test_local_filesystem_adapter_treats_directory_symlink_as_dir(tmp_path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    docs_link = tmp_path / "docs-link"
+    docs_link.symlink_to(docs, target_is_directory=True)
+
+    adapter = LocalFilesystemAdapter()
+
+    entries = adapter.list_directory(str(tmp_path))
+
+    assert [entry.name for entry in entries] == ["docs", "docs-link"]
+    assert entries[0].kind == "dir"
+    assert entries[1].kind == "dir"
+    assert entries[1].size_bytes is None
