@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Protocol
 
+from peneo.models import TerminalConfig
+
 CommandRunner = Callable[[Sequence[str], str | None, str | None], None]
 ForegroundCommandRunner = Callable[[Sequence[str], str | None], None]
 CommandAvailability = Callable[[str], str | None]
@@ -52,6 +54,7 @@ class LocalExternalLaunchAdapter:
     clipboard_fallbacks: tuple[ClipboardFallback, ...] = field(
         default_factory=lambda: (_copy_to_clipboard_with_tkinter,)
     )
+    terminal_command_templates: TerminalConfig = field(default_factory=TerminalConfig)
 
     def open_with_default_app(self, path: str) -> None:
         resolved_path = _resolve_existing_path(path)
@@ -116,7 +119,7 @@ class LocalExternalLaunchAdapter:
         input_text: str | None = None,
     ) -> None:
         available_candidates = [
-            command for command in candidates if self.command_available(command[0]) is not None
+            command for command in candidates if self._command_exists(command[0])
         ]
         if not available_candidates:
             raise OSError(f"No supported command found to {context}")
@@ -213,8 +216,9 @@ class LocalExternalLaunchAdapter:
         platform_kind: PlatformKind,
         path: str,
     ) -> tuple[tuple[str, ...], ...]:
+        configured_commands = self._configured_terminal_commands(platform_kind, path)
         if platform_kind == "linux":
-            return (
+            return configured_commands + (
                 ("kgx",),
                 ("gnome-console",),
                 ("gnome-terminal",),
@@ -227,7 +231,7 @@ class LocalExternalLaunchAdapter:
                 ("xterm",),
             )
         if platform_kind == "wsl":
-            return (
+            return configured_commands + (
                 ("wt.exe", "wsl.exe", "--cd", path),
                 ("cmd.exe", "/c", "start", "", "wsl.exe", "--cd", path),
                 ("kgx",),
@@ -242,8 +246,33 @@ class LocalExternalLaunchAdapter:
                 ("xterm",),
             )
         if platform_kind == "darwin":
-            return (("open", "-a", "Terminal", path),)
+            return configured_commands + (("open", "-a", "Terminal", path),)
         raise OSError(f"Unsupported platform kind: {platform_kind}")
+
+    def _configured_terminal_commands(
+        self,
+        platform_kind: PlatformKind,
+        path: str,
+    ) -> tuple[tuple[str, ...], ...]:
+        templates: list[str] = []
+        if platform_kind == "linux":
+            templates.extend(self.terminal_command_templates.linux)
+        elif platform_kind == "darwin":
+            templates.extend(self.terminal_command_templates.macos)
+        elif platform_kind == "wsl":
+            templates.extend(self.terminal_command_templates.windows)
+            templates.extend(self.terminal_command_templates.linux)
+
+        commands: list[tuple[str, ...]] = []
+        for template in templates:
+            try:
+                rendered = template.format(path=path)
+                parsed_command = tuple(shlex.split(rendered))
+            except (IndexError, KeyError, ValueError):
+                continue
+            if parsed_command:
+                commands.append(parsed_command)
+        return _dedupe_commands(commands)
 
     def _clipboard_candidates(self, platform_kind: PlatformKind) -> tuple[tuple[str, ...], ...]:
         if platform_kind == "linux":

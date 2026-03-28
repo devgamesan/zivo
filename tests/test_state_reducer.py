@@ -876,7 +876,7 @@ def test_cancel_command_palette_returns_to_browsing() -> None:
 
 
 def test_begin_delete_targets_single_runs_file_mutation() -> None:
-    state = build_initial_app_state()
+    state = build_initial_app_state(confirm_delete=False)
 
     result = reduce_app_state(
         state,
@@ -889,6 +889,20 @@ def test_begin_delete_targets_single_runs_file_mutation() -> None:
             request_id=1,
             request=TrashDeleteRequest(paths=("/home/tadashi/develop/peneo/docs",)),
         ),
+    )
+
+
+def test_begin_delete_targets_single_enters_confirm_mode_when_enabled() -> None:
+    state = build_initial_app_state(confirm_delete=True)
+
+    next_state = _reduce_state(
+        state,
+        BeginDeleteTargets(("/home/tadashi/develop/peneo/docs",)),
+    )
+
+    assert next_state.ui_mode == "CONFIRM"
+    assert next_state.delete_confirmation == DeleteConfirmationState(
+        paths=("/home/tadashi/develop/peneo/docs",)
     )
 
 
@@ -1237,6 +1251,44 @@ def test_paste_needs_resolution_enters_confirm_mode() -> None:
     assert next_state.ui_mode == "CONFIRM"
     assert isinstance(next_state.paste_conflict, PasteConflictState)
     assert next_state.paste_conflict.first_conflict == conflict
+
+
+def test_paste_needs_resolution_uses_configured_default_resolution() -> None:
+    state = _reduce_state(
+        build_initial_app_state(paste_conflict_action="rename"),
+        CopyTargets(("/home/tadashi/develop/peneo/docs",)),
+    )
+    requested = reduce_app_state(state, PasteClipboard()).state
+
+    conflict = PasteConflict(
+        source_path="/home/tadashi/develop/peneo/docs",
+        destination_path="/home/tadashi/develop/peneo/docs",
+    )
+    result = reduce_app_state(
+        requested,
+        ClipboardPasteNeedsResolution(
+            request_id=1,
+            request=PasteRequest(
+                mode="copy",
+                source_paths=("/home/tadashi/develop/peneo/docs",),
+                destination_dir="/home/tadashi/develop/peneo",
+            ),
+            conflicts=(conflict,),
+        ),
+    )
+
+    assert result.state.ui_mode == "BUSY"
+    assert result.effects == (
+        RunClipboardPasteEffect(
+            request_id=2,
+            request=PasteRequest(
+                mode="copy",
+                source_paths=("/home/tadashi/develop/peneo/docs",),
+                destination_dir="/home/tadashi/develop/peneo",
+                conflict_resolution="rename",
+            ),
+        ),
+    )
 
 
 def test_paste_needs_resolution_ignores_stale_request() -> None:

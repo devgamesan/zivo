@@ -1,0 +1,53 @@
+"""Configuration models for application startup defaults."""
+
+from dataclasses import dataclass, field
+from typing import Literal
+
+ConfigSortField = Literal["name", "modified", "size"]
+PasteConflictAction = Literal["overwrite", "skip", "rename", "prompt"]
+
+
+@dataclass(frozen=True)
+class TerminalConfig:
+    """Terminal launch command templates keyed by target platform."""
+
+    linux: tuple[str, ...] = ()
+    macos: tuple[str, ...] = ()
+    windows: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class DisplayConfig:
+    """Display-related startup defaults."""
+
+    show_hidden_files: bool = False
+    default_sort_field: ConfigSortField = "name"
+    default_sort_descending: bool = False
+    directories_first: bool = True
+
+
+@dataclass(frozen=True)
+class BehaviorConfig:
+    """Behavior-related startup defaults."""
+
+    confirm_delete: bool = True
+    paste_conflict_action: PasteConflictAction = "prompt"
+
+
+@dataclass(frozen=True)
+class AppConfig:
+    """Normalized application configuration."""
+
+    terminal: TerminalConfig = field(default_factory=TerminalConfig)
+    display: DisplayConfig = field(default_factory=DisplayConfig)
+    behavior: BehaviorConfig = field(default_factory=BehaviorConfig)
+
+
+@dataclass(frozen=True)
+class ConfigLoadResult:
+    """Result payload for loading a startup configuration file."""
+
+    config: AppConfig = field(default_factory=AppConfig)
+    path: str = ""
+    warnings: tuple[str, ...] = ()
+    created: bool = False

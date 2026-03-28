@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 import pytest
 
 from peneo.adapters import LocalExternalLaunchAdapter
-from peneo.models import ExternalLaunchRequest
+from peneo.models import ExternalLaunchRequest, TerminalConfig
 from peneo.services import LiveExternalLaunchService
 
 
@@ -200,6 +200,48 @@ def test_local_external_launch_adapter_uses_open_on_macos(tmp_path) -> None:
 
     assert runner.executed == [
         (("open", "-a", "Terminal", str(tmp_path.resolve())), str(tmp_path), None)
+    ]
+
+
+def test_local_external_launch_adapter_prefers_configured_terminal_commands(tmp_path) -> None:
+    runner = StubCommandRunner()
+    adapter = LocalExternalLaunchAdapter(
+        system_name_resolver=lambda: "Linux",
+        command_available=lambda command: command if command in {"konsole", "kgx"} else None,
+        command_runner=runner,
+        terminal_command_templates=TerminalConfig(
+            linux=("konsole --working-directory {path}",),
+        ),
+    )
+
+    adapter.open_terminal(str(tmp_path))
+
+    assert runner.executed == [
+        (
+            ("konsole", "--working-directory", str(tmp_path.resolve())),
+            str(tmp_path),
+            None,
+        )
+    ]
+
+
+def test_local_external_launch_adapter_uses_windows_templates_first_on_wsl(tmp_path) -> None:
+    runner = StubCommandRunner()
+    adapter = LocalExternalLaunchAdapter(
+        system_name_resolver=lambda: "Linux",
+        command_available=lambda command: command if command == "wt.exe" else None,
+        command_runner=runner,
+        environment_variable=lambda name: "Ubuntu" if name == "WSL_DISTRO_NAME" else None,
+        terminal_command_templates=TerminalConfig(
+            windows=("wt.exe -d {path}",),
+            linux=("konsole --working-directory {path}",),
+        ),
+    )
+
+    adapter.open_terminal(str(tmp_path))
+
+    assert runner.executed == [
+        (("wt.exe", "-d", str(tmp_path.resolve())), str(tmp_path), None)
     ]
 
 

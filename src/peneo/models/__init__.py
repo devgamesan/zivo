@@ -1,5 +1,14 @@
 """Models used across the Peneo application."""
 
+from .config import (
+    AppConfig,
+    BehaviorConfig,
+    ConfigLoadResult,
+    ConfigSortField,
+    DisplayConfig,
+    PasteConflictAction,
+    TerminalConfig,
+)
 from .external_launch import ExternalLaunchKind, ExternalLaunchRequest
 from .file_operations import (
     ConflictResolution,
@@ -33,14 +42,19 @@ from .shell_data import (
 )
 
 __all__ = [
+    "AppConfig",
     "AttributeDialogState",
+    "BehaviorConfig",
     "CommandPaletteItemViewState",
     "CommandPaletteViewState",
+    "ConfigLoadResult",
+    "ConfigSortField",
     "ConflictDialogState",
     "CurrentSummaryState",
     "ConflictResolution",
     "CreateKind",
     "CreatePathRequest",
+    "DisplayConfig",
     "ExternalLaunchKind",
     "ExternalLaunchRequest",
     "FileMutationResult",
@@ -49,6 +63,7 @@ __all__ = [
     "InputBarState",
     "MutationResultLevel",
     "PaneEntry",
+    "PasteConflictAction",
     "SplitTerminalViewState",
     "PasteConflict",
     "PasteConflictPrompt",
@@ -58,6 +73,7 @@ __all__ = [
     "PasteSummary",
     "RenameRequest",
     "StatusBarState",
+    "TerminalConfig",
     "ThreePaneShellData",
     "TrashDeleteRequest",
     "build_dummy_shell_data",

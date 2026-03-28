@@ -11,6 +11,7 @@ from .clipboard_operations import (
     FakeClipboardOperationService,
     LiveClipboardOperationService,
 )
+from .config import AppConfigLoader, load_app_config, resolve_config_path
 from .external_launcher import (
     ExternalLaunchService,
     FakeExternalLaunchService,
@@ -30,6 +31,7 @@ from .split_terminal import (
 )
 
 __all__ = [
+    "AppConfigLoader",
     "BrowserSnapshotLoader",
     "ClipboardOperationService",
     "ExternalLaunchService",
@@ -49,5 +51,7 @@ __all__ = [
     "FakeSplitTerminalService",
     "SplitTerminalService",
     "SplitTerminalSession",
+    "load_app_config",
+    "resolve_config_path",
     "snapshot_from_app_state",
 ]

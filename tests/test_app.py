@@ -9,6 +9,9 @@ from textual.widgets import DataTable, Label, ListView, Static
 
 from peneo import create_app
 from peneo.models import (
+    AppConfig,
+    BehaviorConfig,
+    DisplayConfig,
     ExternalLaunchRequest,
     FileMutationResult,
     PasteConflict,
@@ -16,6 +19,7 @@ from peneo.models import (
     PasteExecutionResult,
     PasteRequest,
     PasteSummary,
+    TerminalConfig,
     TrashDeleteRequest,
 )
 from peneo.services import (
@@ -237,6 +241,31 @@ def test_create_app_returns_peneo_app() -> None:
 
     assert app.title == "Peneo"
     assert app.sub_title == "Three-pane shell"
+
+
+def test_create_app_applies_configured_startup_state() -> None:
+    app = create_app(
+        app_config=AppConfig(
+            terminal=TerminalConfig(),
+            display=DisplayConfig(
+                show_hidden_files=True,
+                default_sort_field="modified",
+                default_sort_descending=True,
+                directories_first=False,
+            ),
+            behavior=BehaviorConfig(
+                confirm_delete=False,
+                paste_conflict_action="skip",
+            ),
+        )
+    )
+
+    assert app.app_state.show_hidden is True
+    assert app.app_state.sort.field == "modified"
+    assert app.app_state.sort.descending is True
+    assert app.app_state.sort.directories_first is False
+    assert app.app_state.confirm_delete is False
+    assert app.app_state.paste_conflict_action == "skip"
 
 
 @pytest.mark.asyncio
