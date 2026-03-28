@@ -47,7 +47,13 @@ jobs:
       - name: Verify version consistency
         run: |
           TAG_VERSION=${{ steps.version.outputs.version }}
-          PY_VERSION=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml'))['project']['version'])")
+          PY_VERSION=$(uv run python - <<'PY'
+          import tomllib
+
+          with open("pyproject.toml", "rb") as f:
+              print(tomllib.load(f)["project"]["version"])
+          PY
+          )
           if [ "$TAG_VERSION" != "$PY_VERSION" ]; then
             echo "Error: Tag version ($TAG_VERSION) does not match pyproject.toml version ($PY_VERSION)"
             exit 1
