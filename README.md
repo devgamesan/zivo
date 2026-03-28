@@ -7,7 +7,7 @@ It aims to feel closer to a GUI explorer than to a keyboard-heavy power-user too
 
 ![Peneo screenshot](docs/resources/screen1.png)
 
-_Current three-pane UI showing the parent, current, and child directories side by side._
+_Current three-pane UI showing the parent, current, and child directories side by side with mixed project files visible._
 
 ## Features
 
@@ -19,6 +19,40 @@ _Current three-pane UI showing the parent, current, and child directories side b
 - Files open with the OS default app, directories can be opened in the OS file manager, `e` opens the current file in the editor inside the current terminal, and a terminal can also be launched in the current directory
 - Optional shell integration via `peneo-cd` can return your shell to the last directory after quitting
 - Safer file operations with trash deletion and overwrite / skip / rename conflict resolution during paste
+
+## Screenshots
+
+The hero image above shows the default overview. The following screens highlight the main workflows in the app.
+
+### Optional Embedded Split Terminal
+
+![Peneo split terminal screenshot](docs/resources/screen-split-terminal.png)
+
+_Split terminal opened with `Ctrl+T`, keeping the browser panes visible while shell output stays in view._
+
+### Multi-selection And Paste Conflict
+
+![Peneo multi-select screenshot](docs/resources/screen-multi-select.png)
+
+_Multiple files selected with `Space`, followed by a paste-conflict dialog for copy workflows._
+
+### Command Palette
+
+![Peneo command palette screenshot](docs/resources/screen-command-palette.png)
+
+_The command palette opened with `:`, showing the main commands without leaving the browser context._
+
+### Filter Input
+
+![Peneo filter screenshot](docs/resources/screen-filter.png)
+
+_Inline filter input opened with `/`, narrowing the current directory contents as you type._
+
+### Attribute Dialog
+
+![Peneo attributes screenshot](docs/resources/screen-attributes.png)
+
+_The read-only attribute dialog showing file details such as path, size, modified time, and permissions._
 
 ## Current Capabilities
 
@@ -214,4 +248,10 @@ Lint and test:
 ```bash
 uv run ruff check .
 uv run pytest
+```
+
+To regenerate the README screenshots:
+
+```bash
+uv run python scripts/generate_readme_screenshots.py
 ```
