@@ -216,6 +216,11 @@ class PeneoApp(App[None]):
         background: $surface;
     }
 
+    #command-palette.file-search {
+        height: 50%;
+        max-height: 50%;
+    }
+
     #command-palette-title {
         color: $accent;
         text-style: bold;

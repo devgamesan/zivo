@@ -30,7 +30,7 @@ from .models import AppState, DirectoryEntryState, FileSearchResultState, SortSt
 
 SIDE_PANE_SORT = SortState(field="name", descending=False, directories_first=True)
 COMMAND_PALETTE_VISIBLE_WINDOW = 8
-FILE_SEARCH_VISIBLE_WINDOW = 8
+FILE_SEARCH_VISIBLE_WINDOW = 12
 
 
 @dataclass(frozen=True)

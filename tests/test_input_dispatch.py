@@ -405,6 +405,22 @@ def test_palette_printable_key_updates_query() -> None:
     assert actions == (SetNotification(None), SetCommandPaletteQuery("f"))
 
 
+def test_palette_pageup_moves_cursor_by_page() -> None:
+    state = replace(build_initial_app_state(), ui_mode="PALETTE")
+
+    actions = dispatch_key_input(state, key="pageup")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=-12))
+
+
+def test_palette_pagedown_moves_cursor_by_page() -> None:
+    state = replace(build_initial_app_state(), ui_mode="PALETTE")
+
+    actions = dispatch_key_input(state, key="pagedown")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=12))
+
+
 def test_split_terminal_focus_sends_printable_input() -> None:
     state = replace(
         build_initial_app_state(),

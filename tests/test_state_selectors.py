@@ -725,8 +725,10 @@ def test_select_command_palette_state_windows_large_file_search_results() -> Non
     palette_state = select_command_palette_state(state)
 
     assert palette_state is not None
-    assert palette_state.title == "Find File (7-14 / 20)"
+    assert palette_state.title == "Find File (5-16 / 20)"
     assert [item.label for item in palette_state.items] == [
+        "src/module_4.py",
+        "src/module_5.py",
         "src/module_6.py",
         "src/module_7.py",
         "src/module_8.py",
@@ -735,8 +737,10 @@ def test_select_command_palette_state_windows_large_file_search_results() -> Non
         "src/module_11.py",
         "src/module_12.py",
         "src/module_13.py",
+        "src/module_14.py",
+        "src/module_15.py",
     ]
-    assert palette_state.items[4].selected is True
+    assert palette_state.items[6].selected is True
 
 
 def test_select_input_bar_state_for_create_mode() -> None:
