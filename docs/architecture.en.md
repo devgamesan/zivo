@@ -122,29 +122,34 @@ sequenceDiagram
 ### `src/peneo/state/reducer.py`
 
 - The single update point for `AppState`
-- Manages screen transitions, cursor movement, selection, filter, sort, clipboard, rename/create/delete, palette execution, and dialog state
-- Does not perform external I/O directly; instead returns `LoadBrowserSnapshotEffect`, `RunClipboardPasteEffect`, `RunFileMutationEffect`, and `RunExternalLaunchEffect`
+- Manages screen transitions, cursor movement, selection, filter, sort, clipboard, rename/create/delete, palette execution, file search, config editor, split terminal, and dialog state
+- Does not perform external I/O directly; instead returns effects for snapshot loads, child-pane loads, paste, rename/create/delete, external launch, file search, split-terminal lifecycle, and config save
 - Matches async results by request id and discards stale snapshot results
 
 ### `src/peneo/state/selectors.py`
 
 - Builds `ThreePaneShellData` from `AppState`
 - Applies filter and sort only to the main pane, while parent and child panes stay fixed to name order plus directories-first
-- Formats the display text for the help bar, status bar, input bar, command palette, conflict dialog, and attribute dialog
+- Formats the display text for the help bar, status bar, input bar, command palette, conflict dialog, attribute dialog, config dialog, and split terminal
 - Also assembles cut-item dimming and the summary line fields such as `item_count`, `selected_count`, and `sort_label`
 
 ### `src/peneo/state/command_palette.py`
 
 - Builds command palette candidates and filters them by query
-- The current palette includes `Find file`, `Show attributes`, `Copy path`, `Open in file manager`, `Open terminal here`, `Open/Close split terminal`, `Show/Hide hidden files`, `Create file`, and `Create directory`
+- The current palette includes `Find file`, `Show attributes`, `Copy path`, `Open in file manager`, `Open terminal here`, `Open/Close split terminal`, `Show/Hide hidden files`, `Edit config`, `Create file`, and `Create directory`
 - `Show attributes` appears only for a single target and opens a read-only attribute dialog with `Name`, `Type`, `Path`, `Size`, `Modified`, `Hidden`, and `Permissions`
+- `Find file` switches the palette into file-search mode and reuses the same UI to show recursive matches under the current directory
+- The split-terminal and hidden-files entries change their labels to reflect the current state
 
 ### `src/peneo/services/`
 
 - `browser_snapshot.py`: builds the three-pane snapshot from the real filesystem
 - `clipboard_operations.py`: handles copy / cut / paste execution and conflict detection
+- `config.py`: loads, validates, saves, and renders `config.toml`
+- `file_search.py`: handles recursive file search under the current directory and filters results according to hidden-file visibility
 - `file_mutations.py`: handles rename / create / trash delete
 - `external_launcher.py`: handles default-app open, editor-in-current-terminal launch, terminal launch, and copying a path to the system clipboard
+- `split_terminal.py`: starts PTY-backed embedded terminal sessions, forwards I/O, and reports exit events
 
 ### `src/peneo/adapters/`
 
@@ -167,7 +172,11 @@ stateDiagram-v2
     BROWSING --> RENAME: F2
     BROWSING --> PALETTE: :
     PALETTE --> CREATE: Enter on create command
+    PALETTE --> CONFIG: Enter on Edit config
+    PALETTE --> PALETTE: Enter on Find file / type file-search query
     PALETTE --> BROWSING: Enter on other command / Esc
+    CONFIG --> BUSY: s save
+    CONFIG --> BROWSING: Esc
     FILTER --> BROWSING: Enter / Down / Esc
     RENAME --> BUSY: Enter
     CREATE --> BUSY: Enter
@@ -191,12 +200,16 @@ Notes:
   - Handles text input, `Backspace`, `Enter`, `Down`, and `Esc`
 - `PALETTE`
   - Handles query updates, candidate cursor movement, command execution, and cancel
+- `CONFIG`
+  - Edits startup defaults in the config overlay, saves with `s`, and opens the raw `config.toml` in a terminal editor with `e`
 - `RENAME` / `CREATE`
   - Edits names in the input bar and issues a mutation effect on `Enter`
 - `CONFIRM`
   - Handles delete confirmation, paste conflicts, and duplicate-name warnings for rename/create
 - `BUSY`
   - Wait state while loading snapshots or executing file mutations
+- While the split terminal is visible
+  - Terminal input takes precedence over browser shortcuts, and `Ctrl+T` closes the embedded terminal
 
 ## 6. What Works Today
 
@@ -211,14 +224,16 @@ Notes:
 - Creates files and directories
 - Moves items to trash and shows a confirmation dialog for multi-target deletion
 - Opens files with the OS default app
-- Opens files in the editor inside the current terminal
-- Provides path copy, terminal launch, and hidden-files toggle from the command palette
-- Keeps status bar / help bar / input bar / conflict dialog / attribute dialog synchronized with application state
+- Opens files in a terminal editor with `e`
+- Provides recursive file search, attribute inspection, path copy, file-manager launch, terminal launch, and hidden-files toggle from the command palette
+- Edits startup defaults in the config overlay and saves them back to `config.toml`
+- Starts the embedded split terminal, forwards input to it, and reports when the session exits
+- Keeps status bar / help bar / input bar / conflict dialog / attribute dialog / config dialog / split terminal synchronized with application state
 
 ## 7. Areas Still Unwired Or Unimplemented
 
 - `HistoryState` exists in state, but back / forward is not wired into the UI yet
-- File preview, editing, Git integration, tabs, and keybinding customization are not implemented
+- File preview, in-app editing, Git integration, tabs, and keybinding customization are not implemented
 
 Filesystem mutations treat the entry path selected in the UI as the trust boundary. When the selected item is a symlink, the final path component is not canonicalized, so delete / rename / move / copy / overwrite / trash operate on the symlink entry itself rather than silently following the target.
 

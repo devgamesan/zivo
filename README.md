@@ -102,21 +102,22 @@ To launch directly from a local checkout during development, run this from the r
 uv run peneo
 ```
 
-If you want the last directory from Peneo to become your shell's current directory when you quit, you can optionally enable shell integration:
+`peneo` itself cannot change the current directory of the parent shell. If you want your shell to `cd` into the last directory you visited after quitting Peneo, add the following line to your shell startup file first, such as `.bashrc` or `.zshrc`:
 
 ```bash
-eval "$(peneo init bash)"
-# or
-eval "$(peneo init zsh)"
+eval "$(peneo init bash)"  # for bash
+eval "$(peneo init zsh)"   # for zsh
 ```
 
-After that, launch the optional wrapper instead of `peneo`:
+Open a new shell, or run the same line once in your current shell to enable it immediately. This defines a shell function named `peneo-cd`. After that, launch `peneo-cd` instead of `peneo` when you want the shell directory to follow Peneo on exit:
 
 ```bash
 peneo-cd
 ```
 
-This setup is optional. Normal usage with `peneo` or `uv run peneo` still works without any shell configuration.
+Use plain `peneo` or `uv run peneo` when you do not need that behavior.
+
+When a file is focused, press `e` to jump into a terminal editor such as `$EDITOR`, `nvim`, `vim`, or `nano` in the current terminal session.
 
 ## Configuration File
 
@@ -127,11 +128,19 @@ If the file does not exist yet, Peneo creates it automatically with default valu
 - macOS: `~/Library/Application Support/peneo/config.toml`
 - Windows config path is reserved for future compatibility, but native Windows runtime is still unsupported
 
-Available sections:
+The supported settings are:
 
-- `terminal`: optional OS-specific terminal launch command templates, using `{path}` as the working directory placeholder
-- `display`: default hidden-file visibility and sort settings
-- `behavior`: delete-confirmation and paste-conflict defaults
+| Section | Key | Values | Description |
+| --- | --- | --- | --- |
+| `terminal` | `linux` | Array of shell-style command templates | Optional terminal launch commands for Linux. Use `{path}` as the working-directory placeholder. Invalid or empty entries are ignored. |
+| `terminal` | `macos` | Array of shell-style command templates | Optional terminal launch commands for macOS, validated the same way as Linux entries. |
+| `terminal` | `windows` | Array of shell-style command templates | Optional terminal launch commands for Windows and WSL bridge workflows. The config key is accepted even though native Windows runtime is not currently supported. |
+| `display` | `show_hidden_files` | `true` / `false` | Default hidden-file visibility when the app starts. |
+| `display` | `default_sort_field` | `name` / `modified` / `size` | Default sort field for the main pane. |
+| `display` | `default_sort_descending` | `true` / `false` | Starts the main-pane sort in descending order when enabled. |
+| `display` | `directories_first` | `true` / `false` | Keeps directories grouped before files in the main pane. |
+| `behavior` | `confirm_delete` | `true` / `false` | Shows a confirmation dialog before moving items to trash. |
+| `behavior` | `paste_conflict_action` | `prompt` / `overwrite` / `skip` / `rename` | Chooses the default paste-conflict behavior. `prompt` keeps the conflict dialog enabled. |
 
 Example:
 
@@ -165,7 +174,7 @@ The main keys are listed below.
 | Normal | `←` / `h` / `Backspace` | Move to the parent directory |
 | Normal | `→` / `l` | Enter the item if it is a directory |
 | Normal | `Enter` | Enter a directory, or open a file with the default app |
-| Normal | `e` | Open the focused file in the editor inside the current terminal |
+| Normal | `e` | Switch the focused file into a terminal editor such as `$EDITOR`, `nvim`, `vim`, or `nano` |
 | Normal | `F5` | Reload the current directory |
 | Normal | `Space` | Toggle selection, then move to the next row |
 | Normal | `y` | Copy the selected items, or the focused item if nothing is selected |
@@ -192,31 +201,24 @@ The main keys are listed below.
 | Confirmation dialog | `Enter` / `Esc` | Confirm or cancel delete |
 | Confirmation dialog | `o` / `s` / `r` / `Esc` | Resolve a paste conflict with overwrite / skip / rename / cancel |
 
+When `e` succeeds, Peneo launches a terminal editor in the current terminal session rather than opening a separate GUI app window.
+
 ## Command Palette
 
 Less frequent actions are grouped in the command palette opened with `:`.
-The currently available commands are:
 
-- `Find file`
-- `Show attributes` (single target only)
-- `Copy path`
-- `Open in file manager`
-- `Open terminal here`
-- `Open split terminal` / `Close split terminal`
-- `Show hidden files` / `Hide hidden files`
-- `Edit config`
-- `Create file`
-- `Create directory`
-
-`Find file` searches recursively under the current directory using a case-insensitive partial match on the filename, then jumps to the selected result by opening its parent directory and focusing that file. Hidden paths are excluded unless hidden-file visibility is enabled. Filesystem scans start after a short pause while you type, and if you keep narrowing a completed result set the palette filters it immediately without another full-tree walk. When there are many hits, the palette shows a moving window around the current cursor so you can inspect all matches with the arrow keys without clipping the list.
-
-`Show attributes` opens a read-only dialog for the current cursor target or a single selected entry and shows `Name`, `Type`, `Path`, `Size`, `Modified`, `Hidden`, and `Permissions`.
-
-`Edit config` opens an overlay for startup defaults such as hidden-file visibility, sort settings, delete confirmation, and paste-conflict handling. Use `↑` / `↓` to move between settings, `←` / `→` / `Enter` to change the selected value, `s` to save back to `config.toml`, and `e` to open the raw config file in your editor for terminal command templates or manual edits.
-
-`Open split terminal` starts an embedded shell rooted at the current directory. The split terminal does not automatically follow later directory changes in the browser pane; open a new split session if you need a shell in another directory.
-
-Commands still under development may appear dimmed and cannot be executed yet.
+| Command | Shown when | Behavior / Notes |
+| --- | --- | --- |
+| `Find file` | Always | Switches the palette into recursive file-search mode. Searches the current directory tree with a case-insensitive partial filename match, excludes hidden paths unless hidden files are currently visible, and `Enter` jumps to the selected result by opening its parent directory and focusing that file. |
+| `Show attributes` | Exactly one target is selected or focused | Opens a read-only dialog with `Name`, `Type`, `Path`, `Size`, `Modified`, `Hidden`, and `Permissions`. |
+| `Copy path` | At least one target is selected or focused | Copies the selected path list, or the focused path when nothing is selected, to the system clipboard. |
+| `Open in file manager` | Always | Opens the current directory in the OS file manager. |
+| `Open terminal here` | Always | Launches an external terminal rooted at the current directory, using `config.toml` templates before built-in fallbacks. |
+| `Open split terminal` / `Close split terminal` | Always | Toggles the embedded split terminal. The label changes with visibility, and the split terminal keeps the directory where it was started instead of following later browser navigation. |
+| `Show hidden files` / `Hide hidden files` | Always | Toggles hidden-file visibility for the browser panes. The label reflects the current visibility state. |
+| `Edit config` | Always | Opens the config overlay for startup defaults. Use `↑` / `↓` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
+| `Create file` | Always | Starts the inline create-file flow in the current directory. |
+| `Create directory` | Always | Starts the inline create-directory flow in the current directory. |
 
 ## Platform Notes
 

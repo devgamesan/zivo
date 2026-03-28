@@ -122,31 +122,34 @@ sequenceDiagram
 ### `src/peneo/state/reducer.py`
 
 - `AppState` の唯一の更新点
-- 画面遷移、カーソル移動、選択、filter、sort、clipboard、rename/create/delete、palette 実行、dialog 状態を管理する
-- 外部 I/O は直接行わず、`LoadBrowserSnapshotEffect`、`RunClipboardPasteEffect`、`RunFileMutationEffect`、`RunExternalLaunchEffect` を返す
+- 画面遷移、カーソル移動、選択、filter、sort、clipboard、rename/create/delete、palette 実行、file search、config editor、split terminal、dialog 状態を管理する
+- 外部 I/O は直接行わず、snapshot、child-pane load、paste、rename/create/delete、外部起動、file search、split terminal 起動/入力/終了、config 保存の各 effect を返す
 - 非同期結果は request id で突き合わせ、古い snapshot 結果を破棄する
 
 ### `src/peneo/state/selectors.py`
 
 - `AppState` から `ThreePaneShellData` を組み立てる
 - 中央ペインにだけ filter / sort を適用し、親・子ペインは名前順 + ディレクトリ優先で固定表示する
-- help bar、status bar、input bar、command palette、conflict dialog、attribute dialog の表示文言もここで整形する
+- help bar、status bar、input bar、command palette、conflict dialog、attribute dialog、config dialog、split terminal の表示文言もここで整形する
 - cut 対象の dim 表示や summary 行の `item_count / selected_count / sort_label` も selector 側で組み立てる
 
 ### `src/peneo/state/command_palette.py`
 
 - コマンドパレット候補の構築と query フィルタリングを担当する
-- 現在の palette には `Find file`、`Show attributes`、`Copy path`、`Open in file manager`、`Open terminal here`、`Open/Close split terminal`、`Show/Hide hidden files`、`Create file`、`Create directory` がある
+- 現在の palette には `Find file`、`Show attributes`、`Copy path`、`Open in file manager`、`Open terminal here`、`Open/Close split terminal`、`Show/Hide hidden files`、`Edit config`、`Create file`、`Create directory` がある
 - `Show attributes` は単一対象がある場合にだけ表示し、`Name` / `Type` / `Path` / `Size` / `Modified` / `Hidden` / `Permissions` を持つ read-only の属性ダイアログを開く
 - `Find file` 選択後は palette をファイル検索モードに切り替え、現在ディレクトリ以下を再帰検索した結果を同じ UI で表示する
+- split terminal と hidden files のトグルは状態に応じてラベルを切り替える
 
 ### `src/peneo/services/`
 
 - `browser_snapshot.py`: 実 filesystem から 3 ペイン用 snapshot を構築
 - `clipboard_operations.py`: copy / cut / paste の実処理と競合検出を担当
+- `config.py`: `config.toml` の読み込み、検証、保存、既定値レンダリングを担当
 - `file_search.py`: 現在ディレクトリ以下の再帰ファイル検索を担当し、hidden 設定に応じて結果を絞る
 - `file_mutations.py`: rename / create / trash delete を担当
 - `external_launcher.py`: 既定アプリ起動、現在のターミナル内エディタ起動、ターミナル起動、システムクリップボードへのパスコピーを担当
+- `split_terminal.py`: 埋め込み split terminal の PTY セッション起動、入出力、終了通知を担当
 
 ### `src/peneo/adapters/`
 
@@ -169,8 +172,11 @@ stateDiagram-v2
     BROWSING --> RENAME: F2
     BROWSING --> PALETTE: :
     PALETTE --> CREATE: Enter on create command
+    PALETTE --> CONFIG: Enter on Edit config
     PALETTE --> PALETTE: Enter on Find file / type file-search query
     PALETTE --> BROWSING: Enter on other command / Esc
+    CONFIG --> BUSY: s save
+    CONFIG --> BROWSING: Esc
     FILTER --> BROWSING: Enter / Down / Esc
     RENAME --> BUSY: Enter
     CREATE --> BUSY: Enter
@@ -194,12 +200,16 @@ stateDiagram-v2
   - 文字入力、`Backspace`、`Enter`、`Down`、`Esc` を処理する
 - `PALETTE`
   - query 更新、候補カーソル移動、コマンド実行、キャンセルを処理する
+- `CONFIG`
+  - config overlay 上で起動時設定を編集し、`s` で保存、`e` で生の `config.toml` をターミナル内エディタで開く
 - `RENAME` / `CREATE`
   - 入力バーで名前を編集し、`Enter` で mutation effect を発行する
 - `CONFIRM`
   - delete 確認、paste conflict、rename/create の重複名警告を扱う
 - `BUSY`
   - snapshot 読み込みや file mutation 実行中の待機状態
+- split terminal 可視時
+  - 通常の browse 用キーバインドではなく terminal 入力が優先され、`Ctrl+T` で閉じる
 
 ## 6. 現在できること
 
@@ -214,14 +224,16 @@ stateDiagram-v2
 - 新規ファイル / 新規ディレクトリ作成
 - ゴミ箱への削除と複数対象削除時の確認ダイアログ
 - ファイルの既定アプリ起動
-- ファイルの現在のターミナル内エディタ起動
-- コマンドパレットからの path copy、既定ファイラー起動、terminal 起動、hidden files 切り替え
-- status bar / help bar / input bar / conflict dialog / attribute dialog の状態連動表示
+- `e` による現在のターミナル内エディタ起動
+- コマンドパレットからの再帰ファイル検索、属性表示、path copy、既定ファイラー起動、terminal 起動、hidden files 切り替え
+- config overlay による起動時設定の編集と `config.toml` 保存
+- 埋め込み split terminal の起動、入力、終了通知
+- status bar / help bar / input bar / conflict dialog / attribute dialog / config dialog / split terminal の状態連動表示
 
 ## 7. 現時点で未接続または未実装の範囲
 
 - `HistoryState` は state にあるが、戻る / 進む操作としてはまだ UI に接続していない
-- ファイル内容プレビュー、編集、Git 連携、タブ機能、キーバインドカスタマイズは未実装
+- ファイル内容プレビュー、アプリ内編集、Git 連携、タブ機能、キーバインドカスタマイズは未実装
 
 filesystem mutation は、UI が選択している entry path をそのまま trust boundary として扱う。選択対象が symlink の場合でも最終パス要素を canonicalize せず、delete / rename / move / copy / overwrite / trash は symlink 自体に作用させる。
 
