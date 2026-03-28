@@ -4,7 +4,6 @@ from pathlib import Path
 
 import pytest
 from rich.text import Text
-from textual.containers import VerticalScroll
 from textual.css.query import NoMatches
 from textual.widgets import DataTable, Label, ListView, Static
 
@@ -1456,8 +1455,8 @@ async def test_app_split_terminal_focus_routes_input_to_session() -> None:
 
 
 @pytest.mark.asyncio
-async def test_app_split_terminal_routes_tab_to_completion_and_auto_scrolls() -> None:
-    path = "/tmp/peneo-split-terminal-scroll"
+async def test_app_split_terminal_handles_full_screen_terminal_output() -> None:
+    path = "/tmp/peneo-split-terminal-screen"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -1482,14 +1481,15 @@ async def test_app_split_terminal_routes_tab_to_completion_and_auto_scrolls() ->
         await asyncio.sleep(0.05)
 
         session = split_terminal_service.sessions[0]
-        session.emit_output("\n".join(f"line {index}" for index in range(20)))
+        session.emit_output("\x1b[?1049h\x1b[2J\x1b[Hvim")
         await asyncio.sleep(0.05)
 
-        scroll = app.query_one("#split-terminal-scroll", VerticalScroll)
+        body = app.query_one("#split-terminal-body", Static)
+        renderable = body.renderable
 
         assert session.writes == ["\t"]
-        assert scroll.max_scroll_y > 0
-        assert scroll.scroll_y == scroll.max_scroll_y
+        assert session.resize_calls
+        assert str(renderable).splitlines()[0].startswith("vim")
 
 
 @pytest.mark.asyncio

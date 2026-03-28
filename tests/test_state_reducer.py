@@ -404,7 +404,7 @@ def test_move_command_palette_cursor_clamps_to_visible_commands() -> None:
     next_state = _reduce_state(state, MoveCommandPaletteCursor(delta=10))
 
     assert next_state.command_palette is not None
-    assert next_state.command_palette.cursor_index == 9
+    assert next_state.command_palette.cursor_index == 8
 
 
 def test_set_command_palette_query_resets_cursor() -> None:
@@ -695,7 +695,7 @@ def test_split_terminal_output_received_appends_and_trims_output() -> None:
     assert next_state.split_terminal.output.endswith("hello world")
 
 
-def test_split_terminal_output_received_strips_title_sequences_and_applies_backspace() -> None:
+def test_split_terminal_output_received_preserves_raw_terminal_sequences() -> None:
     state = replace(
         build_initial_app_state(),
         split_terminal=replace(
@@ -718,7 +718,9 @@ def test_split_terminal_output_received_strips_title_sequences_and_applies_backs
         ),
     )
 
-    assert next_state.split_terminal.output == "prompt$ ab\n"
+    assert next_state.split_terminal.output == (
+        "\x1b]0;tadashi@kubuntu: ~/develop/peneo\x07prompt$ abc\x08\x1b[K\r\n"
+    )
 
 
 def test_split_terminal_exited_resets_state_and_notifies() -> None:

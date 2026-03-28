@@ -1132,12 +1132,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 state,
                 split_terminal=replace(
                     state.split_terminal,
-                    output=_trim_split_terminal_output(
-                        _apply_split_terminal_output(
-                            state.split_terminal.output,
-                            action.data,
-                        )
-                    ),
+                    output=_trim_split_terminal_output(state.split_terminal.output + action.data),
                 ),
             )
         )
@@ -1256,128 +1251,10 @@ def _run_file_mutation_request(
 
 
 def _trim_split_terminal_output(output: str) -> str:
-    max_chars = 20_000
+    max_chars = 200_000
     if len(output) <= max_chars:
         return output
     return output[-max_chars:]
-
-
-def _apply_split_terminal_output(output: str, chunk: str) -> str:
-    buffer = list(output)
-    cursor = len(buffer)
-    index = 0
-
-    while index < len(chunk):
-        char = chunk[index]
-
-        if char == "\x1b":
-            index, erase_to_end = _consume_terminal_escape_sequence(chunk, index)
-            if erase_to_end:
-                del buffer[cursor:_line_end_index(buffer, cursor)]
-            continue
-
-        if char == "\r":
-            if index + 1 < len(chunk) and chunk[index + 1] == "\n":
-                cursor = _line_end_index(buffer, cursor)
-                if cursor == len(buffer):
-                    buffer.append("\n")
-                else:
-                    buffer.insert(cursor, "\n")
-                cursor += 1
-                index += 2
-                continue
-            cursor = _line_start_index(buffer, cursor)
-            index += 1
-            continue
-
-        if char == "\n":
-            if cursor == len(buffer):
-                buffer.append("\n")
-            else:
-                buffer.insert(cursor, "\n")
-            cursor += 1
-            index += 1
-            continue
-
-        if char in {"\b", "\x7f"}:
-            line_start = _line_start_index(buffer, cursor)
-            if cursor > line_start:
-                cursor -= 1
-                del buffer[cursor]
-            index += 1
-            continue
-
-        if char == "\t":
-            tab_width = 4
-            spaces = tab_width - ((cursor - _line_start_index(buffer, cursor)) % tab_width)
-            for _ in range(spaces):
-                cursor = _write_terminal_character(buffer, cursor, " ")
-            index += 1
-            continue
-
-        if ord(char) < 32:
-            index += 1
-            continue
-
-        cursor = _write_terminal_character(buffer, cursor, char)
-        index += 1
-
-    return "".join(buffer)
-
-
-def _consume_terminal_escape_sequence(text: str, index: int) -> tuple[int, bool]:
-    if index + 1 >= len(text):
-        return len(text), False
-
-    leader = text[index + 1]
-    if leader == "]":
-        terminator = text.find("\x07", index + 2)
-        if terminator != -1:
-            return terminator + 1, False
-        terminator = text.find("\x1b\\", index + 2)
-        if terminator != -1:
-            return terminator + 2, False
-        return len(text), False
-
-    if leader != "[":
-        return index + 2, False
-
-    cursor = index + 2
-    while cursor < len(text):
-        final_byte = text[cursor]
-        if "@" <= final_byte <= "~":
-            sequence = text[index : cursor + 1]
-            return cursor + 1, final_byte == "K" and sequence.endswith("K")
-        cursor += 1
-    return len(text), False
-
-
-def _line_start_index(buffer: list[str], cursor: int) -> int:
-    index = cursor - 1
-    while index >= 0:
-        if buffer[index] == "\n":
-            return index + 1
-        index -= 1
-    return 0
-
-
-def _line_end_index(buffer: list[str], cursor: int) -> int:
-    index = cursor
-    while index < len(buffer):
-        if buffer[index] == "\n":
-            return index
-        index += 1
-    return len(buffer)
-
-
-def _write_terminal_character(buffer: list[str], cursor: int, char: str) -> int:
-    if cursor == len(buffer):
-        buffer.append(char)
-    elif buffer[cursor] == "\n":
-        buffer.insert(cursor, char)
-    else:
-        buffer[cursor] = char
-    return cursor + 1
 
 
 def _cursor_path_after_file_mutation(

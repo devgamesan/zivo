@@ -574,8 +574,6 @@ class PeneoApp(App[None]):
             return
 
         self._split_terminal_session = session
-        if self.size.width > 0 and self.size.height > 0:
-            session.resize(columns=self.size.width, rows=10)
         self.call_next(
             self.dispatch_actions,
             (
@@ -891,8 +889,7 @@ class PeneoApp(App[None]):
 
         if self._split_terminal_session is None or not self._app_state.split_terminal.visible:
             return
-        rows = max(6, min(20, event.size.height // 2))
-        self._split_terminal_session.resize(columns=event.size.width, rows=rows)
+        self.call_after_refresh(self._resize_split_terminal_session)
 
     async def _refresh_shell(self) -> None:
         shell = select_shell_data(self._app_state)
@@ -939,6 +936,7 @@ class PeneoApp(App[None]):
         current_pane.set_context_input(shell.current_context_input)
         await child_pane.set_entries(shell.child_entries)
         split_terminal.set_state(shell.split_terminal)
+        self._resize_split_terminal_session()
         command_palette.set_state(shell.command_palette)
         help_bar.set_state(shell.help)
         status_bar.set_state(shell.status)
@@ -956,6 +954,16 @@ class PeneoApp(App[None]):
                 self.set_focus(current_pane.query_one("#current-pane-table"))
             except NoMatches:
                 pass
+
+    def _resize_split_terminal_session(self) -> None:
+        if self._split_terminal_session is None or not self._app_state.split_terminal.visible:
+            return
+        try:
+            split_terminal = self.query_one("#split-terminal", SplitTerminalPane)
+        except NoMatches:
+            return
+        columns, rows = split_terminal.terminal_dimensions()
+        self._split_terminal_session.resize(columns=columns, rows=rows)
 
 
 def create_app(
