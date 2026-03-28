@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 import peneo.__main__ as cli
-from peneo.models import AppConfig, ConfigLoadResult
+from peneo.models import AppConfig, BehaviorConfig, ConfigLoadResult
 
 
 class DummyApp:
@@ -51,6 +51,36 @@ def test_main_print_last_dir_falls_back_to_current_path(capsys, monkeypatch) -> 
     assert return_code == 0
     assert app.run_calls == 1
     assert capsys.readouterr().out == "/tmp/peneo-fallback\n"
+
+
+def test_main_passes_loaded_config_and_warnings_to_create_app(monkeypatch) -> None:
+    app = DummyApp()
+    loaded_config = AppConfig(behavior=BehaviorConfig(confirm_delete=False))
+    captured_kwargs: dict[str, object] = {}
+
+    monkeypatch.setattr(
+        cli,
+        "load_app_config",
+        lambda: ConfigLoadResult(
+            config=loaded_config,
+            warnings=("using test config",),
+        ),
+    )
+
+    def fake_create_app(**kwargs):
+        captured_kwargs.update(kwargs)
+        return app
+
+    monkeypatch.setattr(cli, "create_app", fake_create_app)
+
+    return_code = cli.main([])
+
+    assert return_code == 0
+    assert app.run_calls == 1
+    assert captured_kwargs["app_config"] is loaded_config
+    assert captured_kwargs["startup_notification"] is not None
+    assert captured_kwargs["startup_notification"].level == "warning"
+    assert "using test config" in captured_kwargs["startup_notification"].message
 
 
 def test_config_warning_notification_returns_warning_message() -> None:

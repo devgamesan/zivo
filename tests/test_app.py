@@ -2170,6 +2170,63 @@ async def test_app_delete_confirmation_round_trip() -> None:
 
 
 @pytest.mark.asyncio
+async def test_app_delete_skips_confirmation_when_disabled() -> None:
+    path = "/tmp/peneo-delete-without-confirm"
+    docs = f"{path}/docs"
+    src = f"{path}/src"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (
+                    DirectoryEntryState(docs, "docs", "dir"),
+                    DirectoryEntryState(src, "src", "dir"),
+                ),
+                child_path=docs,
+            )
+        }
+    )
+    delete_request = TrashDeleteRequest(paths=(docs, src))
+    mutation_service = FakeFileMutationService(
+        results={
+            delete_request: FileMutationResult(
+                path=None,
+                message="Trashed 2 items",
+                removed_paths=(docs, src),
+            )
+        }
+    )
+    app = create_app(
+        snapshot_loader=loader,
+        file_mutation_service=mutation_service,
+        initial_path=path,
+        app_config=AppConfig(
+            terminal=TerminalConfig(),
+            display=DisplayConfig(),
+            behavior=BehaviorConfig(
+                confirm_delete=False,
+                paste_conflict_action="prompt",
+            ),
+        ),
+    )
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("space")
+        await pilot.press("space")
+        await pilot.press("delete")
+        await asyncio.sleep(0.05)
+
+        status_bar = await _wait_for_status_bar(app)
+        dialog = app.query_one("#conflict-dialog", ConflictDialog)
+
+        assert app.app_state.ui_mode == "BROWSING"
+        assert app.app_state.delete_confirmation is None
+        assert dialog.display is False
+        assert str(status_bar.renderable) == "info: Trashed 2 items"
+
+
+@pytest.mark.asyncio
 async def test_app_main_flow_round_trip_on_live_filesystem(tmp_path) -> None:
     archive_dir = tmp_path / "archive"
     archive_dir.mkdir()
