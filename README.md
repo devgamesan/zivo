@@ -22,7 +22,7 @@ Peneo is a Textual-based TUI file manager for environments where you want to kee
   ![](docs/resources/screen-filter.png)
   _Inline filter input opened with `/`, narrowing the current directory contents in place._
   ![](docs/resources/screen-find-command.png)
-  _`Find file` opened from `:`, searching recursively under the current directory._
+  _`Find file` opened with `Ctrl+F`, searching recursively under the current directory._
 - File and directory attributes can also be inspected.
   ![](docs/resources/screen-attributes.png)
   _The attribute dialog showing details such as path, size, modified time, and permissions._
@@ -152,6 +152,7 @@ The main keys are listed below.
 | Normal | `q` | Quit the app |
 | Normal | `Esc` | Clear the active filter, otherwise clear the selection |
 | Normal | `:` | Open the command palette |
+| Normal | `Ctrl+F` | Open recursive file search |
 | Normal | `Ctrl+T` | Open or close the embedded split terminal |
 | Normal (with split terminal open) | Text input and browser shortcuts | Disabled while the split terminal owns input |
 | Filter input | Text input | Update the filter string |
@@ -173,7 +174,6 @@ Less frequent actions are grouped in the command palette opened with `:`.
 
 | Command | Shown when | Behavior / Notes |
 | --- | --- | --- |
-| `Find file` | Always | Switches the palette into recursive file-search mode. Plain input searches the current directory tree with a case-insensitive partial basename match. Prefix the query with `re:` to run a Python regular expression against basenames instead; regex is case-sensitive unless you use inline flags such as `(?i)`. Hidden paths are excluded unless hidden files are currently visible, invalid regex patterns are shown inline in the palette, and `Enter` jumps to the selected result by opening its parent directory and focusing that file. |
 | `Show attributes` | Exactly one target is selected or focused | Opens a read-only dialog with `Name`, `Type`, `Path`, `Size`, `Modified`, `Hidden`, and `Permissions`. |
 | `Copy path` | At least one target is selected or focused | Copies the selected path list, or the focused path when nothing is selected, to the system clipboard. |
 | `Open in file manager` | Always | Opens the current directory in the OS file manager. |

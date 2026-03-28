@@ -449,12 +449,12 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
     help_state = select_help_bar_state(state)
 
     assert help_state.lines == (
-        "Enter open | e edit | / filter | : palette | q quit | ctrl+t split",
-        "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename",
+        "Enter open | e edit | / filter | ctrl+f find | : palette | q quit",
+        "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename | ctrl+t split",
     )
     assert help_state.text == (
-        "Enter open | e edit | / filter | : palette | q quit | ctrl+t split\n"
-        "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename"
+        "Enter open | e edit | / filter | ctrl+f find | : palette | q quit\n"
+        "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename | ctrl+t split"
     )
 
 
@@ -524,9 +524,8 @@ def test_select_command_palette_state_marks_selected_and_enabled_items() -> None
     palette_state = select_command_palette_state(state)
 
     assert palette_state is not None
-    assert palette_state.title == "Command Palette (1-8 / 10)"
-    assert [item.label for item in palette_state.items[:3]] == [
-        "Find file",
+    assert palette_state.title == "Command Palette (1-8 / 9)"
+    assert [item.label for item in palette_state.items[:2]] == [
         "Show attributes",
         "Copy path",
     ]

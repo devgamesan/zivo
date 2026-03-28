@@ -3,6 +3,7 @@ from dataclasses import replace
 from peneo.state import (
     BeginCommandPalette,
     BeginDeleteTargets,
+    BeginFileSearch,
     BeginFilterInput,
     BeginRenameInput,
     CancelCommandPalette,
@@ -159,12 +160,13 @@ def test_browsing_q_dispatches_exit_current_path() -> None:
     assert actions == (SetNotification(None), ExitCurrentPath())
 
 
-def test_browsing_ctrl_f_is_unbound() -> None:
+def test_browsing_ctrl_f_begins_file_search() -> None:
     state = build_initial_app_state()
 
     actions = dispatch_key_input(state, key="ctrl+f")
 
-    assert actions == ()
+    assert len(actions) == 2
+    assert isinstance(actions[1], BeginFileSearch)
 
 
 def test_filter_q_updates_query_instead_of_exiting() -> None:

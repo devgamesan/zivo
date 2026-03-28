@@ -76,6 +76,11 @@ class BeginCreateInput:
 
 
 @dataclass(frozen=True)
+class BeginFileSearch:
+    """Open the command palette in file search mode."""
+
+
+@dataclass(frozen=True)
 class BeginCommandPalette:
     """Open the command palette."""
 
@@ -499,6 +504,7 @@ Action = (
     | CancelFilterInput
     | BeginRenameInput
     | BeginCreateInput
+    | BeginFileSearch
     | BeginCommandPalette
     | CancelCommandPalette
     | MoveCommandPaletteCursor

@@ -19,6 +19,7 @@ from .actions import (
     BeginCommandPalette,
     BeginCreateInput,
     BeginDeleteTargets,
+    BeginFileSearch,
     BeginFilterInput,
     BeginRenameInput,
     BrowserSnapshotFailed,
@@ -260,6 +261,21 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             )
         )
 
+    if isinstance(action, BeginFileSearch):
+        return done(
+            replace(
+                state,
+                ui_mode="PALETTE",
+                notification=None,
+                pending_input=None,
+                command_palette=CommandPaletteState(source="file_search"),
+                pending_file_search_request_id=None,
+                delete_confirmation=None,
+                name_conflict=None,
+                attribute_inspection=None,
+            )
+        )
+
     if isinstance(action, CancelCommandPalette):
         return done(
             replace(
@@ -441,15 +457,6 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             pending_file_search_request_id=None,
             attribute_inspection=None,
         )
-        if selected_item.id == "find_file":
-            return done(
-                replace(
-                    state,
-                    notification=None,
-                    command_palette=CommandPaletteState(source="file_search"),
-                    attribute_inspection=None,
-                )
-            )
         if selected_item.id == "show_attributes":
             entry = _single_target_entry(state)
             if entry is None:

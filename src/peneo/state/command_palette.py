@@ -62,12 +62,6 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
     has_single_target = single_target_entry is not None
 
     items = [
-        CommandPaletteItem(
-            id="find_file",
-            label="Find file",
-            shortcut=None,
-            enabled=True,
-        ),
     ]
 
     if has_single_target:

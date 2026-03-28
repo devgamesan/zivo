@@ -1134,8 +1134,8 @@ async def test_app_displays_browsing_help_bar() -> None:
         help_bar = app.query_one("#help-bar", HelpBar)
 
         assert str(help_bar.renderable) == (
-            "Enter open | e edit | / filter | : palette | q quit | ctrl+t split\n"
-            "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename"
+            "Enter open | e edit | / filter | ctrl+f find | : palette | q quit\n"
+            "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename | ctrl+t split"
         )
 
 
@@ -1185,7 +1185,7 @@ async def test_app_colon_shows_command_palette() -> None:
 
         assert app.app_state.ui_mode == "PALETTE"
         assert palette.display is True
-        assert "Find file" in str(items.renderable)
+        assert "Show attributes" in str(items.renderable)
 
 
 @pytest.mark.asyncio
@@ -1257,8 +1257,7 @@ async def test_app_command_palette_find_file_jumps_to_matching_parent_directory(
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
-        await pilot.press(":")
-        await pilot.press("enter")
+        await pilot.press("ctrl+f")
         await pilot.press("r", "e", "a", "d")
         await _wait_for_request_count(file_search_service, 1)
         await pilot.press("enter")
@@ -1286,8 +1285,7 @@ async def test_app_file_search_debounces_rapid_query_updates(tmp_path) -> None:
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
-        await pilot.press(":")
-        await pilot.press("enter")
+        await pilot.press("ctrl+f")
         await pilot.press("r", "e", "a", "d")
 
         await asyncio.sleep(0.1)
@@ -1315,8 +1313,7 @@ async def test_app_file_search_passes_regex_queries_through_to_service(tmp_path)
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
-        await pilot.press(":")
-        await pilot.press("enter")
+        await pilot.press("ctrl+f")
         await pilot.press(
             "r",
             "e",
@@ -1366,8 +1363,7 @@ async def test_app_file_search_prefix_extension_reuses_cached_results(tmp_path) 
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
-        await pilot.press(":")
-        await pilot.press("enter")
+        await pilot.press("ctrl+f")
         await pilot.press("r", "e", "a", "d")
         await _wait_for_request_count(file_search_service, 1)
         await asyncio.sleep(0.05)
@@ -1408,8 +1404,7 @@ async def test_app_file_search_cancels_superseded_request_without_notification(t
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
-        await pilot.press(":")
-        await pilot.press("enter")
+        await pilot.press("ctrl+f")
         await pilot.press("r", "e", "a", "d")
         await _wait_for_request_count(file_search_service, 1)
 
@@ -1441,8 +1436,7 @@ async def test_app_file_search_shows_invalid_regex_message_in_palette(tmp_path) 
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
-        await pilot.press(":")
-        await pilot.press("enter")
+        await pilot.press("ctrl+f")
         await pilot.press("r", "e", ":", "[")
         await _wait_for_request_count(file_search_service, 1)
         await asyncio.sleep(0.05)

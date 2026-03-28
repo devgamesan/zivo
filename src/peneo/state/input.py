@@ -4,6 +4,7 @@ from .actions import (
     Action,
     BeginCommandPalette,
     BeginDeleteTargets,
+    BeginFileSearch,
     BeginFilterInput,
     BeginRenameInput,
     CancelCommandPalette,
@@ -71,6 +72,7 @@ BROWSING_KEYMAP = {
     "l": "enter_directory",
     "enter": "enter_or_open",
     "ctrl+t": "toggle_split_terminal",
+    "ctrl+f": "begin_file_search",
     "y": "copy_targets",
     "x": "cut_targets",
     "p": "paste_clipboard",
@@ -178,6 +180,9 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
 
     if command == "begin_command_palette":
         return _supported(BeginCommandPalette())
+
+    if command == "begin_file_search":
+        return _supported(BeginFileSearch())
 
     if command == "toggle_split_terminal":
         return _supported(ToggleSplitTerminal())

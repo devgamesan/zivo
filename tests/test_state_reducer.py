@@ -15,6 +15,7 @@ from peneo.state import (
     BeginCommandPalette,
     BeginCreateInput,
     BeginDeleteTargets,
+    BeginFileSearch,
     BeginFilterInput,
     BeginRenameInput,
     BrowserSnapshot,
@@ -413,7 +414,7 @@ def test_move_command_palette_cursor_clamps_to_visible_commands() -> None:
     next_state = _reduce_state(state, MoveCommandPaletteCursor(delta=10))
 
     assert next_state.command_palette is not None
-    assert next_state.command_palette.cursor_index == 9
+    assert next_state.command_palette.cursor_index == 8
 
 
 def test_set_command_palette_query_resets_cursor() -> None:
@@ -442,11 +443,8 @@ def test_submit_command_palette_runs_create_file_flow() -> None:
     )
 
 
-def test_submit_command_palette_enters_find_file_mode() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-
-    next_state = _reduce_state(state, SubmitCommandPalette())
+def test_begin_file_search_enters_find_file_mode() -> None:
+    next_state = _reduce_state(build_initial_app_state(), BeginFileSearch())
 
     assert next_state.ui_mode == "PALETTE"
     assert next_state.command_palette == CommandPaletteState(source="file_search")
@@ -955,9 +953,7 @@ def test_submit_command_palette_uses_selected_paths_for_copy_path() -> None:
 
 
 def test_set_command_palette_query_starts_file_search_effect() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
 
     result = reduce_app_state(state, SetCommandPaletteQuery("read"))
 
@@ -977,9 +973,7 @@ def test_set_command_palette_query_starts_file_search_effect() -> None:
 
 def test_set_command_palette_query_reuses_completed_file_search_results_for_prefix_extension(
 ) -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     state = replace(
         state,
         command_palette=replace(
@@ -1028,9 +1022,7 @@ def test_set_command_palette_query_reuses_completed_file_search_results_for_pref
 
 
 def test_set_command_palette_query_runs_new_search_when_query_is_not_prefix_extension() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     state = replace(
         state,
         command_palette=replace(
@@ -1069,9 +1061,7 @@ def test_set_command_palette_query_runs_new_search_when_query_is_not_prefix_exte
 
 
 def test_set_command_palette_query_runs_new_search_for_regex_queries() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     state = replace(
         state,
         command_palette=replace(
@@ -1104,9 +1094,7 @@ def test_set_command_palette_query_runs_new_search_for_regex_queries() -> None:
 
 
 def test_file_search_completed_updates_palette_results() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     search_state = replace(
         state,
         command_palette=replace(state.command_palette, query="read"),
@@ -1141,9 +1129,7 @@ def test_file_search_completed_updates_palette_results() -> None:
 
 
 def test_file_search_completed_does_not_cache_regex_queries() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     search_state = replace(
         state,
         command_palette=replace(state.command_palette, query=r"re:^README\.md$"),
@@ -1176,9 +1162,7 @@ def test_file_search_completed_does_not_cache_regex_queries() -> None:
 
 
 def test_file_search_failed_sets_inline_error_for_invalid_regex() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     search_state = replace(
         state,
         command_palette=replace(
@@ -1215,9 +1199,7 @@ def test_file_search_failed_sets_inline_error_for_invalid_regex() -> None:
 
 
 def test_submit_command_palette_uses_inline_error_message_when_present() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     state = replace(
         state,
         command_palette=replace(
@@ -1236,9 +1218,7 @@ def test_submit_command_palette_uses_inline_error_message_when_present() -> None
 
 
 def test_submit_command_palette_file_search_result_requests_snapshot() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     state = replace(
         state,
         command_palette=replace(
