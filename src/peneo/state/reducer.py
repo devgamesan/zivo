@@ -182,7 +182,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
     if isinstance(action, BeginDeleteTargets):
         if not action.paths:
             return done(state)
-        if len(action.paths) > 1:
+        if state.confirm_delete:
             return done(
                 replace(
                     state,
@@ -960,6 +960,23 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
     if isinstance(action, ClipboardPasteNeedsResolution):
         if action.request_id != state.pending_paste_request_id or not action.conflicts:
             return done(state)
+        if state.paste_conflict_action != "prompt":
+            request = replace(
+                action.request,
+                conflict_resolution=state.paste_conflict_action,
+            )
+            return _run_paste_request(
+                replace(
+                    state,
+                    paste_conflict=None,
+                    delete_confirmation=None,
+                    name_conflict=None,
+                    notification=None,
+                    pending_paste_request_id=None,
+                    ui_mode="BROWSING",
+                ),
+                request,
+            )
         return done(
             replace(
                 state,

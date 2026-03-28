@@ -7,6 +7,8 @@ import sys
 from collections.abc import Sequence
 
 from .app import create_app
+from .services import load_app_config
+from .state import NotificationState
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -52,7 +54,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         sys.stdout.write(render_shell_init(args.shell))
         return 0
 
-    app = create_app()
+    config_result = load_app_config()
+    startup_notification = _config_warning_notification(config_result.warnings)
+    app = create_app(
+        app_config=config_result.config,
+        startup_notification=startup_notification,
+    )
     app.run()
 
     if args.print_last_dir:
@@ -60,6 +67,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         sys.stdout.write(f"{target_path}\n")
 
     return app.return_code
+
+
+def _config_warning_notification(warnings: tuple[str, ...]) -> NotificationState | None:
+    if not warnings:
+        return None
+    return NotificationState(level="warning", message="Config warnings: " + "; ".join(warnings))
 
 
 if __name__ == "__main__":

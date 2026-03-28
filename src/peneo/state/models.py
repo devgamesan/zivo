@@ -5,7 +5,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
-from peneo.models import ConflictResolution, CreateKind, PasteConflict, PasteRequest
+from peneo.models import (
+    ConflictResolution,
+    CreateKind,
+    PasteConflict,
+    PasteConflictAction,
+    PasteRequest,
+)
 from peneo.models.shell_data import EntryKind, NotificationLevel
 
 UiMode = Literal["BROWSING", "FILTER", "RENAME", "CREATE", "PALETTE", "CONFIRM", "BUSY"]
@@ -179,6 +185,8 @@ class AppState:
     child_pane: PaneState
     show_hidden: bool = False
     sort: SortState = SortState()
+    confirm_delete: bool = True
+    paste_conflict_action: PasteConflictAction = "prompt"
     filter: FilterState = FilterState()
     clipboard: ClipboardState = ClipboardState()
     history: HistoryState = HistoryState()
@@ -200,7 +208,14 @@ class AppState:
     next_request_id: int = 1
 
 
-def build_initial_app_state() -> AppState:
+def build_initial_app_state(
+    *,
+    show_hidden: bool = False,
+    sort: SortState | None = None,
+    confirm_delete: bool = True,
+    paste_conflict_action: PasteConflictAction = "prompt",
+    post_reload_notification: NotificationState | None = None,
+) -> AppState:
     """Return a deterministic initial state used by selector and reducer tests."""
 
     current_path = "/home/tadashi/develop/peneo"
@@ -260,12 +275,24 @@ def build_initial_app_state() -> AppState:
             cursor_path=f"{current_path}/docs",
         ),
         child_pane=PaneState(directory_path=docs_path, entries=child_entries),
-        sort=SortState(field="name", descending=False, directories_first=True),
+        show_hidden=show_hidden,
+        sort=sort or SortState(field="name", descending=False, directories_first=True),
+        confirm_delete=confirm_delete,
+        paste_conflict_action=paste_conflict_action,
         filter=FilterState(query="", active=False),
+        post_reload_notification=post_reload_notification,
     )
 
 
-def build_placeholder_app_state(current_path: str) -> AppState:
+def build_placeholder_app_state(
+    current_path: str,
+    *,
+    show_hidden: bool = False,
+    sort: SortState | None = None,
+    confirm_delete: bool = True,
+    paste_conflict_action: PasteConflictAction = "prompt",
+    post_reload_notification: NotificationState | None = None,
+) -> AppState:
     """Return an empty browser state used before the first snapshot loads."""
 
     resolved_path = str(Path(current_path).resolve())
@@ -275,4 +302,9 @@ def build_placeholder_app_state(current_path: str) -> AppState:
         parent_pane=PaneState(directory_path=parent_path, entries=()),
         current_pane=PaneState(directory_path=resolved_path, entries=()),
         child_pane=PaneState(directory_path=resolved_path, entries=()),
+        show_hidden=show_hidden,
+        sort=sort or SortState(),
+        confirm_delete=confirm_delete,
+        paste_conflict_action=paste_conflict_action,
+        post_reload_notification=post_reload_notification,
     )

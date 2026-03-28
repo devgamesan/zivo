@@ -15,7 +15,9 @@ from textual.css.query import NoMatches
 from textual.message import Message
 from textual.worker import Worker, WorkerState
 
+from peneo.adapters import LocalExternalLaunchAdapter
 from peneo.models import (
+    AppConfig,
     FileMutationResult,
     PasteConflictPrompt,
     PasteExecutionResult,
@@ -57,12 +59,14 @@ from peneo.state import (
     FileSearchFailed,
     LoadBrowserSnapshotEffect,
     LoadChildPaneSnapshotEffect,
+    NotificationState,
     ReduceResult,
     RequestBrowserSnapshot,
     RunClipboardPasteEffect,
     RunExternalLaunchEffect,
     RunFileMutationEffect,
     RunFileSearchEffect,
+    SortState,
     SplitTerminalExited,
     SplitTerminalStarted,
     SplitTerminalStartFailed,
@@ -301,15 +305,29 @@ class PeneoApp(App[None]):
         file_search_service: FileSearchService | None = None,
         split_terminal_service: SplitTerminalService | None = None,
         *,
+        app_config: AppConfig | None = None,
+        startup_notification: NotificationState | None = None,
         initial_path: str | Path | None = None,
     ) -> None:
         super().__init__()
+        self._app_config = app_config or AppConfig()
         self._initial_path = str(Path(initial_path or Path.cwd()).expanduser().resolve())
-        self._app_state: AppState = build_placeholder_app_state(self._initial_path)
+        self._app_state: AppState = build_placeholder_app_state(
+            self._initial_path,
+            show_hidden=self._app_config.display.show_hidden_files,
+            sort=_initial_sort_state(self._app_config),
+            confirm_delete=self._app_config.behavior.confirm_delete,
+            paste_conflict_action=self._app_config.behavior.paste_conflict_action,
+            post_reload_notification=startup_notification,
+        )
         self._snapshot_loader = snapshot_loader or LiveBrowserSnapshotLoader()
         self._clipboard_service = clipboard_service or LiveClipboardOperationService()
         self._file_mutation_service = file_mutation_service or LiveFileMutationService()
-        self._external_launch_service = external_launch_service or LiveExternalLaunchService()
+        self._external_launch_service = external_launch_service or LiveExternalLaunchService(
+            adapter=LocalExternalLaunchAdapter(
+                terminal_command_templates=self._app_config.terminal,
+            )
+        )
         self._file_search_service = file_search_service or LiveFileSearchService()
         self._split_terminal_service = split_terminal_service or LiveSplitTerminalService()
         self._pending_workers: dict[str, Effect] = {}
@@ -983,6 +1001,8 @@ def create_app(
     file_search_service: FileSearchService | None = None,
     split_terminal_service: SplitTerminalService | None = None,
     *,
+    app_config: AppConfig | None = None,
+    startup_notification: NotificationState | None = None,
     initial_path: str | Path | None = None,
 ) -> PeneoApp:
     """Create the application instance."""
@@ -994,5 +1014,15 @@ def create_app(
         external_launch_service=external_launch_service,
         file_search_service=file_search_service,
         split_terminal_service=split_terminal_service,
+        app_config=app_config,
+        startup_notification=startup_notification,
         initial_path=initial_path,
+    )
+
+
+def _initial_sort_state(config: AppConfig) -> SortState:
+    return SortState(
+        field=config.display.default_sort_field,
+        descending=config.display.default_sort_descending,
+        directories_first=config.display.directories_first,
     )

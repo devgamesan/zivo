@@ -40,6 +40,7 @@ _Current three-pane UI showing the parent, current, and child directories side b
 - Toggle hidden-file visibility
 - Open files with the OS default app
 - Open files in the editor inside the current terminal
+- Persist display, behavior, and terminal-launch preferences in `config.toml`
 - Optionally return the shell to the last visited directory after quitting
 
 ## Installation
@@ -82,6 +83,42 @@ peneo-cd
 
 This setup is optional. Normal usage with `peneo` or `uv run peneo` still works without any shell configuration.
 
+## Configuration File
+
+On startup, Peneo reads `config.toml` from the platform-specific user config directory.
+If the file does not exist yet, Peneo creates it automatically with default values.
+
+- Linux: `${XDG_CONFIG_HOME:-~/.config}/peneo/config.toml`
+- macOS: `~/Library/Application Support/peneo/config.toml`
+- Windows config path is reserved for future compatibility, but native Windows runtime is still unsupported
+
+Available sections:
+
+- `terminal`: optional OS-specific terminal launch command templates, using `{path}` as the working directory placeholder
+- `display`: default hidden-file visibility and sort settings
+- `behavior`: delete-confirmation and paste-conflict defaults
+
+Example:
+
+```toml
+[terminal]
+linux = ["konsole --working-directory {path}", "gnome-terminal --working-directory={path}"]
+macos = ["open -a Terminal {path}"]
+windows = ["wt -d {path}"]
+
+[display]
+show_hidden_files = false
+default_sort_field = "name"
+default_sort_descending = false
+directories_first = true
+
+[behavior]
+confirm_delete = true
+paste_conflict_action = "prompt"
+```
+
+Invalid config values do not stop startup. Peneo falls back to built-in defaults and shows a warning after the initial directory load.
+
 ## Basic Operations
 
 The main keys are listed below.
@@ -99,7 +136,7 @@ The main keys are listed below.
 | Normal | `y` | Copy the selected items, or the focused item if nothing is selected |
 | Normal | `x` | Cut the selected items, or the focused item if nothing is selected |
 | Normal | `p` | Paste into the current directory |
-| Normal | `Delete` | Move the selected items, or the focused item, to trash |
+| Normal | `Delete` | Move the selected items, or the focused item, to trash (confirmation is enabled by default and can be configured) |
 | Normal | `F2` | Start rename input for a single target |
 | Normal | `/` | Start filter input |
 | Normal | `s` | Cycle the sort order |
@@ -149,6 +186,7 @@ Commands still under development may appear dimmed and cannot be executed yet.
 - GUI integration paths such as default-app launch, file-manager launch, and terminal launch are currently validated primarily in that environment.
 - The embedded split terminal currently targets POSIX environments such as Ubuntu/Linux and WSL.
 - External-launch behavior includes Linux, macOS, and WSL-aware fallbacks. Native Windows is not a supported runtime for Peneo.
+- `config.toml` can override terminal launch commands before those built-in fallbacks are used.
 - WSL prefers Windows-side bridges such as `wslview`, `explorer.exe`, and `clip.exe` when available, with Linux-side fallbacks kept for WSLg and desktop Linux environments.
 - The application is still under active development, so behavior and keybindings may change.
 - File mutations operate on the selected directory entry. If the selected item is a symlink, Peneo mutates the symlink itself instead of silently following and mutating the link target.
