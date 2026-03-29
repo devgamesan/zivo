@@ -1,5 +1,6 @@
 """Command palette definitions and filtering helpers."""
 
+import os
 from dataclasses import dataclass
 
 from .models import AppState, DirectoryEntryState
@@ -34,6 +35,35 @@ def get_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, ...]
             for index, result in enumerate(state.command_palette.file_search_results)
         )
 
+    if state.command_palette.source == "grep_search":
+        return tuple(
+            CommandPaletteItem(
+                id=f"grep_search_result:{index}",
+                label=result.display_label,
+                shortcut=None,
+                enabled=True,
+                path=result.path,
+            )
+            for index, result in enumerate(state.command_palette.grep_search_results)
+        )
+
+    if state.command_palette.source == "history":
+        query = state.command_palette.query
+        return tuple(
+            item
+            for item in (
+                CommandPaletteItem(
+                    id=f"history_result:{index}",
+                    label=_display_path(path),
+                    shortcut=None,
+                    enabled=True,
+                    path=path,
+                )
+                for index, path in enumerate(state.command_palette.history_results)
+            )
+            if _matches_query(item, query)
+        )
+
     query = state.command_palette.query
 
     return tuple(
@@ -48,6 +78,10 @@ def normalize_command_palette_cursor(state: AppState, cursor_index: int) -> int:
         return 0
     if state.command_palette.source == "file_search":
         item_count = len(state.command_palette.file_search_results)
+    elif state.command_palette.source == "grep_search":
+        item_count = len(state.command_palette.grep_search_results)
+    elif state.command_palette.source == "history":
+        item_count = len(get_command_palette_items(state))
     else:
         item_count = len(get_command_palette_items(state))
     if item_count == 0:
@@ -62,12 +96,6 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
     has_single_target = single_target_entry is not None
 
     items = [
-        CommandPaletteItem(
-            id="find_file",
-            label="Find file",
-            shortcut=None,
-            enabled=True,
-        ),
     ]
 
     if has_single_target:
@@ -101,12 +129,6 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             CommandPaletteItem(
                 id="open_terminal",
                 label="Open terminal here",
-                shortcut=None,
-                enabled=True,
-            ),
-            CommandPaletteItem(
-                id="toggle_split_terminal",
-                label=_split_terminal_label(state),
                 shortcut=None,
                 enabled=True,
             ),
@@ -147,12 +169,18 @@ def _matches_query(item: CommandPaletteItem, query: str) -> bool:
     return lowered_query in item.label.casefold()
 
 
+def _display_path(path: str) -> str:
+    """Replace home directory prefix with ~ for display."""
+    home = os.path.expanduser("~")
+    if path.startswith(home + "/"):
+        return "~" + path[len(home):]
+    if path == home:
+        return "~"
+    return path
+
+
 def _hidden_files_label(state: AppState) -> str:
     return "Hide hidden files" if state.show_hidden else "Show hidden files"
-
-
-def _split_terminal_label(state: AppState) -> str:
-    return "Close split terminal" if state.split_terminal.visible else "Open split terminal"
 
 
 def _select_target_paths(state: AppState) -> tuple[str, ...]:

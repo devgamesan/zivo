@@ -18,11 +18,11 @@ Peneo is a Textual-based TUI file manager for environments where you want to kee
 - An embedded split terminal can be opened below the browser panes. `Ctrl+T` switches quickly between the browser and terminal.
   ![](docs/resources/screen-split-terminal.png)
   _The embedded split terminal opened with `Ctrl+T`, keeping the browser panes visible while shell output stays in view._
-- Filter input, recursive file search, and sort switching are supported.
+- Filter input, recursive file search, recursive grep search, directory-size display, and sort switching are supported.
   ![](docs/resources/screen-filter.png)
   _Inline filter input opened with `/`, narrowing the current directory contents in place._
   ![](docs/resources/screen-find-command.png)
-  _`Find file` opened from `:`, searching recursively under the current directory._
+  _`Find file` opened with `Ctrl+F`, searching recursively under the current directory._
 - File and directory attributes can also be inspected.
   ![](docs/resources/screen-attributes.png)
   _The attribute dialog showing details such as path, size, modified time, and permissions._
@@ -38,6 +38,12 @@ With `uv` installed, clone the repository and install Peneo as a tool.
 git clone https://github.com/devgamesan/peneo.git
 cd peneo
 uv tool install --from . peneo
+```
+
+Recursive grep search opened with `Ctrl+G` depends on `ripgrep` (`rg`) being available on `PATH`. On Ubuntu / Debian-based environments, install it with:
+
+```bash
+sudo apt install ripgrep
 ```
 
 On WSL, also install `wslu` so bridge commands such as `wslview` are available:
@@ -95,6 +101,7 @@ The supported settings are:
 | `terminal` | `windows` | Array of shell-style command templates | Optional terminal launch commands for Windows and WSL bridge workflows. The config key is accepted even though native Windows runtime is not currently supported. |
 | `editor` | `command` | Shell-style string, for example `nvim -u NONE` | Optional terminal editor command used by `e`. Do not include the file path; Peneo appends it automatically. Unsupported GUI editors or invalid commands are ignored. |
 | `display` | `show_hidden_files` | `true` / `false` | Default hidden-file visibility when the app starts. |
+| `display` | `show_directory_sizes` | `true` / `false` | Shows recursive directory sizes in the panes. Defaults to `false` because large directories can be expensive to scan. Peneo also calculates sizes automatically while the main pane is sorted by `size`. |
 | `display` | `theme` | `textual-dark` / `textual-light` | Default UI theme applied on startup and after saving from the settings editor. |
 | `display` | `default_sort_field` | `name` / `modified` / `size` | Default sort field for the main pane. |
 | `display` | `default_sort_descending` | `true` / `false` | Starts the main-pane sort in descending order when enabled. |
@@ -115,6 +122,7 @@ command = "nvim -u NONE"
 
 [display]
 show_hidden_files = false
+show_directory_sizes = false
 theme = "textual-dark"
 default_sort_field = "name"
 default_sort_descending = false
@@ -137,6 +145,9 @@ The main keys are listed below.
 | Normal | `↓` / `j` | Move the cursor |
 | Normal | `←` / `h` / `Backspace` | Move to the parent directory |
 | Normal | `→` / `l` | Enter the item if it is a directory |
+| Normal | `Alt+←` | Go back to the previous directory in history |
+| Normal | `Alt+→` | Go forward to the next directory in history |
+| Normal | `Ctrl+O` | Open the directory history list and jump to a selected directory |
 | Normal | `Enter` | Enter a directory, or open a file with the default app |
 | Normal | `e` | Open the focused file in a terminal editor, using `editor.command` -> `$EDITOR` -> built-in defaults |
 | Normal | `F5` | Reload the current directory |
@@ -152,6 +163,8 @@ The main keys are listed below.
 | Normal | `q` | Quit the app |
 | Normal | `Esc` | Clear the active filter, otherwise clear the selection |
 | Normal | `:` | Open the command palette |
+| Normal | `Ctrl+F` | Open recursive file search |
+| Normal | `Ctrl+G` | Open recursive grep search (`ripgrep` / `rg` required on `PATH`) |
 | Normal | `Ctrl+T` | Open or close the embedded split terminal |
 | Normal (with split terminal open) | Text input and browser shortcuts | Disabled while the split terminal owns input |
 | Filter input | Text input | Update the filter string |
@@ -173,14 +186,12 @@ Less frequent actions are grouped in the command palette opened with `:`.
 
 | Command | Shown when | Behavior / Notes |
 | --- | --- | --- |
-| `Find file` | Always | Switches the palette into recursive file-search mode. Plain input searches the current directory tree with a case-insensitive partial basename match. Prefix the query with `re:` to run a Python regular expression against basenames instead; regex is case-sensitive unless you use inline flags such as `(?i)`. Hidden paths are excluded unless hidden files are currently visible, invalid regex patterns are shown inline in the palette, and `Enter` jumps to the selected result by opening its parent directory and focusing that file. |
 | `Show attributes` | Exactly one target is selected or focused | Opens a read-only dialog with `Name`, `Type`, `Path`, `Size`, `Modified`, `Hidden`, and `Permissions`. |
 | `Copy path` | At least one target is selected or focused | Copies the selected path list, or the focused path when nothing is selected, to the system clipboard. |
 | `Open in file manager` | Always | Opens the current directory in the OS file manager. |
 | `Open terminal here` | Always | Launches an external terminal rooted at the current directory, using `config.toml` templates before built-in fallbacks. |
-| `Open split terminal` / `Close split terminal` | Always | Toggles the embedded split terminal. The label changes with visibility, and the split terminal keeps the directory where it was started instead of following later browser navigation. |
 | `Show hidden files` / `Hide hidden files` | Always | Toggles hidden-file visibility for the browser panes. The label reflects the current visibility state. |
-| `Edit config` | Always | Opens the settings overlay for startup defaults. You can edit the preferred terminal editor, hidden-file visibility, theme, sorting, default paste-conflict behavior, and delete confirmation. Use `↑` / `↓` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
+| `Edit config` | Always | Opens the settings overlay for startup defaults. You can edit the preferred terminal editor, hidden-file visibility, directory-size visibility, theme, sorting, default paste-conflict behavior, and delete confirmation. Use `↑` / `↓` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
 | `Create file` | Always | Starts the inline create-file flow in the current directory. |
 | `Create directory` | Always | Starts the inline create-directory flow in the current directory. |
 

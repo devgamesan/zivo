@@ -14,7 +14,9 @@ from peneo.state import (
     CutTargets,
     DeleteConfirmationState,
     DirectoryEntryState,
+    DirectorySizeCacheEntry,
     FileSearchResultState,
+    GrepSearchResultState,
     NameConflictState,
     NotificationState,
     PaneState,
@@ -136,7 +138,7 @@ def test_select_visible_current_entries_sorts_by_size_without_directories_first(
 
     entries = select_visible_current_entry_states(state)
 
-    assert [entry.name for entry in entries] == ["docs", "beta.txt", "alpha.txt"]
+    assert [entry.name for entry in entries] == ["beta.txt", "alpha.txt", "docs"]
 
 
 def test_select_parent_and_child_entries_hide_hidden_unless_enabled() -> None:
@@ -183,6 +185,65 @@ def test_select_parent_and_child_entries_hide_hidden_unless_enabled() -> None:
         ".draft.md",
         "spec.md",
     ]
+
+
+def test_select_pane_entries_show_directory_sizes_from_cache() -> None:
+    state = replace(
+        build_initial_app_state(
+            config=AppConfig(
+                display=replace(
+                    AppConfig().display,
+                    show_directory_sizes=True,
+                )
+            )
+        ),
+        parent_pane=PaneState(
+            directory_path="/tmp",
+            entries=(DirectoryEntryState("/tmp/peneo", "peneo", "dir"),),
+            cursor_path="/tmp/peneo",
+        ),
+        current_pane=PaneState(
+            directory_path="/home/tadashi/develop/peneo",
+            entries=(
+                DirectoryEntryState("/home/tadashi/develop/peneo/docs", "docs", "dir"),
+                DirectoryEntryState(
+                    "/home/tadashi/develop/peneo/README.md",
+                    "README.md",
+                    "file",
+                    size_bytes=2_150,
+                ),
+            ),
+            cursor_path="/home/tadashi/develop/peneo/docs",
+        ),
+        child_pane=PaneState(
+            directory_path="/home/tadashi/develop/peneo/docs",
+            entries=(DirectoryEntryState("/home/tadashi/develop/peneo/docs/api", "api", "dir"),),
+        ),
+        directory_size_cache=(
+            DirectorySizeCacheEntry(
+                "/tmp/peneo",
+                "ready",
+                size_bytes=3_400_000,
+            ),
+            DirectorySizeCacheEntry(
+                "/home/tadashi/develop/peneo/docs",
+                "pending",
+            ),
+            DirectorySizeCacheEntry(
+                "/home/tadashi/develop/peneo/docs/api",
+                "ready",
+                size_bytes=8_200,
+            ),
+        ),
+    )
+
+    parent_entries = select_parent_entries(state)
+    current_entries = select_current_entries(state)
+    child_entries = select_child_entries(state)
+
+    assert parent_entries[0].name_detail == "3.4 MB"
+    assert current_entries[0].size_label == "calculating..."
+    assert child_entries[0].name_detail == "8.2 KB"
 
 
 def test_select_current_summary_counts_selected_absolute_paths() -> None:
@@ -449,12 +510,14 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
     help_state = select_help_bar_state(state)
 
     assert help_state.lines == (
-        "Enter open | e edit | / filter | : palette | q quit | ctrl+t split",
-        "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename",
+        "Enter open | e edit | / filter | ctrl+f find | ctrl+g grep | q quit",
+        "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename | ctrl+t term",
+        "alt+\u2190 back | alt+\u2192 fwd | ctrl+o history",
     )
     assert help_state.text == (
-        "Enter open | e edit | / filter | : palette | q quit | ctrl+t split\n"
-        "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename"
+        "Enter open | e edit | / filter | ctrl+f find | ctrl+g grep | q quit\n"
+        "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename | ctrl+t term\n"
+        "alt+\u2190 back | alt+\u2192 fwd | ctrl+o history"
     )
 
 
@@ -524,9 +587,8 @@ def test_select_command_palette_state_marks_selected_and_enabled_items() -> None
     palette_state = select_command_palette_state(state)
 
     assert palette_state is not None
-    assert palette_state.title == "Command Palette (1-8 / 10)"
-    assert [item.label for item in palette_state.items[:3]] == [
-        "Find file",
+    assert palette_state.title == "Command Palette"
+    assert [item.label for item in palette_state.items[:2]] == [
         "Show attributes",
         "Copy path",
     ]
@@ -537,7 +599,6 @@ def test_select_command_palette_state_marks_selected_and_enabled_items() -> None
     )
     assert any(item.label == "Edit config" and item.enabled for item in palette_state.items)
     assert any(item.label == "Open terminal here" and item.enabled for item in palette_state.items)
-    assert any(item.label == "Open split terminal" and item.enabled for item in palette_state.items)
 
 
 def test_select_command_palette_state_filters_query() -> None:
@@ -727,9 +788,8 @@ def test_select_command_palette_state_windows_large_file_search_results() -> Non
     palette_state = select_command_palette_state(state)
 
     assert palette_state is not None
-    assert palette_state.title == "Find File (7-14 / 20)"
+    assert palette_state.title == "Find File (8-14 / 20)"
     assert [item.label for item in palette_state.items] == [
-        "src/module_6.py",
         "src/module_7.py",
         "src/module_8.py",
         "src/module_9.py",
@@ -738,7 +798,53 @@ def test_select_command_palette_state_windows_large_file_search_results() -> Non
         "src/module_12.py",
         "src/module_13.py",
     ]
-    assert palette_state.items[4].selected is True
+    assert palette_state.items[3].selected is True
+
+
+def test_select_command_palette_state_for_grep_search_results() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = replace(
+        state,
+        command_palette=CommandPaletteState(
+            source="grep_search",
+            query="todo",
+            grep_search_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/peneo/src/peneo/app.py",
+                    display_path="src/peneo/app.py",
+                    line_number=42,
+                    line_text="TODO: update palette",
+                ),
+            ),
+        ),
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert palette_state.title == "Grep (1-1 / 1)"
+    assert [item.label for item in palette_state.items] == [
+        "src/peneo/app.py:42: TODO: update palette"
+    ]
+
+
+def test_select_command_palette_state_shows_grep_searching_message() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = replace(
+        state,
+        command_palette=CommandPaletteState(
+            source="grep_search",
+            query="todo",
+            grep_search_results=(),
+        ),
+        pending_grep_search_request_id=9,
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert palette_state.title == "Grep"
+    assert palette_state.empty_message == "Searching matches..."
 
 
 def test_select_input_bar_state_for_create_mode() -> None:
@@ -917,3 +1023,54 @@ def test_select_help_bar_for_attribute_dialog() -> None:
     help_state = select_help_bar_state(state)
 
     assert help_state.text == "enter close | esc close"
+
+
+class TestComputeSearchVisibleWindow:
+    """Tests for dynamic search window size calculation."""
+
+    def test_default_terminal_height(self) -> None:
+        assert selectors_module.compute_search_visible_window(24) == 7
+
+    def test_large_terminal(self) -> None:
+        assert selectors_module.compute_search_visible_window(48) == 19
+
+    def test_very_large_terminal(self) -> None:
+        assert selectors_module.compute_search_visible_window(80) == 35
+
+    def test_small_terminal_uses_minimum(self) -> None:
+        assert selectors_module.compute_search_visible_window(10) == 3
+
+    def test_tiny_terminal_uses_minimum(self) -> None:
+        assert selectors_module.compute_search_visible_window(1) == 3
+
+
+class TestSelectSearchWindowWithDynamicSize:
+    """Tests for _select_file_search_window with dynamic terminal height."""
+
+    def test_large_terminal_shows_more_items(self) -> None:
+        results = tuple(
+            FileSearchResultState(
+                path=f"/home/tadashi/develop/peneo/src/module_{index}.py",
+                display_path=f"src/module_{index}.py",
+            )
+            for index in range(30)
+        )
+        state = _reduce_state(
+            replace(build_initial_app_state(), terminal_height=48),
+            BeginCommandPalette(),
+        )
+        state = replace(
+            state,
+            command_palette=CommandPaletteState(
+                source="file_search",
+                query=".py",
+                cursor_index=15,
+                file_search_results=results,
+            ),
+        )
+
+        palette_state = select_command_palette_state(state)
+
+        assert palette_state is not None
+        assert len(palette_state.items) == 19
+        assert palette_state.items[15 - (15 - 9)].selected is True

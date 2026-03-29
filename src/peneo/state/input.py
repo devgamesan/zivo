@@ -1,10 +1,15 @@
 """Keyboard dispatcher that normalizes Textual input into reducer actions."""
 
+import string
+
 from .actions import (
     Action,
     BeginCommandPalette,
     BeginDeleteTargets,
+    BeginFileSearch,
     BeginFilterInput,
+    BeginGrepSearch,
+    BeginHistorySearch,
     BeginRenameInput,
     CancelCommandPalette,
     CancelDeleteConfirmation,
@@ -22,7 +27,10 @@ from .actions import (
     DismissNameConflict,
     EnterCursorDirectory,
     ExitCurrentPath,
+    GoBack,
+    GoForward,
     GoToParentDirectory,
+    JumpCursor,
     MoveCommandPaletteCursor,
     MoveConfigEditorCursor,
     MoveCursor,
@@ -44,7 +52,11 @@ from .actions import (
     ToggleSplitTerminal,
 )
 from .models import AppState, DirectoryEntryState, NotificationState
-from .selectors import select_target_paths, select_visible_current_entry_states
+from .selectors import (
+    compute_search_visible_window,
+    select_target_paths,
+    select_visible_current_entry_states,
+)
 
 DispatchedActions = tuple[Action, ...]
 
@@ -71,9 +83,16 @@ BROWSING_KEYMAP = {
     "l": "enter_directory",
     "enter": "enter_or_open",
     "ctrl+t": "toggle_split_terminal",
+    "ctrl+f": "begin_file_search",
+    "ctrl+g": "begin_grep_search",
     "y": "copy_targets",
     "x": "cut_targets",
     "p": "paste_clipboard",
+    "home": "cursor_home",
+    "end": "cursor_end",
+    "alt+left": "go_back",
+    "alt+right": "go_forward",
+    "ctrl+o": "begin_history_search",
 }
 
 CONFLICT_KEYMAP = {
@@ -83,11 +102,15 @@ CONFLICT_KEYMAP = {
     "r": "rename",
 }
 
+PRINTABLE_BINDING_KEYS = tuple((*string.ascii_letters, *string.digits))
+
 
 def iter_bound_keys() -> tuple[str, ...]:
     """Return the keys that should be installed as app bindings."""
 
-    return tuple(dict.fromkeys((*BROWSING_KEYMAP.keys(), *CONFLICT_KEYMAP.keys())))
+    return tuple(
+        dict.fromkeys((*BROWSING_KEYMAP.keys(), *CONFLICT_KEYMAP.keys(), *PRINTABLE_BINDING_KEYS))
+    )
 
 
 def dispatch_key_input(
@@ -138,6 +161,12 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
     if command == "cursor_down":
         return _supported(MoveCursor(delta=1, visible_paths=visible_paths))
 
+    if command == "cursor_home":
+        return _supported(JumpCursor(position="start", visible_paths=visible_paths))
+
+    if command == "cursor_end":
+        return _supported(JumpCursor(position="end", visible_paths=visible_paths))
+
     if command == "toggle_selection" and state.current_pane.cursor_path is not None:
         return _supported(
             ToggleSelectionAndAdvance(
@@ -163,6 +192,12 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
     if command == "paste_clipboard":
         return _supported(PasteClipboard())
 
+    if command == "go_back":
+        return _supported(GoBack())
+
+    if command == "go_forward":
+        return _supported(GoForward())
+
     if command == "go_to_parent":
         return _supported(GoToParentDirectory())
 
@@ -178,6 +213,15 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
 
     if command == "begin_command_palette":
         return _supported(BeginCommandPalette())
+
+    if command == "begin_file_search":
+        return _supported(BeginFileSearch())
+
+    if command == "begin_grep_search":
+        return _supported(BeginGrepSearch())
+
+    if command == "begin_history_search":
+        return _supported(BeginHistorySearch())
 
     if command == "toggle_split_terminal":
         return _supported(ToggleSplitTerminal())
@@ -294,6 +338,8 @@ def _terminal_control_character(key: str) -> str | None:
     return chr(ord(letter) - ord("a") + 1)
 
 
+
+
 def _dispatch_command_palette_input(
     state: AppState,
     *,
@@ -308,6 +354,20 @@ def _dispatch_command_palette_input(
 
     if key in {"down", "j"}:
         return _supported(MoveCommandPaletteCursor(delta=1))
+
+    if key == "pageup":
+        visible = compute_search_visible_window(state.terminal_height)
+        return _supported(MoveCommandPaletteCursor(delta=-visible))
+
+    if key == "pagedown":
+        visible = compute_search_visible_window(state.terminal_height)
+        return _supported(MoveCommandPaletteCursor(delta=visible))
+
+    if key == "home":
+        return _supported(MoveCommandPaletteCursor(delta=-999999))
+
+    if key == "end":
+        return _supported(MoveCommandPaletteCursor(delta=999999))
 
     if key == "enter":
         return _supported(SubmitCommandPalette())

@@ -1,6 +1,6 @@
 """Selectors that convert AppState into display models."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -26,11 +26,19 @@ from .command_palette import (
     get_command_palette_items,
     normalize_command_palette_cursor,
 )
-from .models import AppState, DirectoryEntryState, FileSearchResultState, SortState
+from .models import (
+    AppState,
+    DirectoryEntryState,
+    DirectorySizeCacheEntry,
+    FileSearchResultState,
+    GrepSearchResultState,
+    SortState,
+)
 
 SIDE_PANE_SORT = SortState(field="name", descending=False, directories_first=True)
 COMMAND_PALETTE_VISIBLE_WINDOW = 8
-FILE_SEARCH_VISIBLE_WINDOW = 8
+MIN_SEARCH_VISIBLE_WINDOW = 3
+_SEARCH_OVERHEAD_ROWS = 5
 
 
 @dataclass(frozen=True)
@@ -50,6 +58,8 @@ def select_shell_data(state: AppState) -> ThreePaneShellData:
         parent_entries=select_parent_entries(state),
         current_entries=_select_current_pane_entries(
             current_pane.visible_entries,
+            state.directory_size_cache,
+            state.config.display.show_directory_sizes or state.sort.field == "size",
             state.current_pane.selected_paths,
             _select_cut_paths(state),
         ),
@@ -73,6 +83,8 @@ def select_parent_entries(state: AppState) -> tuple[PaneEntry, ...]:
     visible_entries = _select_side_pane_entry_states(state.parent_pane.entries, state.show_hidden)
     return _select_side_pane_entries(
         visible_entries,
+        state.directory_size_cache,
+        state.config.display.show_directory_sizes,
         _select_visible_cut_paths(visible_entries, _select_cut_paths(state)),
     )
 
@@ -82,6 +94,8 @@ def select_current_entries(state: AppState) -> tuple[PaneEntry, ...]:
 
     return _select_current_pane_entries(
         select_visible_current_entry_states(state),
+        state.directory_size_cache,
+        state.config.display.show_directory_sizes or state.sort.field == "size",
         state.current_pane.selected_paths,
         _select_cut_paths(state),
     )
@@ -105,6 +119,8 @@ def _select_child_entries_for_cursor(
     visible_entries = _select_side_pane_entry_states(state.child_pane.entries, state.show_hidden)
     return _select_side_pane_entries(
         visible_entries,
+        state.directory_size_cache,
+        state.config.display.show_directory_sizes,
         _select_visible_cut_paths(visible_entries, _select_cut_paths(state)),
     )
 
@@ -155,13 +171,18 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
     if state.ui_mode == "PALETTE":
         if state.command_palette is not None and state.command_palette.source == "file_search":
             return HelpBarState(("type filename | enter jump | esc cancel",))
+        if state.command_palette is not None and state.command_palette.source == "grep_search":
+            return HelpBarState(("type text / re:pattern | enter jump | esc cancel",))
+        if state.command_palette is not None and state.command_palette.source == "history":
+            return HelpBarState(("type path | enter jump | esc cancel",))
         return HelpBarState(("type command | enter run | esc cancel",))
     if state.ui_mode == "BUSY":
         return HelpBarState(("processing...",))
     return HelpBarState(
         (
-            "Enter open | e edit | / filter | : palette | q quit | ctrl+t split",
-            "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename",
+            "Enter open | e edit | / filter | ctrl+f find | ctrl+g grep | q quit",
+            "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename | ctrl+t term",
+            "alt+\u2190 back | alt+\u2192 fwd | ctrl+o history",
         )
     )
 
@@ -204,6 +225,7 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
     cursor_index = normalize_command_palette_cursor(state, state.command_palette.cursor_index)
     if state.command_palette.source == "file_search":
         visible_results, title = _select_file_search_window(
+            state,
             state.command_palette.file_search_results,
             cursor_index,
         )
@@ -220,6 +242,43 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
                 for index, result in visible_results
             ),
             empty_message=_file_search_empty_message(state),
+        )
+    if state.command_palette.source == "grep_search":
+        visible_results, title = _select_grep_search_window(
+            state,
+            state.command_palette.grep_search_results,
+            cursor_index,
+        )
+        return CommandPaletteViewState(
+            title=title,
+            query=state.command_palette.query,
+            items=tuple(
+                CommandPaletteItemViewState(
+                    label=result.display_label,
+                    shortcut=None,
+                    enabled=True,
+                    selected=index == cursor_index,
+                )
+                for index, result in visible_results
+            ),
+            empty_message=_grep_search_empty_message(state),
+        )
+    if state.command_palette.source == "history":
+        items = get_command_palette_items(state)
+        visible_items, _palette_title = _select_command_palette_window(items, cursor_index)
+        return CommandPaletteViewState(
+            title="Directory History",
+            query=state.command_palette.query,
+            items=tuple(
+                CommandPaletteItemViewState(
+                    label=item.label,
+                    shortcut=item.shortcut,
+                    enabled=item.enabled,
+                    selected=index == cursor_index,
+                )
+                for index, item in visible_items
+            ),
+            empty_message="No directory history",
         )
 
     items = get_command_palette_items(state)
@@ -370,27 +429,38 @@ def select_config_dialog_state(state: AppState) -> ConfigDialogState | None:
             "Show hidden files",
             _format_bool(config.display.show_hidden_files),
         ),
-        _format_config_line(2, selected_index, "Theme", config.display.theme),
+        _format_config_line(
+            2,
+            selected_index,
+            "Theme",
+            config.display.theme,
+        ),
         _format_config_line(
             3,
+            selected_index,
+            "Show directory sizes",
+            _format_bool(config.display.show_directory_sizes),
+        ),
+        _format_config_line(
+            4,
             selected_index,
             "Default sort field",
             config.display.default_sort_field,
         ),
         _format_config_line(
-            4,
+            5,
             selected_index,
             "Default sort descending",
             _format_bool(config.display.default_sort_descending),
         ),
         _format_config_line(
-            5, selected_index, "Directories first", _format_bool(config.display.directories_first)
+            6, selected_index, "Directories first", _format_bool(config.display.directories_first)
         ),
         _format_config_line(
-            6, selected_index, "Confirm delete", _format_bool(config.behavior.confirm_delete)
+            7, selected_index, "Confirm delete", _format_bool(config.behavior.confirm_delete)
         ),
         _format_config_line(
-            7, selected_index, "Paste conflict action", config.behavior.paste_conflict_action
+            8, selected_index, "Paste conflict action", config.behavior.paste_conflict_action
         ),
         "",
         _format_custom_editor_hint(config.editor.command),
@@ -431,6 +501,7 @@ def select_visible_current_entry_states(state: AppState) -> tuple[DirectoryEntry
 
     return _select_visible_current_entry_states(
         state.current_pane.entries,
+        state.directory_size_cache,
         state.show_hidden,
         state.filter.query,
         state.filter.active,
@@ -457,6 +528,7 @@ def _select_current_pane_projection(state: AppState) -> _CurrentPaneProjection:
 @lru_cache(maxsize=256)
 def _select_visible_current_entry_states(
     entries: tuple[DirectoryEntryState, ...],
+    directory_size_cache: tuple[DirectorySizeCacheEntry, ...],
     show_hidden: bool,
     query: str,
     active: bool,
@@ -464,6 +536,7 @@ def _select_visible_current_entry_states(
 ) -> tuple[DirectoryEntryState, ...]:
     visible_entries = _filter_hidden_entries(entries, show_hidden)
     visible_entries = _filter_entries(visible_entries, query, active)
+    visible_entries = _overlay_directory_sizes(visible_entries, directory_size_cache)
     return _sort_entries(visible_entries, sort)
 
 
@@ -478,6 +551,8 @@ def _select_side_pane_entry_states(
 @lru_cache(maxsize=256)
 def _select_current_pane_entries(
     visible_entries: tuple[DirectoryEntryState, ...],
+    directory_size_cache: tuple[DirectorySizeCacheEntry, ...],
+    display_directory_sizes: bool,
     selected_paths: frozenset[str],
     cut_paths: frozenset[str],
 ) -> tuple[PaneEntry, ...]:
@@ -485,6 +560,11 @@ def _select_current_pane_entries(
         _to_pane_entry(
             entry,
             name_detail=_format_current_entry_name_detail(entry),
+            size_label_override=_format_entry_size_label(
+                entry,
+                directory_size_cache,
+                display_directory_sizes=display_directory_sizes,
+            ),
             selected=entry.path in selected_paths,
             cut=entry.path in cut_paths,
         )
@@ -495,9 +575,22 @@ def _select_current_pane_entries(
 @lru_cache(maxsize=256)
 def _select_side_pane_entries(
     visible_entries: tuple[DirectoryEntryState, ...],
+    directory_size_cache: tuple[DirectorySizeCacheEntry, ...],
+    display_directory_sizes: bool,
     cut_paths: frozenset[str],
 ) -> tuple[PaneEntry, ...]:
-    return tuple(_to_pane_entry(entry, cut=entry.path in cut_paths) for entry in visible_entries)
+    return tuple(
+        _to_pane_entry(
+            entry,
+            name_detail=_format_side_pane_name_detail(
+                entry,
+                directory_size_cache,
+                display_directory_sizes=display_directory_sizes,
+            ),
+            cut=entry.path in cut_paths,
+        )
+        for entry in visible_entries
+    )
 
 
 @lru_cache(maxsize=512)
@@ -558,6 +651,9 @@ def _sort_entries(
     entries: tuple[DirectoryEntryState, ...],
     sort: SortState,
 ) -> tuple[DirectoryEntryState, ...]:
+    if sort.field == "size":
+        return _sort_entries_by_size(entries, sort)
+
     directories = [entry for entry in entries if entry.kind == "dir"]
     files = [entry for entry in entries if entry.kind == "file"]
 
@@ -569,6 +665,20 @@ def _sort_entries(
     else:
         combined = sorted(entries, key=_sort_key(sort.field), reverse=sort.descending)
 
+    return tuple(combined)
+
+
+def _sort_entries_by_size(
+    entries: tuple[DirectoryEntryState, ...],
+    sort: SortState,
+) -> tuple[DirectoryEntryState, ...]:
+    key = _sort_size_key(sort.descending)
+    directories = [entry for entry in entries if entry.kind == "dir"]
+    files = [entry for entry in entries if entry.kind == "file"]
+    if sort.directories_first:
+        combined = [*sorted(directories, key=key), *sorted(files, key=key)]
+    else:
+        combined = sorted(entries, key=key)
     return tuple(combined)
 
 
@@ -588,30 +698,71 @@ def _sort_key(field: str):
     return lambda entry: entry.name.casefold()
 
 
+def _sort_size_key(descending: bool):
+    def key(entry: DirectoryEntryState) -> tuple[int, int, str]:
+        if entry.size_bytes is None:
+            return (1, 0, entry.name.casefold())
+        value = -entry.size_bytes if descending else entry.size_bytes
+        return (0, value, entry.name.casefold())
+
+    return key
+
+
 def _format_sort_label(sort: SortState) -> str:
     direction = "desc" if sort.descending else "asc"
     directories = "on" if sort.directories_first else "off"
     return f"{sort.field} {direction} dirs:{directories}"
 
 
+def compute_search_visible_window(terminal_height: int) -> int:
+    """Calculate visible search items based on terminal height."""
+    palette_rows = max(1, terminal_height // 2)
+    return max(MIN_SEARCH_VISIBLE_WINDOW, palette_rows - _SEARCH_OVERHEAD_ROWS)
+
+
 def _select_file_search_window(
+    state: AppState,
     results: tuple[FileSearchResultState, ...],
     cursor_index: int,
 ) -> tuple[tuple[tuple[int, FileSearchResultState], ...], str]:
+    visible_window = compute_search_visible_window(state.terminal_height)
+    return _select_search_window(
+        results, cursor_index, title="Find File", visible_window=visible_window,
+    )
+
+
+def _select_grep_search_window(
+    state: AppState,
+    results: tuple[GrepSearchResultState, ...],
+    cursor_index: int,
+) -> tuple[tuple[tuple[int, GrepSearchResultState], ...], str]:
+    visible_window = compute_search_visible_window(state.terminal_height)
+    return _select_search_window(
+        results, cursor_index, title="Grep", visible_window=visible_window,
+    )
+
+
+def _select_search_window(
+    results: tuple[FileSearchResultState | GrepSearchResultState, ...],
+    cursor_index: int,
+    *,
+    title: str,
+    visible_window: int,
+) -> tuple[tuple[tuple[int, FileSearchResultState | GrepSearchResultState], ...], str]:
     total = len(results)
     if total == 0:
-        return (), "Find File"
+        return (), title
 
     start = max(
         0,
         min(
-            cursor_index - (FILE_SEARCH_VISIBLE_WINDOW // 2),
-            max(0, total - FILE_SEARCH_VISIBLE_WINDOW),
+            cursor_index - (visible_window // 2),
+            max(0, total - visible_window),
         ),
     )
-    end = min(total, start + FILE_SEARCH_VISIBLE_WINDOW)
+    end = min(total, start + visible_window)
     visible_results = tuple((index, results[index]) for index in range(start, end))
-    return visible_results, f"Find File ({start + 1}-{end} / {total})"
+    return visible_results, f"{title} ({start + 1}-{end} / {total})"
 
 
 def _select_command_palette_window(
@@ -646,6 +797,18 @@ def _file_search_empty_message(state: AppState) -> str:
     return "No matching files"
 
 
+def _grep_search_empty_message(state: AppState) -> str:
+    if state.pending_grep_search_request_id is not None:
+        return "Searching matches..."
+    if (
+        state.command_palette is not None
+        and state.command_palette.source == "grep_search"
+        and state.command_palette.grep_search_error_message is not None
+    ):
+        return state.command_palette.grep_search_error_message
+    return "No matching lines"
+
+
 def _get_current_cursor_entry(state: AppState) -> DirectoryEntryState | None:
     return _select_current_pane_projection(state).cursor_entry
 
@@ -661,6 +824,7 @@ def _to_pane_entry(
     entry: DirectoryEntryState,
     *,
     name_detail: str | None = None,
+    size_label_override: str | None = None,
     selected: bool = False,
     cut: bool = False,
 ) -> PaneEntry:
@@ -668,7 +832,7 @@ def _to_pane_entry(
         name=entry.name,
         kind=entry.kind,
         name_detail=name_detail,
-        size_label=_format_size_label(entry.size_bytes),
+        size_label=size_label_override or _format_size_label(entry.size_bytes),
         modified_label=_format_modified_label(entry),
         selected=selected,
         cut=cut,
@@ -694,7 +858,13 @@ def _format_size_label(size_bytes: int | None) -> str:
         return "-"
     if size_bytes < 1_000:
         return f"{size_bytes} B"
-    return f"{size_bytes / 1_000:.1f} KB"
+    units = ("KB", "MB", "GB", "TB")
+    size = float(size_bytes)
+    for unit in units:
+        size /= 1_000
+        if size < 1_000 or unit == units[-1]:
+            return f"{size:.1f} {unit}"
+    return f"{size:.1f} TB"
 
 
 def _format_modified_label(entry: DirectoryEntryState) -> str:
@@ -732,3 +902,62 @@ def _format_custom_editor_hint(command: str | None) -> str:
 
 def _format_current_entry_name_detail(entry: DirectoryEntryState) -> str | None:
     return None
+
+
+@lru_cache(maxsize=256)
+def _directory_size_cache_by_path(
+    directory_size_cache: tuple[DirectorySizeCacheEntry, ...],
+) -> dict[str, DirectorySizeCacheEntry]:
+    return {entry.path: entry for entry in directory_size_cache}
+
+
+@lru_cache(maxsize=256)
+def _overlay_directory_sizes(
+    entries: tuple[DirectoryEntryState, ...],
+    directory_size_cache: tuple[DirectorySizeCacheEntry, ...],
+) -> tuple[DirectoryEntryState, ...]:
+    cache_by_path = _directory_size_cache_by_path(directory_size_cache)
+    return tuple(
+        replace(entry, size_bytes=cache_by_path[entry.path].size_bytes)
+        if entry.kind == "dir"
+        and entry.path in cache_by_path
+        and cache_by_path[entry.path].status == "ready"
+        else entry
+        for entry in entries
+    )
+
+
+def _format_entry_size_label(
+    entry: DirectoryEntryState,
+    directory_size_cache: tuple[DirectorySizeCacheEntry, ...],
+    *,
+    display_directory_sizes: bool,
+) -> str:
+    if entry.kind != "dir":
+        return _format_size_label(entry.size_bytes)
+    if not display_directory_sizes:
+        return "-"
+    cached_entry = _directory_size_cache_by_path(directory_size_cache).get(entry.path)
+    if cached_entry is None or cached_entry.status == "failed":
+        return "-"
+    if cached_entry.status == "pending":
+        return "calculating..."
+    return _format_size_label(cached_entry.size_bytes)
+
+
+def _format_side_pane_name_detail(
+    entry: DirectoryEntryState,
+    directory_size_cache: tuple[DirectorySizeCacheEntry, ...],
+    *,
+    display_directory_sizes: bool,
+) -> str | None:
+    if entry.kind != "dir":
+        return None
+    size_label = _format_entry_size_label(
+        entry,
+        directory_size_cache,
+        display_directory_sizes=display_directory_sizes,
+    )
+    if size_label == "-":
+        return None
+    return size_label

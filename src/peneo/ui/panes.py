@@ -71,9 +71,10 @@ class SidePane(Vertical):
 
     @classmethod
     def _render_label(cls, entry: PaneEntry) -> Text:
+        label = entry.name if entry.name_detail is None else f"{entry.name}  ({entry.name_detail})"
         if not entry.cut:
-            return Text(entry.name)
-        return Text(entry.name, style=cls.CUT_STYLE)
+            return Text(label)
+        return Text(label, style=cls.CUT_STYLE)
 
 
 class MainPane(Vertical):

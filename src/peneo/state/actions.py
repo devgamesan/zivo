@@ -1,6 +1,7 @@
 """Reducer actions for app state transitions."""
 
 from dataclasses import dataclass
+from typing import Literal
 
 from peneo.models import (
     AppConfig,
@@ -17,6 +18,7 @@ from .models import (
     AppState,
     BrowserSnapshot,
     FileSearchResultState,
+    GrepSearchResultState,
     NotificationState,
     PaneState,
     SortField,
@@ -73,6 +75,21 @@ class BeginCreateInput:
     """Enter create input mode for a new file or directory."""
 
     kind: CreateKind
+
+
+@dataclass(frozen=True)
+class BeginFileSearch:
+    """Open the command palette in file search mode."""
+
+
+@dataclass(frozen=True)
+class BeginGrepSearch:
+    """Open the command palette in grep search mode."""
+
+
+@dataclass(frozen=True)
+class BeginHistorySearch:
+    """Open the command palette in directory history mode."""
 
 
 @dataclass(frozen=True)
@@ -148,6 +165,25 @@ class FileSearchFailed:
 
 
 @dataclass(frozen=True)
+class GrepSearchCompleted:
+    """Apply completed grep-search results to the command palette."""
+
+    request_id: int
+    query: str
+    results: tuple[GrepSearchResultState, ...]
+
+
+@dataclass(frozen=True)
+class GrepSearchFailed:
+    """Apply a terminal grep-search failure."""
+
+    request_id: int
+    query: str
+    message: str
+    invalid_query: bool = False
+
+
+@dataclass(frozen=True)
 class SetPendingInputValue:
     """Update the rename/create text input value."""
 
@@ -173,6 +209,14 @@ class MoveCursor:
 
 
 @dataclass(frozen=True)
+class JumpCursor:
+    """Jump cursor to the start or end of the visible path list."""
+
+    position: Literal["start", "end"]
+    visible_paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class SetCursorPath:
     """Set the current pane cursor to a specific absolute path."""
 
@@ -192,6 +236,16 @@ class GoToParentDirectory:
 @dataclass(frozen=True)
 class ReloadDirectory:
     """Reload the current directory snapshot."""
+
+
+@dataclass(frozen=True)
+class GoBack:
+    """Navigate to the previous directory in the history stack."""
+
+
+@dataclass(frozen=True)
+class GoForward:
+    """Navigate to the next directory in the history forward stack."""
 
 
 @dataclass(frozen=True)
@@ -351,6 +405,13 @@ class RequestBrowserSnapshot:
 
 
 @dataclass(frozen=True)
+class RequestDirectorySizes:
+    """Request asynchronous recursive sizes for visible directories."""
+
+    paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class BrowserSnapshotLoaded:
     """Apply a loaded browser snapshot to reducer state."""
 
@@ -381,6 +442,24 @@ class ChildPaneSnapshotFailed:
     """Apply an error raised while loading the child pane."""
 
     request_id: int
+    message: str
+
+
+@dataclass(frozen=True)
+class DirectorySizesLoaded:
+    """Apply completed recursive directory sizes."""
+
+    request_id: int
+    sizes: tuple[tuple[str, int], ...]
+    failures: tuple[tuple[str, str], ...] = ()
+
+
+@dataclass(frozen=True)
+class DirectorySizesFailed:
+    """Apply a terminal recursive size failure."""
+
+    request_id: int
+    paths: tuple[str, ...]
     message: str
 
 
@@ -491,6 +570,13 @@ class ConfigSaveFailed:
     message: str
 
 
+@dataclass(frozen=True)
+class SetTerminalHeight:
+    """Update the stored terminal height."""
+
+    height: int
+
+
 Action = (
     InitializeState
     | SetUiMode
@@ -499,6 +585,9 @@ Action = (
     | CancelFilterInput
     | BeginRenameInput
     | BeginCreateInput
+    | BeginFileSearch
+    | BeginGrepSearch
+    | BeginHistorySearch
     | BeginCommandPalette
     | CancelCommandPalette
     | MoveCommandPaletteCursor
@@ -510,13 +599,18 @@ Action = (
     | SaveConfigEditor
     | FileSearchCompleted
     | FileSearchFailed
+    | GrepSearchCompleted
+    | GrepSearchFailed
     | SetPendingInputValue
     | SubmitPendingInput
     | CancelPendingInput
     | MoveCursor
+    | JumpCursor
     | SetCursorPath
     | EnterCursorDirectory
     | GoToParentDirectory
+    | GoBack
+    | GoForward
     | ReloadDirectory
     | ExitCurrentPath
     | OpenPathWithDefaultApp
@@ -540,10 +634,13 @@ Action = (
     | SetSort
     | SetNotification
     | RequestBrowserSnapshot
+    | RequestDirectorySizes
     | BrowserSnapshotLoaded
     | BrowserSnapshotFailed
     | ChildPaneSnapshotLoaded
     | ChildPaneSnapshotFailed
+    | DirectorySizesLoaded
+    | DirectorySizesFailed
     | ClipboardPasteNeedsResolution
     | ClipboardPasteCompleted
     | ClipboardPasteFailed
@@ -557,4 +654,5 @@ Action = (
     | SplitTerminalExited
     | ConfigSaveCompleted
     | ConfigSaveFailed
+    | SetTerminalHeight
 )

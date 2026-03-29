@@ -1,6 +1,7 @@
 """Filesystem adapter for reading local directory entries."""
 
 import os
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,17 @@ class DirectoryReader(Protocol):
     """Boundary for reading directory entries from an external filesystem."""
 
     def list_directory(self, path: str) -> tuple[DirectoryEntryState, ...]: ...
+
+
+class DirectorySizeReader(Protocol):
+    """Boundary for recursive directory-size calculations."""
+
+    def calculate_directory_size(
+        self,
+        path: str,
+        *,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> int: ...
 
 
 @dataclass(frozen=True)
@@ -30,6 +42,20 @@ class LocalFilesystemAdapter:
         entries.sort(key=lambda entry: (entry.kind != "dir", entry.name.casefold()))
         return tuple(entries)
 
+    def calculate_directory_size(
+        self,
+        path: str,
+        *,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> int:
+        directory = Path(path).expanduser().resolve()
+        if not directory.exists():
+            raise FileNotFoundError(path)
+        if not directory.is_dir():
+            raise NotADirectoryError(path)
+        return _calculate_directory_size(directory, is_cancelled=is_cancelled)
+
+
 def _build_directory_entry(entry: os.DirEntry[str]) -> DirectoryEntryState | None:
     try:
         stat_result = entry.stat()
@@ -46,3 +72,35 @@ def _build_directory_entry(entry: os.DirEntry[str]) -> DirectoryEntryState | Non
         hidden=entry.name.startswith("."),
         permissions_mode=stat_result.st_mode,
     )
+
+
+def _calculate_directory_size(
+    directory: Path,
+    *,
+    is_cancelled: Callable[[], bool] | None = None,
+) -> int:
+    if is_cancelled is not None and is_cancelled():
+        raise DirectorySizeCancelled()
+
+    total_size = 0
+    with os.scandir(directory) as iterator:
+        for child in iterator:
+            if is_cancelled is not None and is_cancelled():
+                raise DirectorySizeCancelled()
+            try:
+                if child.is_symlink():
+                    continue
+                if child.is_dir(follow_symlinks=False):
+                    total_size += _calculate_directory_size(
+                        Path(child.path),
+                        is_cancelled=is_cancelled,
+                    )
+                    continue
+                total_size += child.stat(follow_symlinks=False).st_size
+            except FileNotFoundError:
+                continue
+    return total_size
+
+
+class DirectorySizeCancelled(RuntimeError):
+    """Raised internally to abort a recursive size walk."""

@@ -34,6 +34,14 @@ class LoadChildPaneSnapshotEffect:
 
 
 @dataclass(frozen=True)
+class RunDirectorySizeEffect:
+    """Execute recursive size calculation outside the reducer."""
+
+    request_id: int
+    paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class RunClipboardPasteEffect:
     """Execute a clipboard paste outside the reducer."""
 
@@ -60,6 +68,16 @@ class RunExternalLaunchEffect:
 @dataclass(frozen=True)
 class RunFileSearchEffect:
     """Execute a recursive filename search outside the reducer."""
+
+    request_id: int
+    root_path: str
+    query: str
+    show_hidden: bool
+
+
+@dataclass(frozen=True)
+class RunGrepSearchEffect:
+    """Execute a recursive content search outside the reducer."""
 
     request_id: int
     root_path: str
@@ -102,10 +120,12 @@ class RunConfigSaveEffect:
 Effect = (
     LoadBrowserSnapshotEffect
     | LoadChildPaneSnapshotEffect
+    | RunDirectorySizeEffect
     | RunClipboardPasteEffect
     | RunFileMutationEffect
     | RunExternalLaunchEffect
     | RunFileSearchEffect
+    | RunGrepSearchEffect
     | StartSplitTerminalEffect
     | WriteSplitTerminalInputEffect
     | CloseSplitTerminalEffect

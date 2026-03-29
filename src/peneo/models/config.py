@@ -29,6 +29,7 @@ class DisplayConfig:
     """Display-related startup defaults."""
 
     show_hidden_files: bool = False
+    show_directory_sizes: bool = False
     theme: ConfigTheme = "textual-dark"
     default_sort_field: ConfigSortField = "name"
     default_sort_descending: bool = False

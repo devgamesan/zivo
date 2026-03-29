@@ -163,6 +163,13 @@ def _load_display_config(section: object, warnings: list[str]) -> DisplayConfig:
             warnings=warnings,
             section_name="display",
         ),
+        show_directory_sizes=_read_bool(
+            section,
+            key="show_directory_sizes",
+            default=config.show_directory_sizes,
+            warnings=warnings,
+            section_name="display",
+        ),
         default_sort_descending=_read_bool(
             section,
             key="default_sort_descending",
@@ -344,6 +351,7 @@ def render_app_config(config: AppConfig) -> str:
 
         [display]
         show_hidden_files = {show_hidden_files}
+        show_directory_sizes = {show_directory_sizes}
         theme = "{theme}"
         default_sort_field = "{default_sort_field}"
         default_sort_descending = {default_sort_descending}
@@ -359,6 +367,7 @@ def render_app_config(config: AppConfig) -> str:
         windows=_render_command_array(config.terminal.windows),
         editor_command=_render_optional_toml_string(config.editor.command),
         show_hidden_files=_render_bool(config.display.show_hidden_files),
+        show_directory_sizes=_render_bool(config.display.show_directory_sizes),
         theme=config.display.theme,
         default_sort_field=config.display.default_sort_field,
         default_sort_descending=_render_bool(config.display.default_sort_descending),

@@ -15,7 +15,10 @@ from peneo.state import (
     BeginCommandPalette,
     BeginCreateInput,
     BeginDeleteTargets,
+    BeginFileSearch,
     BeginFilterInput,
+    BeginGrepSearch,
+    BeginHistorySearch,
     BeginRenameInput,
     BrowserSnapshot,
     BrowserSnapshotFailed,
@@ -43,6 +46,9 @@ from peneo.state import (
     CycleConfigEditorValue,
     DeleteConfirmationState,
     DirectoryEntryState,
+    DirectorySizeCacheEntry,
+    DirectorySizesFailed,
+    DirectorySizesLoaded,
     DismissAttributeDialog,
     DismissConfigEditor,
     DismissNameConflict,
@@ -55,7 +61,14 @@ from peneo.state import (
     FileSearchFailed,
     FileSearchResultState,
     FocusSplitTerminal,
+    GoBack,
+    GoForward,
     GoToParentDirectory,
+    GrepSearchCompleted,
+    GrepSearchFailed,
+    GrepSearchResultState,
+    HistoryState,
+    JumpCursor,
     LoadBrowserSnapshotEffect,
     LoadChildPaneSnapshotEffect,
     MoveCommandPaletteCursor,
@@ -72,12 +85,15 @@ from peneo.state import (
     PendingInputState,
     ReloadDirectory,
     RequestBrowserSnapshot,
+    RequestDirectorySizes,
     ResolvePasteConflict,
     RunClipboardPasteEffect,
     RunConfigSaveEffect,
+    RunDirectorySizeEffect,
     RunExternalLaunchEffect,
     RunFileMutationEffect,
     RunFileSearchEffect,
+    RunGrepSearchEffect,
     SaveConfigEditor,
     SendSplitTerminalInput,
     SetCommandPaletteQuery,
@@ -85,6 +101,7 @@ from peneo.state import (
     SetFilterQuery,
     SetPendingInputValue,
     SetSort,
+    SetTerminalHeight,
     SetUiMode,
     SplitTerminalExited,
     SplitTerminalOutputReceived,
@@ -115,6 +132,125 @@ def test_set_ui_mode_updates_only_mode() -> None:
     assert next_state.ui_mode == "FILTER"
     assert next_state.current_pane == state.current_pane
     assert next_state.filter == state.filter
+
+
+def test_request_directory_sizes_marks_paths_pending_and_emits_effect() -> None:
+    state = build_initial_app_state()
+
+    result = reduce_app_state(
+        state,
+        RequestDirectorySizes(("/home/tadashi/develop/peneo/docs",)),
+    )
+
+    assert result.state.pending_directory_size_request_id == 1
+    assert result.state.directory_size_cache == (
+        DirectorySizeCacheEntry("/home/tadashi/develop/peneo/docs", "pending"),
+    )
+    assert result.effects == (
+        RunDirectorySizeEffect(
+            request_id=1,
+            paths=("/home/tadashi/develop/peneo/docs",),
+        ),
+    )
+
+
+def test_request_browser_snapshot_clears_directory_size_cache() -> None:
+    state = replace(
+        build_initial_app_state(),
+        directory_size_cache=(
+            DirectorySizeCacheEntry("/home/tadashi/develop/peneo/docs", "ready", size_bytes=123),
+        ),
+        pending_directory_size_request_id=7,
+    )
+
+    next_state = reduce_app_state(
+        state,
+        RequestBrowserSnapshot("/home/tadashi/develop/peneo", blocking=True),
+    ).state
+
+    assert next_state.directory_size_cache == ()
+    assert next_state.pending_directory_size_request_id is None
+
+
+def test_directory_sizes_loaded_updates_cache_when_request_matches() -> None:
+    state = replace(
+        build_initial_app_state(),
+        directory_size_cache=(
+            DirectorySizeCacheEntry("/home/tadashi/develop/peneo/docs", "pending"),
+        ),
+        pending_directory_size_request_id=9,
+    )
+
+    next_state = _reduce_state(
+        state,
+        DirectorySizesLoaded(
+            request_id=9,
+            sizes=(("/home/tadashi/develop/peneo/docs", 4321),),
+        ),
+    )
+
+    assert next_state.directory_size_cache == (
+        DirectorySizeCacheEntry("/home/tadashi/develop/peneo/docs", "ready", size_bytes=4321),
+    )
+    assert next_state.pending_directory_size_request_id is None
+
+
+def test_directory_sizes_loaded_marks_partial_failures() -> None:
+    state = replace(
+        build_initial_app_state(),
+        directory_size_cache=(
+            DirectorySizeCacheEntry("/home/tadashi/develop/peneo/docs", "pending"),
+            DirectorySizeCacheEntry("/home/tadashi/develop/peneo/private", "pending"),
+        ),
+        pending_directory_size_request_id=9,
+    )
+
+    next_state = _reduce_state(
+        state,
+        DirectorySizesLoaded(
+            request_id=9,
+            sizes=(("/home/tadashi/develop/peneo/docs", 4321),),
+            failures=(("/home/tadashi/develop/peneo/private", "Permission denied"),),
+        ),
+    )
+
+    assert next_state.directory_size_cache == (
+        DirectorySizeCacheEntry("/home/tadashi/develop/peneo/docs", "ready", size_bytes=4321),
+        DirectorySizeCacheEntry(
+            "/home/tadashi/develop/peneo/private",
+            "failed",
+            error_message="Permission denied",
+        ),
+    )
+    assert next_state.pending_directory_size_request_id is None
+
+
+def test_directory_sizes_failed_marks_requested_paths_failed() -> None:
+    state = replace(
+        build_initial_app_state(),
+        directory_size_cache=(
+            DirectorySizeCacheEntry("/home/tadashi/develop/peneo/docs", "pending"),
+        ),
+        pending_directory_size_request_id=4,
+    )
+
+    next_state = _reduce_state(
+        state,
+        DirectorySizesFailed(
+            request_id=4,
+            paths=("/home/tadashi/develop/peneo/docs",),
+            message="Permission denied",
+        ),
+    )
+
+    assert next_state.directory_size_cache == (
+        DirectorySizeCacheEntry(
+            "/home/tadashi/develop/peneo/docs",
+            "failed",
+            error_message="Permission denied",
+        ),
+    )
+    assert next_state.pending_directory_size_request_id is None
 
 
 def test_toggle_selection_uses_absolute_paths() -> None:
@@ -413,7 +549,7 @@ def test_move_command_palette_cursor_clamps_to_visible_commands() -> None:
     next_state = _reduce_state(state, MoveCommandPaletteCursor(delta=10))
 
     assert next_state.command_palette is not None
-    assert next_state.command_palette.cursor_index == 9
+    assert next_state.command_palette.cursor_index == 7
 
 
 def test_set_command_palette_query_resets_cursor() -> None:
@@ -442,17 +578,83 @@ def test_submit_command_palette_runs_create_file_flow() -> None:
     )
 
 
-def test_submit_command_palette_enters_find_file_mode() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-
-    next_state = _reduce_state(state, SubmitCommandPalette())
+def test_begin_file_search_enters_find_file_mode() -> None:
+    next_state = _reduce_state(build_initial_app_state(), BeginFileSearch())
 
     assert next_state.ui_mode == "PALETTE"
     assert next_state.command_palette == CommandPaletteState(source="file_search")
 
 
-def test_submit_command_palette_opens_config_editor() -> None:
+def test_begin_grep_search_enters_grep_mode() -> None:
+    next_state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+
+    assert next_state.ui_mode == "PALETTE"
+    assert next_state.command_palette == CommandPaletteState(source="grep_search")
+
+
+def test_begin_history_search_enters_history_mode() -> None:
+    state = build_initial_app_state()
+    state = replace(
+        state,
+        history=HistoryState(
+            back=("/tmp/a", "/tmp/b"),
+            forward=("/tmp/c",),
+        ),
+    )
+    next_state = _reduce_state(state, BeginHistorySearch())
+
+    assert next_state.ui_mode == "PALETTE"
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.source == "history"
+    # back is reversed (most recent first) + forward in order
+    assert next_state.command_palette.history_results == ("/tmp/b", "/tmp/a", "/tmp/c")
+
+
+def test_begin_history_search_with_empty_history() -> None:
+    next_state = _reduce_state(build_initial_app_state(), BeginHistorySearch())
+
+    assert next_state.ui_mode == "PALETTE"
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.source == "history"
+    assert next_state.command_palette.history_results == ()
+
+
+def test_submit_history_palette_navigates_to_selected_directory() -> None:
+    state = build_initial_app_state()
+    state = replace(
+        state,
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="history",
+            history_results=("/tmp/a", "/tmp/b", "/tmp/c"),
+            cursor_index=1,
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.command_palette is None
+    assert any(
+        isinstance(e, LoadBrowserSnapshotEffect) and e.path == "/tmp/b"
+        for e in result.effects
+    )
+
+
+def test_submit_history_palette_with_empty_history_shows_warning() -> None:
+    state = build_initial_app_state()
+    state = replace(
+        state,
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="history",
+            history_results=(),
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.notification is not None
+    assert result.state.notification.message == "No directory history"
     state = _reduce_state(
         build_initial_app_state(config_path="/tmp/peneo/config.toml"),
         BeginCommandPalette(),
@@ -482,7 +684,7 @@ def test_move_config_editor_cursor_clamps_to_visible_settings() -> None:
     next_state = _reduce_state(state, MoveConfigEditorCursor(delta=99))
 
     assert next_state.config_editor is not None
-    assert next_state.config_editor.cursor_index == 7
+    assert next_state.config_editor.cursor_index == 8
 
 
 def test_cycle_config_editor_editor_command_updates_draft_and_dirty_state() -> None:
@@ -536,6 +738,24 @@ def test_cycle_config_editor_theme_updates_draft_and_dirty_state() -> None:
 
     assert next_state.config_editor is not None
     assert next_state.config_editor.draft.display.theme == "textual-light"
+    assert next_state.config_editor.dirty is True
+
+
+def test_cycle_config_editor_directory_size_visibility_updates_draft_and_dirty_state() -> None:
+    state = replace(
+        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        ui_mode="CONFIG",
+        config_editor=ConfigEditorState(
+            path="/tmp/peneo/config.toml",
+            draft=build_initial_app_state().config,
+            cursor_index=3,
+        ),
+    )
+
+    next_state = _reduce_state(state, CycleConfigEditorValue(delta=1))
+
+    assert next_state.config_editor is not None
+    assert next_state.config_editor.draft.display.show_directory_sizes is True
     assert next_state.config_editor.dirty is True
 
 
@@ -768,23 +988,6 @@ def test_open_path_in_editor_allows_non_browser_file_path() -> None:
     )
 
 
-def test_submit_command_palette_toggles_split_terminal() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("split"))
-
-    result = reduce_app_state(state, SubmitCommandPalette())
-
-    assert result.state.ui_mode == "BROWSING"
-    assert result.state.split_terminal.visible is True
-    assert result.state.split_terminal.status == "starting"
-    assert result.effects == (
-        StartSplitTerminalEffect(
-            session_id=1,
-            cwd="/home/tadashi/develop/peneo",
-        ),
-    )
-
-
 def test_toggle_split_terminal_starts_embedded_session() -> None:
     result = reduce_app_state(build_initial_app_state(), ToggleSplitTerminal())
 
@@ -955,9 +1158,7 @@ def test_submit_command_palette_uses_selected_paths_for_copy_path() -> None:
 
 
 def test_set_command_palette_query_starts_file_search_effect() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
 
     result = reduce_app_state(state, SetCommandPaletteQuery("read"))
 
@@ -975,11 +1176,28 @@ def test_set_command_palette_query_starts_file_search_effect() -> None:
     )
 
 
+def test_set_command_palette_query_starts_grep_search_effect() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+
+    result = reduce_app_state(state, SetCommandPaletteQuery("todo"))
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.source == "grep_search"
+    assert result.state.command_palette.query == "todo"
+    assert result.state.pending_grep_search_request_id == 1
+    assert result.effects == (
+        RunGrepSearchEffect(
+            request_id=1,
+            root_path="/home/tadashi/develop/peneo",
+            query="todo",
+            show_hidden=False,
+        ),
+    )
+
+
 def test_set_command_palette_query_reuses_completed_file_search_results_for_prefix_extension(
 ) -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     state = replace(
         state,
         command_palette=replace(
@@ -1028,9 +1246,7 @@ def test_set_command_palette_query_reuses_completed_file_search_results_for_pref
 
 
 def test_set_command_palette_query_runs_new_search_when_query_is_not_prefix_extension() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     state = replace(
         state,
         command_palette=replace(
@@ -1069,9 +1285,7 @@ def test_set_command_palette_query_runs_new_search_when_query_is_not_prefix_exte
 
 
 def test_set_command_palette_query_runs_new_search_for_regex_queries() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     state = replace(
         state,
         command_palette=replace(
@@ -1104,9 +1318,7 @@ def test_set_command_palette_query_runs_new_search_for_regex_queries() -> None:
 
 
 def test_file_search_completed_updates_palette_results() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     search_state = replace(
         state,
         command_palette=replace(state.command_palette, query="read"),
@@ -1141,9 +1353,7 @@ def test_file_search_completed_updates_palette_results() -> None:
 
 
 def test_file_search_completed_does_not_cache_regex_queries() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     search_state = replace(
         state,
         command_palette=replace(state.command_palette, query=r"re:^README\.md$"),
@@ -1176,9 +1386,7 @@ def test_file_search_completed_does_not_cache_regex_queries() -> None:
 
 
 def test_file_search_failed_sets_inline_error_for_invalid_regex() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     search_state = replace(
         state,
         command_palette=replace(
@@ -1215,9 +1423,7 @@ def test_file_search_failed_sets_inline_error_for_invalid_regex() -> None:
 
 
 def test_submit_command_palette_uses_inline_error_message_when_present() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     state = replace(
         state,
         command_palette=replace(
@@ -1236,9 +1442,7 @@ def test_submit_command_palette_uses_inline_error_message_when_present() -> None
 
 
 def test_submit_command_palette_file_search_result_requests_snapshot() -> None:
-    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
-    state = _reduce_state(state, SetCommandPaletteQuery("find"))
-    state = _reduce_state(state, SubmitCommandPalette())
+    state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     state = replace(
         state,
         command_palette=replace(
@@ -1263,6 +1467,109 @@ def test_submit_command_palette_file_search_result_requests_snapshot() -> None:
             request_id=1,
             path="/home/tadashi/develop/peneo/docs",
             cursor_path="/home/tadashi/develop/peneo/docs/README.md",
+            blocking=True,
+        ),
+    )
+
+
+def test_grep_search_completed_updates_palette_results() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    search_state = replace(
+        state,
+        command_palette=replace(state.command_palette, query="todo"),
+        pending_grep_search_request_id=4,
+    )
+
+    next_state = _reduce_state(
+        search_state,
+        GrepSearchCompleted(
+            request_id=4,
+            query="todo",
+            results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/peneo/src/peneo/app.py",
+                    display_path="src/peneo/app.py",
+                    line_number=42,
+                    line_text="TODO: update palette",
+                ),
+            ),
+        ),
+    )
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.grep_search_results == (
+        GrepSearchResultState(
+            path="/home/tadashi/develop/peneo/src/peneo/app.py",
+            display_path="src/peneo/app.py",
+            line_number=42,
+            line_text="TODO: update palette",
+        ),
+    )
+    assert next_state.pending_grep_search_request_id is None
+
+
+def test_grep_search_failed_sets_inline_error_for_invalid_regex() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    search_state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            query="re:[",
+            grep_search_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/peneo/src/peneo/app.py",
+                    display_path="src/peneo/app.py",
+                    line_number=42,
+                    line_text="TODO: update palette",
+                ),
+            ),
+        ),
+        pending_grep_search_request_id=4,
+    )
+
+    next_state = _reduce_state(
+        search_state,
+        GrepSearchFailed(
+            request_id=4,
+            query="re:[",
+            message="regex parse error",
+            invalid_query=True,
+        ),
+    )
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.grep_search_results == ()
+    assert next_state.command_palette.grep_search_error_message == "regex parse error"
+    assert next_state.pending_grep_search_request_id is None
+
+
+def test_submit_command_palette_grep_result_requests_snapshot() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            query="todo",
+            grep_search_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/peneo/src/peneo/app.py",
+                    display_path="src/peneo/app.py",
+                    line_number=42,
+                    line_text="TODO: update palette",
+                ),
+            ),
+            cursor_index=0,
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.ui_mode == "BUSY"
+    assert result.effects == (
+        LoadBrowserSnapshotEffect(
+            request_id=1,
+            path="/home/tadashi/develop/peneo/src/peneo",
+            cursor_path="/home/tadashi/develop/peneo/src/peneo/app.py",
             blocking=True,
         ),
     )
@@ -2318,3 +2625,281 @@ def test_child_pane_snapshot_failure_sets_error_and_clears_entries() -> None:
         level="error",
         message="permission denied",
     )
+
+
+class TestSetTerminalHeight:
+    def test_updates_terminal_height(self) -> None:
+        state = build_initial_app_state()
+        assert state.terminal_height == 24
+
+        next_state = _reduce_state(state, SetTerminalHeight(height=48))
+
+        assert next_state.terminal_height == 48
+
+    def test_no_change_when_same_height(self) -> None:
+        state = build_initial_app_state()
+        next_state = _reduce_state(state, SetTerminalHeight(height=24))
+
+        assert next_state is state
+
+
+def test_jump_cursor_start() -> None:
+    state = build_initial_app_state()
+    visible_paths = (
+        "/home/tadashi/develop/peneo/docs",
+        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/peneo/tests",
+    )
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/tests"))
+
+    result = reduce_app_state(state, JumpCursor(position="start", visible_paths=visible_paths))
+
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/docs"
+    assert result.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=2,
+            current_path="/home/tadashi/develop/peneo",
+            cursor_path="/home/tadashi/develop/peneo/docs",
+        ),
+    )
+
+
+def test_jump_cursor_end() -> None:
+    state = build_initial_app_state()
+    visible_paths = (
+        "/home/tadashi/develop/peneo/docs",
+        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/peneo/tests",
+    )
+
+    result = reduce_app_state(state, JumpCursor(position="end", visible_paths=visible_paths))
+
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/tests"
+    assert result.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=1,
+            current_path="/home/tadashi/develop/peneo",
+            cursor_path="/home/tadashi/develop/peneo/tests",
+        ),
+    )
+
+
+def test_jump_cursor_empty_paths() -> None:
+    state = build_initial_app_state()
+
+    result = reduce_app_state(state, JumpCursor(position="start", visible_paths=()))
+
+    assert result.state is state
+
+
+def test_jump_cursor_with_filter() -> None:
+    state = build_initial_app_state()
+    filtered_paths = (
+        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/peneo/tests",
+    )
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/tests"))
+
+    result = reduce_app_state(
+        state,
+        JumpCursor(position="start", visible_paths=filtered_paths),
+    )
+
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/src"
+
+
+def test_go_back_does_nothing_when_back_stack_is_empty() -> None:
+    state = build_initial_app_state()
+
+    result = reduce_app_state(state, GoBack())
+
+    assert result.state == state
+
+
+def test_go_back_requests_snapshot_from_back_stack() -> None:
+    state = replace(
+        build_initial_app_state(),
+        history=HistoryState(
+            back=("/home/tadashi", "/home/tadashi/downloads"),
+            forward=(),
+        ),
+    )
+
+    result = reduce_app_state(state, GoBack())
+
+    assert result.state.pending_browser_snapshot_request_id is not None
+    assert result.state.ui_mode == "BUSY"
+    assert len(result.effects) == 1
+    assert result.effects[0].path == "/home/tadashi/downloads"
+
+
+def test_go_forward_does_nothing_when_forward_stack_is_empty() -> None:
+    state = build_initial_app_state()
+
+    result = reduce_app_state(state, GoForward())
+
+    assert result.state == state
+
+
+def test_go_forward_requests_snapshot_from_forward_stack() -> None:
+    state = replace(
+        build_initial_app_state(),
+        history=HistoryState(
+            back=(),
+            forward=("/home/tadashi/downloads",),
+        ),
+    )
+
+    result = reduce_app_state(state, GoForward())
+
+    assert result.state.pending_browser_snapshot_request_id is not None
+    assert result.state.ui_mode == "BUSY"
+    assert len(result.effects) == 1
+    assert result.effects[0].path == "/home/tadashi/downloads"
+
+
+def test_browser_snapshot_loaded_records_history_on_path_change() -> None:
+    state = build_initial_app_state()
+    initial_path = state.current_path
+    state = _reduce_state(state, RequestBrowserSnapshot("/tmp/example"))
+
+    snapshot = BrowserSnapshot(
+        current_path="/tmp/example",
+        parent_pane=state.parent_pane,
+        current_pane=state.current_pane,
+        child_pane=state.child_pane,
+    )
+
+    next_state = _reduce_state(
+        state,
+        BrowserSnapshotLoaded(
+            request_id=state.pending_browser_snapshot_request_id,
+            snapshot=snapshot,
+            blocking=True,
+        ),
+    )
+
+    assert next_state.current_path == "/tmp/example"
+    assert next_state.history.back == (initial_path,)
+    assert next_state.history.forward == ()
+
+
+def test_browser_snapshot_loaded_clears_forward_on_new_navigation() -> None:
+    initial_path = build_initial_app_state().current_path
+    state = replace(
+        build_initial_app_state(),
+        history=HistoryState(
+            back=("/home/tadashi",),
+            forward=("/home/tadashi/downloads", "/home/tadashi/documents"),
+        ),
+    )
+    state = _reduce_state(state, RequestBrowserSnapshot("/tmp/new_place"))
+
+    snapshot = BrowserSnapshot(
+        current_path="/tmp/new_place",
+        parent_pane=state.parent_pane,
+        current_pane=state.current_pane,
+        child_pane=state.child_pane,
+    )
+
+    next_state = _reduce_state(
+        state,
+        BrowserSnapshotLoaded(
+            request_id=state.pending_browser_snapshot_request_id,
+            snapshot=snapshot,
+            blocking=True,
+        ),
+    )
+
+    assert next_state.history.forward == ()
+    assert next_state.history.back == ("/home/tadashi", initial_path)
+
+
+def test_browser_snapshot_loaded_does_not_record_history_on_reload() -> None:
+    state = build_initial_app_state()
+    state = _reduce_state(state, RequestBrowserSnapshot(state.current_path))
+
+    snapshot = BrowserSnapshot(
+        current_path=state.current_path,
+        parent_pane=state.parent_pane,
+        current_pane=state.current_pane,
+        child_pane=state.child_pane,
+    )
+
+    next_state = _reduce_state(
+        state,
+        BrowserSnapshotLoaded(
+            request_id=state.pending_browser_snapshot_request_id,
+            snapshot=snapshot,
+            blocking=True,
+        ),
+    )
+
+    assert next_state.history.back == ()
+    assert next_state.history.forward == ()
+
+
+def test_go_back_then_snapshot_loaded_updates_history_correctly() -> None:
+    initial_path = "/home/tadashi"
+    second_path = "/home/tadashi/develop"
+
+    state = replace(
+        build_initial_app_state(),
+        current_path=second_path,
+        history=HistoryState(back=(initial_path,), forward=()),
+    )
+
+    result = reduce_app_state(state, GoBack())
+    assert result.effects[0].path == initial_path
+
+    snapshot = BrowserSnapshot(
+        current_path=initial_path,
+        parent_pane=state.parent_pane,
+        current_pane=state.current_pane,
+        child_pane=state.child_pane,
+    )
+    loaded_result = _reduce_state(
+        result.state,
+        BrowserSnapshotLoaded(
+            request_id=result.state.pending_browser_snapshot_request_id,
+            snapshot=snapshot,
+            blocking=True,
+        ),
+    )
+
+    assert loaded_result.current_path == initial_path
+    assert loaded_result.history.back == ()
+    assert loaded_result.history.forward == (second_path,)
+
+
+def test_go_forward_then_snapshot_loaded_updates_history_correctly() -> None:
+    initial_path = "/home/tadashi"
+    forward_path = "/home/tadashi/develop"
+
+    state = replace(
+        build_initial_app_state(),
+        current_path=initial_path,
+        history=HistoryState(back=(), forward=(forward_path,)),
+    )
+
+    result = reduce_app_state(state, GoForward())
+    assert result.effects[0].path == forward_path
+
+    snapshot = BrowserSnapshot(
+        current_path=forward_path,
+        parent_pane=state.parent_pane,
+        current_pane=state.current_pane,
+        child_pane=state.child_pane,
+    )
+    loaded_result = _reduce_state(
+        result.state,
+        BrowserSnapshotLoaded(
+            request_id=result.state.pending_browser_snapshot_request_id,
+            snapshot=snapshot,
+            blocking=True,
+        ),
+    )
+
+    assert loaded_result.current_path == forward_path
+    assert loaded_result.history.back == (initial_path,)
+    assert loaded_result.history.forward == ()

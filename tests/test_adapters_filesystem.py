@@ -60,3 +60,33 @@ def test_local_filesystem_adapter_treats_directory_symlink_as_dir(tmp_path) -> N
     assert entries[0].kind == "dir"
     assert entries[1].kind == "dir"
     assert entries[1].size_bytes is None
+
+
+def test_local_filesystem_adapter_calculates_recursive_directory_size(tmp_path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    (docs / "guide.md").write_text("guide", encoding="utf-8")
+    nested = docs / "nested"
+    nested.mkdir()
+    (nested / "deep.txt").write_text("deep-data", encoding="utf-8")
+
+    adapter = LocalFilesystemAdapter()
+
+    size = adapter.calculate_directory_size(str(docs))
+
+    assert size == len("guide") + len("deep-data")
+
+
+def test_local_filesystem_adapter_directory_size_ignores_symlinks(tmp_path) -> None:
+    docs = tmp_path / "docs"
+    docs.mkdir()
+    target = tmp_path / "target.txt"
+    target.write_text("linked-data", encoding="utf-8")
+    (docs / "guide.md").write_text("guide", encoding="utf-8")
+    (docs / "target-link").symlink_to(target)
+
+    adapter = LocalFilesystemAdapter()
+
+    size = adapter.calculate_directory_size(str(docs))
+
+    assert size == len("guide")

@@ -19,6 +19,11 @@ from .config import (
     render_app_config,
     resolve_config_path,
 )
+from .directory_size import (
+    DirectorySizeService,
+    FakeDirectorySizeService,
+    LiveDirectorySizeService,
+)
 from .external_launcher import (
     ExternalLaunchService,
     FakeExternalLaunchService,
@@ -35,6 +40,12 @@ from .file_search import (
     InvalidFileSearchQueryError,
     LiveFileSearchService,
 )
+from .grep_search import (
+    FakeGrepSearchService,
+    GrepSearchService,
+    InvalidGrepSearchQueryError,
+    LiveGrepSearchService,
+)
 from .split_terminal import (
     FakeSplitTerminalService,
     LiveSplitTerminalService,
@@ -47,18 +58,25 @@ __all__ = [
     "BrowserSnapshotLoader",
     "ClipboardOperationService",
     "ConfigSaveService",
+    "DirectorySizeService",
     "ExternalLaunchService",
     "FileSearchService",
+    "GrepSearchService",
     "FakeFileMutationService",
     "FakeFileSearchService",
+    "FakeGrepSearchService",
+    "FakeDirectorySizeService",
     "InvalidFileSearchQueryError",
+    "InvalidGrepSearchQueryError",
     "FakeBrowserSnapshotLoader",
     "FakeClipboardOperationService",
     "FakeExternalLaunchService",
     "FileMutationService",
     "LiveExternalLaunchService",
     "LiveFileSearchService",
+    "LiveGrepSearchService",
     "LiveFileMutationService",
+    "LiveDirectorySizeService",
     "LiveClipboardOperationService",
     "LiveBrowserSnapshotLoader",
     "LiveConfigSaveService",

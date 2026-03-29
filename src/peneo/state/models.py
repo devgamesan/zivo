@@ -19,12 +19,14 @@ UiMode = Literal["BROWSING", "FILTER", "RENAME", "CREATE", "PALETTE", "CONFIRM",
 SortField = Literal["name", "modified", "size"]
 ClipboardMode = Literal["copy", "cut", "none"]
 NameConflictKind = Literal["rename", "create_file", "create_dir"]
-CommandPaletteSource = Literal["commands", "file_search"]
+CommandPaletteSource = Literal["commands", "file_search", "grep_search", "history"]
 SplitTerminalStatus = Literal["closed", "starting", "running"]
 SplitTerminalFocusTarget = Literal["browser", "terminal"]
+DirectorySizeStatus = Literal["pending", "ready", "failed"]
 ConfigFieldId = Literal[
     "editor.command",
     "display.show_hidden_files",
+    "display.show_directory_sizes",
     "display.theme",
     "display.default_sort_field",
     "display.default_sort_descending",
@@ -157,11 +159,37 @@ class PendingInputState:
 
 
 @dataclass(frozen=True)
+class DirectorySizeCacheEntry:
+    """Cached recursive directory size for a visible path."""
+
+    path: str
+    status: DirectorySizeStatus
+    size_bytes: int | None = None
+    error_message: str | None = None
+
+
+@dataclass(frozen=True)
 class FileSearchResultState:
     """A single file-search result shown in the command palette."""
 
     path: str
     display_path: str
+
+
+@dataclass(frozen=True)
+class GrepSearchResultState:
+    """A single grep result shown in the command palette."""
+
+    path: str
+    display_path: str
+    line_number: int
+    line_text: str
+
+    @property
+    def display_label(self) -> str:
+        """Return the single-line palette label for the grep match."""
+
+        return f"{self.display_path}:{self.line_number}: {self.line_text}"
 
 
 @dataclass(frozen=True)
@@ -177,6 +205,9 @@ class CommandPaletteState:
     file_search_cache_results: tuple[FileSearchResultState, ...] = ()
     file_search_cache_root_path: str | None = None
     file_search_cache_show_hidden: bool = False
+    grep_search_results: tuple[GrepSearchResultState, ...] = ()
+    grep_search_error_message: str | None = None
+    history_results: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -229,12 +260,16 @@ class AppState:
     attribute_inspection: AttributeInspectionState | None = None
     config_editor: ConfigEditorState | None = None
     post_reload_notification: NotificationState | None = None
+    directory_size_cache: tuple[DirectorySizeCacheEntry, ...] = ()
     pending_browser_snapshot_request_id: int | None = None
     pending_child_pane_request_id: int | None = None
     pending_paste_request_id: int | None = None
     pending_file_mutation_request_id: int | None = None
     pending_file_search_request_id: int | None = None
+    pending_grep_search_request_id: int | None = None
+    pending_directory_size_request_id: int | None = None
     pending_config_save_request_id: int | None = None
+    terminal_height: int = 24
     next_request_id: int = 1
 
 
