@@ -26,6 +26,7 @@ from peneo.state import (
     EnterCursorDirectory,
     ExitCurrentPath,
     GoToParentDirectory,
+    JumpCursor,
     MoveCommandPaletteCursor,
     MoveConfigEditorCursor,
     MoveCursor,
@@ -889,3 +890,55 @@ def test_busy_key_shows_warning_message() -> None:
             NotificationState(level="warning", message="Input ignored while processing")
         ),
     )
+
+
+def test_browsing_home_dispatches_jump_cursor_start() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="home")
+
+    assert actions[0] == SetNotification(None)
+    assert actions[1] == JumpCursor(
+        position="start",
+        visible_paths=(
+            "/home/tadashi/develop/peneo/docs",
+            "/home/tadashi/develop/peneo/src",
+            "/home/tadashi/develop/peneo/tests",
+            "/home/tadashi/develop/peneo/pyproject.toml",
+            "/home/tadashi/develop/peneo/README.md",
+        ),
+    )
+
+
+def test_browsing_end_dispatches_jump_cursor_end() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="end")
+
+    assert actions[0] == SetNotification(None)
+    assert actions[1] == JumpCursor(
+        position="end",
+        visible_paths=(
+            "/home/tadashi/develop/peneo/docs",
+            "/home/tadashi/develop/peneo/src",
+            "/home/tadashi/develop/peneo/tests",
+            "/home/tadashi/develop/peneo/pyproject.toml",
+            "/home/tadashi/develop/peneo/README.md",
+        ),
+    )
+
+
+def test_palette_home_jumps_to_start() -> None:
+    state = replace(build_initial_app_state(), ui_mode="PALETTE")
+
+    actions = dispatch_key_input(state, key="home")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=-999999))
+
+
+def test_palette_end_jumps_to_end() -> None:
+    state = replace(build_initial_app_state(), ui_mode="PALETTE")
+
+    actions = dispatch_key_input(state, key="end")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=999999))

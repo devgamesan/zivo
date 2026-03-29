@@ -64,6 +64,7 @@ from peneo.state import (
     GrepSearchCompleted,
     GrepSearchFailed,
     GrepSearchResultState,
+    JumpCursor,
     LoadBrowserSnapshotEffect,
     LoadChildPaneSnapshotEffect,
     MoveCommandPaletteCursor,
@@ -2574,3 +2575,68 @@ class TestSetTerminalHeight:
         next_state = _reduce_state(state, SetTerminalHeight(height=24))
 
         assert next_state is state
+
+
+def test_jump_cursor_start() -> None:
+    state = build_initial_app_state()
+    visible_paths = (
+        "/home/tadashi/develop/peneo/docs",
+        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/peneo/tests",
+    )
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/tests"))
+
+    result = reduce_app_state(state, JumpCursor(position="start", visible_paths=visible_paths))
+
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/docs"
+    assert result.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=2,
+            current_path="/home/tadashi/develop/peneo",
+            cursor_path="/home/tadashi/develop/peneo/docs",
+        ),
+    )
+
+
+def test_jump_cursor_end() -> None:
+    state = build_initial_app_state()
+    visible_paths = (
+        "/home/tadashi/develop/peneo/docs",
+        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/peneo/tests",
+    )
+
+    result = reduce_app_state(state, JumpCursor(position="end", visible_paths=visible_paths))
+
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/tests"
+    assert result.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=1,
+            current_path="/home/tadashi/develop/peneo",
+            cursor_path="/home/tadashi/develop/peneo/tests",
+        ),
+    )
+
+
+def test_jump_cursor_empty_paths() -> None:
+    state = build_initial_app_state()
+
+    result = reduce_app_state(state, JumpCursor(position="start", visible_paths=()))
+
+    assert result.state is state
+
+
+def test_jump_cursor_with_filter() -> None:
+    state = build_initial_app_state()
+    filtered_paths = (
+        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/peneo/tests",
+    )
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/tests"))
+
+    result = reduce_app_state(
+        state,
+        JumpCursor(position="start", visible_paths=filtered_paths),
+    )
+
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/src"

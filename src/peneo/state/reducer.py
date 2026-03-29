@@ -60,6 +60,7 @@ from .actions import (
     GrepSearchCompleted,
     GrepSearchFailed,
     InitializeState,
+    JumpCursor,
     MoveCommandPaletteCursor,
     MoveConfigEditorCursor,
     MoveCursor,
@@ -726,6 +727,21 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             state.current_pane.cursor_path,
             action.visible_paths,
             action.delta,
+        )
+        next_state = replace(
+            state,
+            current_pane=replace(state.current_pane, cursor_path=cursor_path),
+            notification=None,
+        )
+        return _sync_child_pane(next_state, cursor_path)
+
+    if isinstance(action, JumpCursor):
+        if not action.visible_paths:
+            return done(state)
+        cursor_path = (
+            action.visible_paths[0]
+            if action.position == "start"
+            else action.visible_paths[-1]
         )
         next_state = replace(
             state,

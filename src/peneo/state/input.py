@@ -27,6 +27,7 @@ from .actions import (
     EnterCursorDirectory,
     ExitCurrentPath,
     GoToParentDirectory,
+    JumpCursor,
     MoveCommandPaletteCursor,
     MoveConfigEditorCursor,
     MoveCursor,
@@ -84,6 +85,8 @@ BROWSING_KEYMAP = {
     "y": "copy_targets",
     "x": "cut_targets",
     "p": "paste_clipboard",
+    "home": "cursor_home",
+    "end": "cursor_end",
 }
 
 CONFLICT_KEYMAP = {
@@ -151,6 +154,12 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
 
     if command == "cursor_down":
         return _supported(MoveCursor(delta=1, visible_paths=visible_paths))
+
+    if command == "cursor_home":
+        return _supported(JumpCursor(position="start", visible_paths=visible_paths))
+
+    if command == "cursor_end":
+        return _supported(JumpCursor(position="end", visible_paths=visible_paths))
 
     if command == "toggle_selection" and state.current_pane.cursor_path is not None:
         return _supported(
@@ -338,6 +347,12 @@ def _dispatch_command_palette_input(
     if key == "pagedown":
         visible = compute_search_visible_window(state.terminal_height)
         return _supported(MoveCommandPaletteCursor(delta=visible))
+
+    if key == "home":
+        return _supported(MoveCommandPaletteCursor(delta=-999999))
+
+    if key == "end":
+        return _supported(MoveCommandPaletteCursor(delta=999999))
 
     if key == "enter":
         return _supported(SubmitCommandPalette())

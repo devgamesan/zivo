@@ -1,6 +1,7 @@
 """Reducer actions for app state transitions."""
 
 from dataclasses import dataclass
+from typing import Literal
 
 from peneo.models import (
     AppConfig,
@@ -199,6 +200,14 @@ class MoveCursor:
     """Move the cursor within a caller-provided visible path list."""
 
     delta: int
+    visible_paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class JumpCursor:
+    """Jump cursor to the start or end of the visible path list."""
+
+    position: Literal["start", "end"]
     visible_paths: tuple[str, ...]
 
 
@@ -580,6 +589,7 @@ Action = (
     | SubmitPendingInput
     | CancelPendingInput
     | MoveCursor
+    | JumpCursor
     | SetCursorPath
     | EnterCursorDirectory
     | GoToParentDirectory
