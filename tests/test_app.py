@@ -217,6 +217,22 @@ async def _wait_for_directory_sizes(app, timeout: float = 0.5) -> None:
         await asyncio.sleep(0.01)
 
 
+async def _wait_for_table_cell(
+    app, expected: str, row: int, col: int, timeout: float = 5.0
+) -> None:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
+        table = app.query_one("#current-pane-table", DataTable)
+        if str(table.get_cell_at((row, col))) == expected:
+            return
+        if asyncio.get_running_loop().time() >= deadline:
+            actual = table.get_cell_at((row, col))
+            raise AssertionError(
+                f"table cell ({row}, {col}) is {actual!r}, expected {expected!r}"
+            )
+        await asyncio.sleep(0.01)
+
+
 class FakeConfigSaveService:
     def __init__(
         self, *, saved_path: str | None = None, failure_message: str | None = None
@@ -458,8 +474,8 @@ async def test_app_loads_directory_sizes_when_enabled() -> None:
 
     async with app.run_test():
         await _wait_for_snapshot_loaded(app, path)
-        await _wait_for_directory_sizes(app, timeout=5.0)
         await _wait_for_row_count(app, 2)
+        await _wait_for_table_cell(app, "4.2 KB", 0, 3)
 
         table = app.query_one("#current-pane-table", DataTable)
         child_list = app.query_one("#child-pane-list", ListView)
@@ -509,8 +525,8 @@ async def test_app_keeps_successful_directory_sizes_when_some_paths_fail() -> No
 
     async with app.run_test():
         await _wait_for_snapshot_loaded(app, path)
-        await _wait_for_directory_sizes(app, timeout=5.0)
         await _wait_for_row_count(app, 2)
+        await _wait_for_table_cell(app, "4.2 KB", 0, 3)
 
         table = app.query_one("#current-pane-table", DataTable)
         child_list = app.query_one("#child-pane-list", ListView)
