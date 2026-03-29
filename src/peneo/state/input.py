@@ -9,6 +9,7 @@ from .actions import (
     BeginFileSearch,
     BeginFilterInput,
     BeginGrepSearch,
+    BeginHistorySearch,
     BeginRenameInput,
     CancelCommandPalette,
     CancelDeleteConfirmation,
@@ -91,6 +92,7 @@ BROWSING_KEYMAP = {
     "end": "cursor_end",
     "alt+left": "go_back",
     "alt+right": "go_forward",
+    "ctrl+o": "begin_history_search",
 }
 
 CONFLICT_KEYMAP = {
@@ -217,6 +219,9 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
 
     if command == "begin_grep_search":
         return _supported(BeginGrepSearch())
+
+    if command == "begin_history_search":
+        return _supported(BeginHistorySearch())
 
     if command == "toggle_split_terminal":
         return _supported(ToggleSplitTerminal())

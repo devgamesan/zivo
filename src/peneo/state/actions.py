@@ -88,6 +88,11 @@ class BeginGrepSearch:
 
 
 @dataclass(frozen=True)
+class BeginHistorySearch:
+    """Open the command palette in directory history mode."""
+
+
+@dataclass(frozen=True)
 class BeginCommandPalette:
     """Open the command palette."""
 
@@ -582,6 +587,7 @@ Action = (
     | BeginCreateInput
     | BeginFileSearch
     | BeginGrepSearch
+    | BeginHistorySearch
     | BeginCommandPalette
     | CancelCommandPalette
     | MoveCommandPaletteCursor

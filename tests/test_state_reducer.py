@@ -18,6 +18,7 @@ from peneo.state import (
     BeginFileSearch,
     BeginFilterInput,
     BeginGrepSearch,
+    BeginHistorySearch,
     BeginRenameInput,
     BrowserSnapshot,
     BrowserSnapshotFailed,
@@ -591,7 +592,69 @@ def test_begin_grep_search_enters_grep_mode() -> None:
     assert next_state.command_palette == CommandPaletteState(source="grep_search")
 
 
-def test_submit_command_palette_opens_config_editor() -> None:
+def test_begin_history_search_enters_history_mode() -> None:
+    state = build_initial_app_state()
+    state = replace(
+        state,
+        history=HistoryState(
+            back=("/tmp/a", "/tmp/b"),
+            forward=("/tmp/c",),
+        ),
+    )
+    next_state = _reduce_state(state, BeginHistorySearch())
+
+    assert next_state.ui_mode == "PALETTE"
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.source == "history"
+    # back is reversed (most recent first) + forward in order
+    assert next_state.command_palette.history_results == ("/tmp/b", "/tmp/a", "/tmp/c")
+
+
+def test_begin_history_search_with_empty_history() -> None:
+    next_state = _reduce_state(build_initial_app_state(), BeginHistorySearch())
+
+    assert next_state.ui_mode == "PALETTE"
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.source == "history"
+    assert next_state.command_palette.history_results == ()
+
+
+def test_submit_history_palette_navigates_to_selected_directory() -> None:
+    state = build_initial_app_state()
+    state = replace(
+        state,
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="history",
+            history_results=("/tmp/a", "/tmp/b", "/tmp/c"),
+            cursor_index=1,
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.command_palette is None
+    assert any(
+        isinstance(e, LoadBrowserSnapshotEffect) and e.path == "/tmp/b"
+        for e in result.effects
+    )
+
+
+def test_submit_history_palette_with_empty_history_shows_warning() -> None:
+    state = build_initial_app_state()
+    state = replace(
+        state,
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="history",
+            history_results=(),
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.notification is not None
+    assert result.state.notification.message == "No directory history"
     state = _reduce_state(
         build_initial_app_state(config_path="/tmp/peneo/config.toml"),
         BeginCommandPalette(),

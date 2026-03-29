@@ -22,6 +22,7 @@ from .actions import (
     BeginFileSearch,
     BeginFilterInput,
     BeginGrepSearch,
+    BeginHistorySearch,
     BeginRenameInput,
     BrowserSnapshotFailed,
     BrowserSnapshotLoaded,
@@ -313,6 +314,26 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             )
         )
 
+    if isinstance(action, BeginHistorySearch):
+        history_items = tuple(reversed(state.history.back)) + state.history.forward
+        return done(
+            replace(
+                state,
+                ui_mode="PALETTE",
+                notification=None,
+                pending_input=None,
+                command_palette=CommandPaletteState(
+                    source="history",
+                    history_results=history_items,
+                ),
+                pending_file_search_request_id=None,
+                pending_grep_search_request_id=None,
+                delete_confirmation=None,
+                name_conflict=None,
+                attribute_inspection=None,
+            )
+        )
+
     if isinstance(action, CancelCommandPalette):
         return done(
             replace(
@@ -499,6 +520,38 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 RequestBrowserSnapshot(
                     str(Path(selected_result.path).parent),
                     cursor_path=selected_result.path,
+                    blocking=True,
+                ),
+            )
+
+        if state.command_palette.source == "history":
+            items = get_command_palette_items(state)
+            if not items:
+                return done(
+                    replace(
+                        state,
+                        notification=NotificationState(
+                            level="warning",
+                            message="No directory history",
+                        ),
+                    )
+                )
+            selected_item = items[
+                normalize_command_palette_cursor(state, state.command_palette.cursor_index)
+            ]
+            next_state = replace(
+                state,
+                ui_mode="BROWSING",
+                notification=None,
+                command_palette=None,
+                pending_file_search_request_id=None,
+                pending_grep_search_request_id=None,
+                attribute_inspection=None,
+            )
+            return reduce_app_state(
+                next_state,
+                RequestBrowserSnapshot(
+                    selected_item.path,
                     blocking=True,
                 ),
             )

@@ -241,9 +241,12 @@ def test_select_pane_entries_show_directory_sizes_from_cache() -> None:
     current_entries = select_current_entries(state)
     child_entries = select_child_entries(state)
 
-    assert parent_entries[0].name_detail == "3.4 MB"
+    # Parent/Child panes do not show directory sizes (Issue #187)
+    assert parent_entries[0].name_detail is None
+    assert parent_entries[0].size_label == "-"
     assert current_entries[0].size_label == "calculating..."
-    assert child_entries[0].name_detail == "8.2 KB"
+    assert child_entries[0].name_detail is None
+    assert child_entries[0].size_label == "-"
 
 
 def test_select_current_summary_counts_selected_absolute_paths() -> None:
@@ -512,10 +515,12 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
     assert help_state.lines == (
         "Enter open | e edit | / filter | ctrl+f find | ctrl+g grep | q quit",
         "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename | ctrl+t term",
+        "alt+\u2190 back | alt+\u2192 fwd | ctrl+o history",
     )
     assert help_state.text == (
         "Enter open | e edit | / filter | ctrl+f find | ctrl+g grep | q quit\n"
-        "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename | ctrl+t term"
+        "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename | ctrl+t term\n"
+        "alt+\u2190 back | alt+\u2192 fwd | ctrl+o history"
     )
 
 

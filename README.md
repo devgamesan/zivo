@@ -147,6 +147,7 @@ The main keys are listed below.
 | Normal | `→` / `l` | Enter the item if it is a directory |
 | Normal | `Alt+←` | Go back to the previous directory in history |
 | Normal | `Alt+→` | Go forward to the next directory in history |
+| Normal | `Ctrl+O` | Open the directory history list and jump to a selected directory |
 | Normal | `Enter` | Enter a directory, or open a file with the default app |
 | Normal | `e` | Open the focused file in a terminal editor, using `editor.command` -> `$EDITOR` -> built-in defaults |
 | Normal | `F5` | Reload the current directory |

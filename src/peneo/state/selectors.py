@@ -84,8 +84,8 @@ def select_parent_entries(state: AppState) -> tuple[PaneEntry, ...]:
     return _select_side_pane_entries(
         visible_entries,
         state.directory_size_cache,
-        state.config.display.show_directory_sizes,
-        _select_visible_cut_paths(visible_entries, _select_cut_paths(state)),
+        display_directory_sizes=False,
+        cut_paths=_select_visible_cut_paths(visible_entries, _select_cut_paths(state)),
     )
 
 
@@ -120,8 +120,8 @@ def _select_child_entries_for_cursor(
     return _select_side_pane_entries(
         visible_entries,
         state.directory_size_cache,
-        state.config.display.show_directory_sizes,
-        _select_visible_cut_paths(visible_entries, _select_cut_paths(state)),
+        display_directory_sizes=False,
+        cut_paths=_select_visible_cut_paths(visible_entries, _select_cut_paths(state)),
     )
 
 
@@ -173,6 +173,8 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             return HelpBarState(("type filename | enter jump | esc cancel",))
         if state.command_palette is not None and state.command_palette.source == "grep_search":
             return HelpBarState(("type text / re:pattern | enter jump | esc cancel",))
+        if state.command_palette is not None and state.command_palette.source == "history":
+            return HelpBarState(("type path | enter jump | esc cancel",))
         return HelpBarState(("type command | enter run | esc cancel",))
     if state.ui_mode == "BUSY":
         return HelpBarState(("processing...",))
@@ -180,6 +182,7 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
         (
             "Enter open | e edit | / filter | ctrl+f find | ctrl+g grep | q quit",
             "Space select | y copy | x cut | p paste | s sort | d dirs | F2 rename | ctrl+t term",
+            "alt+\u2190 back | alt+\u2192 fwd | ctrl+o history",
         )
     )
 
@@ -259,6 +262,23 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
                 for index, result in visible_results
             ),
             empty_message=_grep_search_empty_message(state),
+        )
+    if state.command_palette.source == "history":
+        items = get_command_palette_items(state)
+        visible_items, _palette_title = _select_command_palette_window(items, cursor_index)
+        return CommandPaletteViewState(
+            title="Directory History",
+            query=state.command_palette.query,
+            items=tuple(
+                CommandPaletteItemViewState(
+                    label=item.label,
+                    shortcut=item.shortcut,
+                    enabled=item.enabled,
+                    selected=index == cursor_index,
+                )
+                for index, item in visible_items
+            ),
+            empty_message="No directory history",
         )
 
     items = get_command_palette_items(state)
