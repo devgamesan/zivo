@@ -78,6 +78,7 @@ from peneo.state import (
     PasteClipboard,
     PasteConflictState,
     PendingInputState,
+    RangeSelectTo,
     ReloadDirectory,
     RequestBrowserSnapshot,
     RequestDirectorySizes,
@@ -2557,3 +2558,98 @@ def test_child_pane_snapshot_failure_sets_error_and_clears_entries() -> None:
         level="error",
         message="permission denied",
     )
+
+
+# ---------------------------------------------------------------------------
+# RangeSelectTo tests
+# ---------------------------------------------------------------------------
+
+_BASE = "/home/tadashi/develop/peneo"
+_VISIBLE = (
+    f"{_BASE}/docs",
+    f"{_BASE}/src",
+    f"{_BASE}/tests",
+    f"{_BASE}/pyproject.toml",
+    f"{_BASE}/README.md",
+)
+
+
+def test_range_select_down_sets_anchor_and_selects_next() -> None:
+    state = build_initial_app_state()
+
+    result = reduce_app_state(state, RangeSelectTo(delta=1, visible_paths=_VISIBLE))
+    s = result.state.current_pane
+
+    assert s.range_anchor == f"{_BASE}/docs"
+    assert s.cursor_path == f"{_BASE}/src"
+    assert f"{_BASE}/docs" in s.selected_paths
+    assert f"{_BASE}/src" in s.selected_paths
+
+
+def test_range_select_continued_same_direction_extends_selection() -> None:
+    state = build_initial_app_state()
+    state = reduce_app_state(state, RangeSelectTo(delta=1, visible_paths=_VISIBLE)).state
+
+    result = reduce_app_state(state, RangeSelectTo(delta=1, visible_paths=_VISIBLE))
+    s = result.state.current_pane
+
+    assert s.range_anchor == f"{_BASE}/docs"
+    assert s.cursor_path == f"{_BASE}/tests"
+    assert s.selected_paths == frozenset({
+        f"{_BASE}/docs",
+        f"{_BASE}/src",
+        f"{_BASE}/tests",
+    })
+
+
+def test_range_select_direction_reversal_deselects_previous() -> None:
+    state = build_initial_app_state()
+    state = reduce_app_state(state, RangeSelectTo(delta=1, visible_paths=_VISIBLE)).state
+    state = reduce_app_state(state, RangeSelectTo(delta=1, visible_paths=_VISIBLE)).state
+
+    result = reduce_app_state(state, RangeSelectTo(delta=-1, visible_paths=_VISIBLE))
+    s = result.state.current_pane
+
+    assert s.cursor_path == f"{_BASE}/src"
+    assert f"{_BASE}/tests" not in s.selected_paths
+    assert f"{_BASE}/docs" in s.selected_paths
+    assert f"{_BASE}/src" in s.selected_paths
+
+
+def test_move_cursor_clears_range_anchor() -> None:
+    state = build_initial_app_state()
+    state = reduce_app_state(state, RangeSelectTo(delta=1, visible_paths=_VISIBLE)).state
+    assert state.current_pane.range_anchor is not None
+
+    result = reduce_app_state(state, MoveCursor(delta=1, visible_paths=_VISIBLE))
+    assert result.state.current_pane.range_anchor is None
+
+
+def test_clear_selection_clears_range_anchor() -> None:
+    state = build_initial_app_state()
+    state = reduce_app_state(state, RangeSelectTo(delta=1, visible_paths=_VISIBLE)).state
+
+    result = reduce_app_state(state, ClearSelection())
+    s = result.state.current_pane
+    assert s.range_anchor is None
+    assert s.selected_paths == frozenset()
+
+
+def test_toggle_selection_clears_range_anchor() -> None:
+    state = build_initial_app_state()
+    state = reduce_app_state(state, RangeSelectTo(delta=1, visible_paths=_VISIBLE)).state
+
+    result = reduce_app_state(
+        state, ToggleSelection(path=state.current_pane.cursor_path),
+    )
+    assert result.state.current_pane.range_anchor is None
+
+
+def test_range_select_at_boundary_does_not_move() -> None:
+    state = build_initial_app_state()
+    # Cursor is at docs (first entry); shift+up cannot go further up.
+    result = reduce_app_state(state, RangeSelectTo(delta=-1, visible_paths=_VISIBLE))
+    s = result.state.current_pane
+
+    assert s.cursor_path == f"{_BASE}/docs"
+    assert s.range_anchor == f"{_BASE}/docs"

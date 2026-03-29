@@ -292,6 +292,14 @@ class ClearSelection:
 
 
 @dataclass(frozen=True)
+class RangeSelectTo:
+    """Move cursor and extend range selection in the given direction."""
+
+    delta: int
+    visible_paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class CopyTargets:
     """Copy the current selection or cursor target into the clipboard."""
 
@@ -587,6 +595,7 @@ Action = (
     | ToggleSelection
     | ToggleSelectionAndAdvance
     | ClearSelection
+    | RangeSelectTo
     | CopyTargets
     | CutTargets
     | PasteClipboard

@@ -33,6 +33,7 @@ from .actions import (
     OpenPathInEditor,
     OpenPathWithDefaultApp,
     PasteClipboard,
+    RangeSelectTo,
     ReloadDirectory,
     ResolvePasteConflict,
     SaveConfigEditor,
@@ -61,6 +62,8 @@ BROWSING_KEYMAP = {
     "down": "cursor_down",
     "k": "cursor_up",
     "j": "cursor_down",
+    "shift+up": "range_select_up",
+    "shift+down": "range_select_down",
     "space": "toggle_selection",
     "escape": "clear_selection",
     "/": "begin_filter",
@@ -151,6 +154,12 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
 
     if command == "cursor_down":
         return _supported(MoveCursor(delta=1, visible_paths=visible_paths))
+
+    if command == "range_select_up":
+        return _supported(RangeSelectTo(delta=-1, visible_paths=visible_paths))
+
+    if command == "range_select_down":
+        return _supported(RangeSelectTo(delta=1, visible_paths=visible_paths))
 
     if command == "toggle_selection" and state.current_pane.cursor_path is not None:
         return _supported(

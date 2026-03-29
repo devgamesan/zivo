@@ -35,6 +35,7 @@ from peneo.state import (
     OpenPathWithDefaultApp,
     PasteClipboard,
     PendingInputState,
+    RangeSelectTo,
     ReloadDirectory,
     ResolvePasteConflict,
     SaveConfigEditor,
@@ -889,3 +890,30 @@ def test_busy_key_shows_warning_message() -> None:
             NotificationState(level="warning", message="Input ignored while processing")
         ),
     )
+
+
+_VISIBLE_PATHS = (
+    "/home/tadashi/develop/peneo/docs",
+    "/home/tadashi/develop/peneo/src",
+    "/home/tadashi/develop/peneo/tests",
+    "/home/tadashi/develop/peneo/pyproject.toml",
+    "/home/tadashi/develop/peneo/README.md",
+)
+
+
+def test_browsing_shift_down_dispatches_range_select_to() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="shift+down")
+
+    assert actions[0] == SetNotification(None)
+    assert actions[1] == RangeSelectTo(delta=1, visible_paths=_VISIBLE_PATHS)
+
+
+def test_browsing_shift_up_dispatches_range_select_to() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="shift+up")
+
+    assert actions[0] == SetNotification(None)
+    assert actions[1] == RangeSelectTo(delta=-1, visible_paths=_VISIBLE_PATHS)

@@ -34,6 +34,7 @@ def pane(
     *,
     cursor_path: str | None = None,
     selected_paths: Iterable[str] = (),
+    range_anchor: str | None = None,
 ) -> PaneState:
     entry_list = tuple(entries)
     return PaneState(
@@ -41,6 +42,7 @@ def pane(
         entries=entry_list,
         cursor_path=cursor_path,
         selected_paths=frozenset(selected_paths),
+        range_anchor=range_anchor,
     )
 
 

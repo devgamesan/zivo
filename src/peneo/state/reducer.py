@@ -67,6 +67,7 @@ from .actions import (
     OpenPathWithDefaultApp,
     OpenTerminalAtPath,
     PasteClipboard,
+    RangeSelectTo,
     ReloadDirectory,
     RequestBrowserSnapshot,
     RequestDirectorySizes,
@@ -728,10 +729,70 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
         )
         next_state = replace(
             state,
-            current_pane=replace(state.current_pane, cursor_path=cursor_path),
+            current_pane=replace(
+                state.current_pane, cursor_path=cursor_path, range_anchor=None,
+            ),
             notification=None,
         )
         return _sync_child_pane(next_state, cursor_path)
+
+    if isinstance(action, RangeSelectTo):
+        visible_paths = action.visible_paths
+        if not visible_paths:
+            return done(state)
+
+        current_cursor = state.current_pane.cursor_path
+        current_anchor = state.current_pane.range_anchor
+        active_entries = _active_current_entries(state)
+
+        new_cursor = _move_cursor(current_cursor, visible_paths, action.delta)
+        if new_cursor is None:
+            return done(state)
+
+        selected = set(
+            _normalize_selected_paths(
+                state.current_pane.selected_paths, active_entries,
+            )
+        )
+
+        anchor = current_anchor
+        if anchor is None:
+            if current_cursor is not None:
+                anchor = current_cursor
+                selected.add(anchor)
+            else:
+                anchor = new_cursor
+
+        if current_cursor is not None and current_cursor in visible_paths:
+            cursor_idx = visible_paths.index(current_cursor)
+            anchor_idx = (
+                visible_paths.index(anchor)
+                if anchor in visible_paths
+                else cursor_idx
+            )
+
+            new_idx = (
+                visible_paths.index(new_cursor)
+                if new_cursor in visible_paths
+                else cursor_idx
+            )
+
+            current_dist = abs(cursor_idx - anchor_idx)
+            new_dist = abs(new_idx - anchor_idx)
+
+            if new_dist < current_dist and current_cursor != anchor:
+                selected.discard(current_cursor)
+
+        selected.add(new_cursor)
+
+        next_pane = replace(
+            state.current_pane,
+            cursor_path=new_cursor,
+            selected_paths=frozenset(selected),
+            range_anchor=anchor,
+        )
+        next_state = replace(state, current_pane=next_pane, notification=None)
+        return _sync_child_pane(next_state, new_cursor)
 
     if isinstance(action, SetCursorPath):
         if action.path is not None and action.path not in _current_entry_paths(state):
@@ -865,6 +926,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 current_pane=replace(
                     state.current_pane,
                     selected_paths=frozenset(selected_paths),
+                    range_anchor=None,
                 ),
             )
         )
@@ -890,6 +952,7 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 state.current_pane,
                 cursor_path=cursor_path,
                 selected_paths=frozenset(selected_paths),
+                range_anchor=None,
             ),
             notification=None,
         )
@@ -899,7 +962,11 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
         return done(
             replace(
                 state,
-                current_pane=replace(state.current_pane, selected_paths=frozenset()),
+                current_pane=replace(
+                    state.current_pane,
+                    selected_paths=frozenset(),
+                    range_anchor=None,
+                ),
             )
         )
 
