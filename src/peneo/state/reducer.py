@@ -21,6 +21,7 @@ from .actions import (
     BeginDeleteTargets,
     BeginFileSearch,
     BeginFilterInput,
+    BeginGoToPath,
     BeginGrepSearch,
     BeginHistorySearch,
     BeginRenameInput,
@@ -334,6 +335,22 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             )
         )
 
+    if isinstance(action, BeginGoToPath):
+        return done(
+            replace(
+                state,
+                ui_mode="PALETTE",
+                notification=None,
+                pending_input=None,
+                command_palette=CommandPaletteState(source="go_to_path"),
+                pending_file_search_request_id=None,
+                pending_grep_search_request_id=None,
+                delete_confirmation=None,
+                name_conflict=None,
+                attribute_inspection=None,
+            )
+        )
+
     if isinstance(action, CancelCommandPalette):
         return done(
             replace(
@@ -423,6 +440,16 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                     query=stripped_query,
                     show_hidden=state.show_hidden,
                 ),
+            )
+
+        if state.command_palette.source == "go_to_path":
+            # Validate and preview path in real-time
+            expanded_path = _expand_and_validate_path(action.query, state.current_path)
+            return done(
+                replace(
+                    state,
+                    command_palette=replace(next_palette, go_to_path_preview=expanded_path),
+                )
             )
 
         if state.command_palette.source != "file_search":
@@ -556,6 +583,35 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 ),
             )
 
+        if state.command_palette.source == "go_to_path":
+            expanded_path = _expand_and_validate_path(
+                state.command_palette.query,
+                state.current_path,
+            )
+            if expanded_path is None:
+                return done(
+                    replace(
+                        state,
+                        notification=NotificationState(
+                            level="error",
+                            message="Path does not exist or is not a directory",
+                        ),
+                    )
+                )
+            next_state = replace(
+                state,
+                ui_mode="BROWSING",
+                notification=None,
+                command_palette=None,
+                pending_file_search_request_id=None,
+                pending_grep_search_request_id=None,
+                attribute_inspection=None,
+            )
+            return reduce_app_state(
+                next_state,
+                RequestBrowserSnapshot(expanded_path, blocking=True),
+            )
+
         items = get_command_palette_items(state)
         if not items:
             return done(
@@ -592,6 +648,8 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             return reduce_app_state(next_state, BeginGrepSearch())
         if selected_item.id == "history_search":
             return reduce_app_state(next_state, BeginHistorySearch())
+        if selected_item.id == "go_to_path":
+            return reduce_app_state(next_state, BeginGoToPath())
         if selected_item.id == "reload_directory":
             return reduce_app_state(next_state, ReloadDirectory())
         if selected_item.id == "toggle_split_terminal":
@@ -1732,6 +1790,33 @@ def _current_entry_paths(state: AppState) -> set[str]:
 
 def _active_current_entries(state: AppState) -> tuple[DirectoryEntryState, ...]:
     return state.current_pane.entries
+
+
+def _expand_and_validate_path(query: str, base_path: str) -> str | None:
+    """Expand ~, ., .. and validate path exists and is a directory.
+
+    Args:
+        query: User-provided path string (may contain ~, ., .., or be relative/absolute)
+        base_path: Current directory path for resolving relative paths
+
+    Returns:
+        Expanded absolute path if valid directory exists, None otherwise
+    """
+    if not query or not query.strip():
+        return None
+    try:
+        # Expand ~ and resolve to absolute path
+        # Note: Path.resolve() also handles . and ..
+        expanded = Path(query).expanduser().resolve()
+        # Check if path exists and is a directory
+        if not expanded.exists():
+            return None
+        if not expanded.is_dir():
+            return None
+        return str(expanded)
+    except (OSError, ValueError, RuntimeError):
+        # Handle permission errors, invalid paths, etc.
+        return None
 
 
 def _normalize_selected_paths(

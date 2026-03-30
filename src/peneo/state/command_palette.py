@@ -64,6 +64,20 @@ def get_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, ...]
             if _matches_query(item, query)
         )
 
+    if state.command_palette.source == "go_to_path":
+        preview = state.command_palette.go_to_path_preview
+        if preview:
+            return (
+                CommandPaletteItem(
+                    id="go_to_path_execute",
+                    label=_display_path(preview),
+                    shortcut=None,
+                    enabled=True,
+                    path=preview,
+                ),
+            )
+        return ()
+
     query = state.command_palette.query
 
     return tuple(
@@ -112,6 +126,12 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             id="history_search",
             label="History search",
             shortcut="Ctrl+O",
+            enabled=True,
+        ),
+        CommandPaletteItem(
+            id="go_to_path",
+            label="Go to path",
+            shortcut="Ctrl+J",
             enabled=True,
         ),
         CommandPaletteItem(

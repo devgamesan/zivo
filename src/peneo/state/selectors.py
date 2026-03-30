@@ -281,6 +281,32 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
             empty_message="No directory history",
         )
 
+    if state.command_palette.source == "go_to_path":
+        preview = state.command_palette.go_to_path_preview
+        if preview:
+            # Display preview with ~ replacement
+            from .command_palette import _display_path
+            display_preview = _display_path(preview)
+            return CommandPaletteViewState(
+                title="Go to path",
+                query=state.command_palette.query,
+                items=(
+                    CommandPaletteItemViewState(
+                        label=display_preview,
+                        shortcut=None,
+                        enabled=True,
+                        selected=True,
+                    ),
+                ),
+                empty_message="Path does not exist or is not a directory",
+            )
+        return CommandPaletteViewState(
+            title="Go to path",
+            query=state.command_palette.query,
+            items=(),
+            empty_message="Type a path to jump to",
+        )
+
     items = get_command_palette_items(state)
     visible_items, title = _select_command_palette_window(items, cursor_index)
     return CommandPaletteViewState(

@@ -93,6 +93,11 @@ class BeginHistorySearch:
 
 
 @dataclass(frozen=True)
+class BeginGoToPath:
+    """Open the command palette in go-to-path mode."""
+
+
+@dataclass(frozen=True)
 class BeginCommandPalette:
     """Open the command palette."""
 

@@ -549,7 +549,7 @@ def test_move_command_palette_cursor_clamps_to_visible_commands() -> None:
     next_state = _reduce_state(state, MoveCommandPaletteCursor(delta=20))
 
     assert next_state.command_palette is not None
-    assert next_state.command_palette.cursor_index == 15
+    assert next_state.command_palette.cursor_index == 16
 
 
 def test_set_command_palette_query_resets_cursor() -> None:
