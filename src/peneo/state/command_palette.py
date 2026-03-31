@@ -135,6 +135,12 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             enabled=True,
         ),
         CommandPaletteItem(
+            id="go_to_home_directory",
+            label="Go to home directory",
+            shortcut="Alt+Home",
+            enabled=True,
+        ),
+        CommandPaletteItem(
             id="reload_directory",
             label="Reload directory",
             shortcut="F5",

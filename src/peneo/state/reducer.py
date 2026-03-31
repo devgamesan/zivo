@@ -60,6 +60,7 @@ from .actions import (
     FocusSplitTerminal,
     GoBack,
     GoForward,
+    GoToHomeDirectory,
     GoToParentDirectory,
     GrepSearchCompleted,
     GrepSearchFailed,
@@ -650,6 +651,8 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
             return reduce_app_state(next_state, BeginHistorySearch())
         if selected_item.id == "go_to_path":
             return reduce_app_state(next_state, BeginGoToPath())
+        if selected_item.id == "go_to_home_directory":
+            return reduce_app_state(next_state, GoToHomeDirectory())
         if selected_item.id == "reload_directory":
             return reduce_app_state(next_state, ReloadDirectory())
         if selected_item.id == "toggle_split_terminal":
@@ -951,6 +954,13 @@ def reduce_app_state(state: AppState, action: Action) -> ReduceResult:
                 cursor_path=state.current_path,
                 blocking=True,
             ),
+        )
+
+    if isinstance(action, GoToHomeDirectory):
+        home_path = str(Path("~").expanduser().resolve())
+        return reduce_app_state(
+            state,
+            RequestBrowserSnapshot(home_path, blocking=True),
         )
 
     if isinstance(action, GoBack):

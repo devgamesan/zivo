@@ -63,6 +63,7 @@ from peneo.state import (
     FocusSplitTerminal,
     GoBack,
     GoForward,
+    GoToHomeDirectory,
     GoToParentDirectory,
     GrepSearchCompleted,
     GrepSearchFailed,
@@ -401,6 +402,19 @@ def test_go_to_parent_directory_uses_current_path_parent() -> None:
     assert result.effects[0].cursor_path == "/tmp/work/project"
 
 
+def test_go_to_home_directory_navigates_to_home() -> None:
+    state = build_initial_app_state()
+
+    result = reduce_app_state(state, GoToHomeDirectory())
+
+    assert result.state.pending_browser_snapshot_request_id == 1
+    assert result.state.ui_mode == "BUSY"
+    assert len(result.effects) == 1
+    # Home directory path will be expanded and resolved
+    assert result.effects[0].blocking is True
+    assert "home" in result.effects[0].path.lower()
+
+
 def test_reload_directory_requests_snapshot_with_current_cursor() -> None:
     state = build_initial_app_state()
     state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/src"))
@@ -549,7 +563,7 @@ def test_move_command_palette_cursor_clamps_to_visible_commands() -> None:
     next_state = _reduce_state(state, MoveCommandPaletteCursor(delta=20))
 
     assert next_state.command_palette is not None
-    assert next_state.command_palette.cursor_index == 16
+    assert next_state.command_palette.cursor_index == 17
 
 
 def test_set_command_palette_query_resets_cursor() -> None:
@@ -1009,6 +1023,18 @@ def test_submit_command_palette_reloads_directory() -> None:
 
     result = reduce_app_state(state, SubmitCommandPalette())
 
+    assert result.state.command_palette is None
+    assert len(result.effects) == 1
+    assert isinstance(result.effects[0], LoadBrowserSnapshotEffect)
+
+
+def test_submit_command_palette_goes_to_home_directory() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("go to home directory"))
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.ui_mode == "BUSY"
     assert result.state.command_palette is None
     assert len(result.effects) == 1
     assert isinstance(result.effects[0], LoadBrowserSnapshotEffect)

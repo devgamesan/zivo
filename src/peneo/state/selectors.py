@@ -36,7 +36,7 @@ from .models import (
 )
 
 SIDE_PANE_SORT = SortState(field="name", descending=False, directories_first=True)
-COMMAND_PALETTE_VISIBLE_WINDOW = 8
+COMMAND_PALETTE_VISIBLE_WINDOW = 9
 MIN_SEARCH_VISIBLE_WINDOW = 3
 _SEARCH_OVERHEAD_ROWS = 5
 
