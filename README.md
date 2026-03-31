@@ -160,6 +160,8 @@ The main keys are listed below.
 | Normal | `→` / `l` | Enter the item if it is a directory |
 | Normal | `Alt+←` | Go back to the previous directory in history |
 | Normal | `Alt+→` | Go forward to the next directory in history |
+| Normal | `Ctrl+J` | Open go-to-path input to navigate to a specific path |
+| Normal | `Alt+Home` | Go to home directory |
 | Normal | `Ctrl+O` | Open the directory history list and jump to a selected directory |
 | Normal | `Enter` | Enter a directory, or open a file with the default app |
 | Normal | `e` | Open the focused file in a terminal editor, using `editor.command` -> `$EDITOR` -> built-in defaults |
@@ -199,10 +201,20 @@ Less frequent actions are grouped in the command palette opened with `:`.
 
 | Command | Shown when | Behavior / Notes |
 | --- | --- | --- |
+| `Find files` | Always | Opens recursive file search. |
+| `Grep search` | Always | Opens recursive grep search (`ripgrep` / `rg` required on `PATH`). |
+| `History search` | Always | Opens directory history list and jump to a selected directory. |
+| `Go to path` | Always | Opens go-to-path input to navigate to a specific path. |
+| `Go to home directory` | Always | Navigates to the home directory. |
+| `Reload directory` | Always | Reloads the current directory. |
+| `Toggle split terminal` | Always | Opens or closes the embedded split terminal. |
 | `Show attributes` | Exactly one target is selected or focused | Opens a read-only dialog with `Name`, `Type`, `Path`, `Size`, `Modified`, `Hidden`, and `Permissions`. |
+| `Rename` | Exactly one target is selected or focused | Starts rename input for a single target. |
+| `Open in editor` | Exactly one file is selected or focused | Opens the focused file in a terminal editor, using `editor.command` -> `$EDITOR` -> built-in defaults. |
 | `Copy path` | At least one target is selected or focused | Copies the selected path list, or the focused path when nothing is selected, to the system clipboard. |
+| `Move to trash` | At least one target is selected or focused | Moves the selected items, or the focused item, to trash (confirmation is enabled by default and can be configured). |
 | `Open in file manager` | Always | Opens the current directory in the OS file manager. |
-| `Open terminal here` | Always | Launches an external terminal rooted at the current directory, using `config.toml` templates before built-in fallbacks. |
+| `Open terminal` | Always | Launches an external terminal rooted at the current directory, using `config.toml` templates before built-in fallbacks. |
 | `Show hidden files` / `Hide hidden files` | Always | Toggles hidden-file visibility for the browser panes. The label reflects the current visibility state. |
 | `Edit config` | Always | Opens the settings overlay for startup defaults. You can edit the preferred terminal editor, hidden-file visibility, directory-size visibility, theme, sorting, default paste-conflict behavior, and delete confirmation. Use `↑` / `↓` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
 | `Create file` | Always | Starts the inline create-file flow in the current directory. |
