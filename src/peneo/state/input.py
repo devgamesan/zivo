@@ -39,6 +39,7 @@ from .actions import (
     OpenPathInEditor,
     OpenPathWithDefaultApp,
     PasteClipboard,
+    PasteFromClipboardToTerminal,
     ReloadDirectory,
     ResolvePasteConflict,
     SaveConfigEditor,
@@ -287,6 +288,9 @@ def _dispatch_split_terminal_input(
     if key == "ctrl+t":
         return _supported(ToggleSplitTerminal())
 
+    if key == "ctrl+v":
+        return _supported(PasteFromClipboardToTerminal())
+
     if key == "enter":
         return _supported(SendSplitTerminalInput("\r"))
 
@@ -337,7 +341,7 @@ def _dispatch_split_terminal_input(
 
 
 def _terminal_control_character(key: str) -> str | None:
-    if not key.startswith("ctrl+") or key == "ctrl+t":
+    if not key.startswith("ctrl+") or key in ("ctrl+t", "ctrl+v"):
         return None
 
     suffix = key[5:]

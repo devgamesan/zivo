@@ -59,6 +59,7 @@ from .actions import (
     OpenPathWithDefaultApp,
     OpenTerminalAtPath,
     PasteClipboard,
+    PasteFromClipboardToTerminal,
     ReloadDirectory,
     RequestBrowserSnapshot,
     RequestDirectorySizes,
@@ -99,6 +100,7 @@ from .effects import (
     RunGrepSearchEffect,
     StartSplitTerminalEffect,
     WriteSplitTerminalInputEffect,
+    PasteFromClipboardEffect,
 )
 from .input import dispatch_key_input, iter_bound_keys
 from .models import (
@@ -230,6 +232,7 @@ __all__ = [
     "PaneState",
     "PendingInputState",
     "PasteClipboard",
+    "PasteFromClipboardToTerminal",
     "PasteConflictState",
     "ReduceResult",
     "ReloadDirectory",
@@ -269,6 +272,7 @@ __all__ = [
     "ToggleSelection",
     "ToggleSelectionAndAdvance",
     "UiMode",
+    "PasteFromClipboardEffect",
     "WriteSplitTerminalInputEffect",
     "CycleConfigEditorValue",
     "select_config_dialog_state",
