@@ -308,13 +308,12 @@ def _run_detached_command(command: Sequence[str], cwd: str | None, input_text: s
                 input=input_text,
                 text=True,
                 stdout=subprocess.DEVNULL,
-                stderr=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
                 cwd=cwd,
                 check=True,
             )
         except subprocess.CalledProcessError as error:
-            detail = (error.stderr or "").strip() or str(error)
-            raise OSError(detail) from error
+            raise OSError(str(error) or f"{command[0]} failed") from error
         return
 
     subprocess.Popen(
