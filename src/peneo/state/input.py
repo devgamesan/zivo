@@ -107,6 +107,25 @@ CONFLICT_KEYMAP = {
     "r": "rename",
 }
 
+TERMINAL_KEYMAP = {
+    "tab": "terminal_tab",
+    "ctrl+t": "toggle_terminal",
+    "ctrl+v": "paste_from_clipboard",
+    "enter": "terminal_enter",
+    "backspace": "terminal_backspace",
+    "delete": "terminal_delete",
+    "escape": "terminal_escape",
+    "home": "terminal_home",
+    "end": "terminal_end",
+    "pageup": "terminal_pageup",
+    "pagedown": "terminal_pagedown",
+    "up": "terminal_up",
+    "down": "terminal_down",
+    "left": "terminal_left",
+    "right": "terminal_right",
+    "ctrl+c": "terminal_ctrl_c",
+}
+
 PRINTABLE_BINDING_KEYS = tuple((*string.ascii_letters, *string.digits))
 
 
@@ -114,7 +133,14 @@ def iter_bound_keys() -> tuple[str, ...]:
     """Return the keys that should be installed as app bindings."""
 
     return tuple(
-        dict.fromkeys((*BROWSING_KEYMAP.keys(), *CONFLICT_KEYMAP.keys(), *PRINTABLE_BINDING_KEYS))
+        dict.fromkeys(
+            (
+                *BROWSING_KEYMAP.keys(),
+                *CONFLICT_KEYMAP.keys(),
+                *TERMINAL_KEYMAP.keys(),
+                *PRINTABLE_BINDING_KEYS,
+            )
+        )
     )
 
 
@@ -282,13 +308,15 @@ def _dispatch_split_terminal_input(
     key: str,
     character: str | None,
 ) -> DispatchedActions:
-    if key == "tab":
+    command = TERMINAL_KEYMAP.get(key)
+
+    if command == "terminal_tab":
         return _supported(SendSplitTerminalInput("\t"))
 
-    if key == "ctrl+t":
+    if command == "toggle_terminal":
         return _supported(ToggleSplitTerminal())
 
-    if key == "ctrl+v":
+    if command == "paste_from_clipboard":
         return _supported(PasteFromClipboardToTerminal())
 
     if key == "enter":
