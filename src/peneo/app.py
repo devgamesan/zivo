@@ -577,7 +577,9 @@ class PeneoApp(App[None]):
             elif isinstance(effect, RunFileMutationEffect):
                 self._schedule_file_mutation(effect)
             elif isinstance(effect, RunExternalLaunchEffect):
-                if effect.request.kind == "open_editor":
+                if effect.request.kind == "copy_paths":
+                    self._run_copy_paths(effect)
+                elif effect.request.kind == "open_editor":
                     self.call_next(self._run_foreground_external_launch, effect)
                 else:
                     self._schedule_external_launch(effect)
@@ -911,6 +913,32 @@ class PeneoApp(App[None]):
             return
 
         self.refresh(repaint=True, layout=True)
+        self.call_next(
+            self.dispatch_actions,
+            (
+                ExternalLaunchCompleted(
+                    request_id=effect.request_id,
+                    request=effect.request,
+                ),
+            ),
+        )
+
+    def _run_copy_paths(self, effect: RunExternalLaunchEffect) -> None:
+        try:
+            self._external_launch_service.execute(effect.request)
+        except OSError as error:
+            self.call_next(
+                self.dispatch_actions,
+                (
+                    ExternalLaunchFailed(
+                        request_id=effect.request_id,
+                        request=effect.request,
+                        message=str(error) or "Operation failed",
+                    ),
+                ),
+            )
+            return
+
         self.call_next(
             self.dispatch_actions,
             (
