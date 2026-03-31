@@ -2123,7 +2123,7 @@ async def test_app_right_on_file_does_not_launch_default_app() -> None:
 @pytest.mark.asyncio
 async def test_app_command_palette_copy_path_copies_cursor_target() -> None:
     path = "/tmp/peneo-copy-path"
-    copied_text: list[str] = []
+    launch_service = FakeExternalLaunchService()
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2138,9 +2138,9 @@ async def test_app_command_palette_copy_path_copies_cursor_target() -> None:
     )
     app = create_app(
         snapshot_loader=loader,
+        external_launch_service=launch_service,
         initial_path=path,
     )
-    app.copy_to_clipboard = copied_text.append  # type: ignore[method-assign]
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
@@ -2149,7 +2149,10 @@ async def test_app_command_palette_copy_path_copies_cursor_target() -> None:
         await pilot.press("enter")
         await asyncio.sleep(0.05)
 
-        assert copied_text == [f"{path}/docs"]
+        assert len(launch_service.executed_requests) == 1
+        request = launch_service.executed_requests[0]
+        assert request.kind == "copy_paths"
+        assert request.paths == (f"{path}/docs",)
 
         status_bar = await _wait_for_status_bar(app)
         assert "info: Copied 1 path to system clipboard" in str(status_bar.renderable)
