@@ -63,8 +63,8 @@ from peneo.state import (
     FocusSplitTerminal,
     GoBack,
     GoForward,
-    GoToParentDirectory,
     GoToHomeDirectory,
+    GoToParentDirectory,
     GrepSearchCompleted,
     GrepSearchFailed,
     GrepSearchResultState,
@@ -563,7 +563,7 @@ def test_move_command_palette_cursor_clamps_to_visible_commands() -> None:
     next_state = _reduce_state(state, MoveCommandPaletteCursor(delta=20))
 
     assert next_state.command_palette is not None
-    assert next_state.command_palette.cursor_index == 16
+    assert next_state.command_palette.cursor_index == 17
 
 
 def test_set_command_palette_query_resets_cursor() -> None:
@@ -1023,6 +1023,18 @@ def test_submit_command_palette_reloads_directory() -> None:
 
     result = reduce_app_state(state, SubmitCommandPalette())
 
+    assert result.state.command_palette is None
+    assert len(result.effects) == 1
+    assert isinstance(result.effects[0], LoadBrowserSnapshotEffect)
+
+
+def test_submit_command_palette_goes_to_home_directory() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("go to home directory"))
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.ui_mode == "BUSY"
     assert result.state.command_palette is None
     assert len(result.effects) == 1
     assert isinstance(result.effects[0], LoadBrowserSnapshotEffect)
