@@ -209,7 +209,6 @@ paste_conflict_action = "prompt"
 | `Go to home directory` | 常に表示 | ホームディレクトリへ移動します。 |
 | `Reload directory` | 常に表示 | 現在ディレクトリを再読み込みします。 |
 | `Toggle split terminal` | 常に表示 | 埋め込み split terminal を開閉します。 |
-| `Paste to terminal` | split terminal が表示中かつフォーカス中のとき | クリップボードの内容をアクティブな split terminal セッションに貼り付けます。 |
 | `Rename` | 単一対象が選択中またはフォーカス中のとき | 単一対象のリネーム入力を開始します。 |
 | `Open in editor` | 単一ファイルが選択中またはフォーカス中のとき | フォーカス中のファイルを `editor.command` -> `$EDITOR` -> 組み込み既定値の順でターミナルエディタで開きます。 |
 | `Copy path` | 対象が 1 件以上あるとき | 選択中のパス一覧、または未選択時はフォーカス中のパスをシステムクリップボードへコピーします。 |
