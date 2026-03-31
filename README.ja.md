@@ -41,15 +41,28 @@ cd peneo
 uv tool install --from . peneo
 ```
 
-`Ctrl+G` で開く再帰 grep 検索は、`ripgrep` (`rg`) が `PATH` 上にあることを前提にしています。Ubuntu / Debian 系では次でインストールできます。
+### 依存ツール
+
+一部の機能は `PATH` 上で外部コマンドが利用可能であることを前提としています：
+
+**grep 検索 (`Ctrl+G`) に必要：**
+- `ripgrep` (`rg`)
+
+**パスコピーに必要：**
+- Linux: `xclip` または `wl-copy` (Wayland)
+- macOS: `pbcopy` (macOS に含まれています)
+- WSL: `clip.exe` (WSL に含まれています)、または上記の Linux コマンド
+
+**WSL で推奨：**
+- `wslu` (ブリッジコマンド `wslview` など)
+
+Ubuntu / Debian 系でのインストール例：
 
 ```bash
-sudo apt install ripgrep
-```
+# grep 検索とパスコピー用
+sudo apt install ripgrep xclip
 
-WSL 環境では、`wslview` などのブリッジコマンドを使えるように `wslu` も追加でインストールしてください。
-
-```bash
+# WSL の場合（推奨）
 sudo apt install wslu
 ```
 

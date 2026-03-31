@@ -40,15 +40,28 @@ cd peneo
 uv tool install --from . peneo
 ```
 
-Recursive grep search opened with `Ctrl+G` depends on `ripgrep` (`rg`) being available on `PATH`. On Ubuntu / Debian-based environments, install it with:
+### Dependencies
+
+Some features depend on external commands being available on `PATH`:
+
+**Required for grep search (`Ctrl+G`):**
+- `ripgrep` (`rg`)
+
+**Required for copy path command:**
+- Linux: `xclip` or `wl-copy` (Wayland)
+- macOS: `pbcopy` (included with macOS)
+- WSL: `clip.exe` (included with WSL), or Linux commands above
+
+**Recommended for WSL:**
+- `wslu` for bridge commands (`wslview`, etc.)
+
+Install dependencies on Ubuntu / Debian:
 
 ```bash
-sudo apt install ripgrep
-```
+# For grep search and copy path
+sudo apt install ripgrep xclip
 
-On WSL, also install `wslu` so bridge commands such as `wslview` are available:
-
-```bash
+# For WSL (optional but recommended)
 sudo apt install wslu
 ```
 
