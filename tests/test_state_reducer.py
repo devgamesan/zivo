@@ -17,6 +17,7 @@ from peneo.state import (
     BeginDeleteTargets,
     BeginFileSearch,
     BeginFilterInput,
+    BeginGoToPath,
     BeginGrepSearch,
     BeginHistorySearch,
     BeginRenameInput,
@@ -633,6 +634,13 @@ def test_begin_history_search_with_empty_history() -> None:
     assert next_state.command_palette.history_results == ()
 
 
+def test_begin_go_to_path_enters_palette_mode() -> None:
+    next_state = _reduce_state(build_initial_app_state(), BeginGoToPath())
+
+    assert next_state.ui_mode == "PALETTE"
+    assert next_state.command_palette == CommandPaletteState(source="go_to_path")
+
+
 def test_submit_history_palette_navigates_to_selected_directory() -> None:
     state = build_initial_app_state()
     state = replace(
@@ -669,6 +677,58 @@ def test_submit_history_palette_with_empty_history_shows_warning() -> None:
 
     assert result.state.notification is not None
     assert result.state.notification.message == "No directory history"
+
+
+def test_set_command_palette_query_updates_go_to_path_preview(tmp_path) -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGoToPath())
+    target_path = str(tmp_path)
+
+    next_state = _reduce_state(
+        state,
+        SetCommandPaletteQuery(target_path),
+    )
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.go_to_path_preview == target_path
+
+
+def test_submit_go_to_path_palette_requests_snapshot(tmp_path) -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGoToPath())
+    target_path = tmp_path / "docs"
+    target_path.mkdir()
+    state = _reduce_state(
+        state,
+        SetCommandPaletteQuery(str(target_path)),
+    )
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.ui_mode == "BUSY"
+    assert result.state.command_palette is None
+    assert result.effects == (
+        LoadBrowserSnapshotEffect(
+            request_id=1,
+            path=str(target_path),
+            cursor_path=None,
+            blocking=True,
+        ),
+    )
+
+
+def test_submit_go_to_path_palette_with_invalid_directory_shows_error() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGoToPath())
+    state = _reduce_state(
+        state,
+        SetCommandPaletteQuery("/path/that/does/not/exist"),
+    )
+
+    next_state = _reduce_state(state, SubmitCommandPalette())
+
+    assert next_state.ui_mode == "PALETTE"
+    assert next_state.notification == NotificationState(
+        level="error",
+        message="Path does not exist or is not a directory",
+    )
     state = _reduce_state(
         build_initial_app_state(config_path="/tmp/peneo/config.toml"),
         BeginCommandPalette(),
