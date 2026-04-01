@@ -3,6 +3,8 @@ from stat import S_IFREG
 
 import peneo.state.selectors as selectors_module
 from peneo.models import AppConfig, EditorConfig, PasteConflict, PasteRequest
+from peneo.state.command_palette import CommandPaletteItem
+from peneo.state.selectors import _select_command_palette_window
 from peneo.state import (
     AttributeInspectionState,
     BeginCommandPalette,
@@ -1100,3 +1102,110 @@ class TestSelectSearchWindowWithDynamicSize:
         assert palette_state is not None
         assert len(palette_state.items) == 19
         assert palette_state.items[15 - (15 - 9)].selected is True
+
+
+class TestSelectCommandPaletteWindow:
+    """Tests for _select_command_palette_window scrolling algorithm."""
+
+    def test_empty_list(self) -> None:
+        """空リストの場合は空のタプルが返されること"""
+        items: tuple[CommandPaletteItem, ...] = ()
+        result, title = _select_command_palette_window(items, 0)
+
+        assert result == ()
+        assert title == "Command Palette"
+
+    def test_short_list(self) -> None:
+        """ウィンドウサイズ以下の場合は全アイテムが表示されること"""
+        items = tuple(
+            CommandPaletteItem(id=f"item_{i}", label=f"Item {i}", shortcut=None, enabled=True)
+            for i in range(5)
+        )
+        result, title = _select_command_palette_window(items, 2)
+
+        assert len(result) == 5
+        assert title == "Command Palette"
+        assert result[2][0] == 2  # カーソル位置が2であること
+
+    def test_exact_window_size(self) -> None:
+        """ウィンドウサイズと同じ長さの場合は全アイテムが表示されること"""
+        items = tuple(
+            CommandPaletteItem(id=f"item_{i}", label=f"Item {i}", shortcut=None, enabled=True)
+            for i in range(8)
+        )
+        result, title = _select_command_palette_window(items, 4)
+
+        assert len(result) == 8
+        assert title == "Command Palette"
+
+    def test_center_alignment(self) -> None:
+        """中央付近のアイテム選択時に中央揃えが維持されること"""
+        items = tuple(
+            CommandPaletteItem(id=f"item_{i}", label=f"Item {i}", shortcut=None, enabled=True)
+            for i in range(20)
+        )
+        # 中央のアイテム（インデックス10）を選択
+        result, title = _select_command_palette_window(items, 10)
+
+        assert len(result) == 8  # ウィンドウサイズ
+        assert title == "Command Palette (7-14 / 20)"
+        # カーソルが中央に配置されること
+        cursor_position_in_window = next(i for i, (idx, _) in enumerate(result) if idx == 10)
+        assert cursor_position_in_window == 4  # ウィンドウの中央（0始まりで4）
+
+    def test_top_boundary(self) -> None:
+        """先頭付近のアイテム選択時に先頭から表示されること"""
+        items = tuple(
+            CommandPaletteItem(id=f"item_{i}", label=f"Item {i}", shortcut=None, enabled=True)
+            for i in range(20)
+        )
+        # 先頭のアイテム（インデックス0）を選択
+        result, title = _select_command_palette_window(items, 0)
+
+        assert len(result) == 8
+        assert title == "Command Palette (1-8 / 20)"
+        assert result[0][0] == 0  # 先頭から表示
+
+    def test_bottom_boundary(self) -> None:
+        """末尾付近のアイテム選択時に末尾が見えること（主要なバグ修正）"""
+        items = tuple(
+            CommandPaletteItem(id=f"item_{i}", label=f"Item {i}", shortcut=None, enabled=True)
+            for i in range(14)
+        )
+        # 最後のアイテム（インデックス13）を選択
+        result, title = _select_command_palette_window(items, 13)
+
+        assert len(result) == 8
+        assert title == "Command Palette (7-14 / 14)"
+        # 最後のアイテムが表示されていること
+        assert result[-1][0] == 13
+        assert result[-1][1].label == "Item 13"
+
+    def test_last_item_visible(self) -> None:
+        """最後のアイテムが必ず表示されること"""
+        items = tuple(
+            CommandPaletteItem(id=f"item_{i}", label=f"Item {i}", shortcut=None, enabled=True)
+            for i in range(15)
+        )
+        # 最後のアイテム（インデックス14）を選択
+        result, title = _select_command_palette_window(items, 14)
+
+        assert len(result) == 8
+        assert result[-1][0] == 14  # 最後のアイテムが表示されている
+        assert result[0][0] == 7  # 先頭はインデックス7
+
+    def test_second_last_item_visible(self) -> None:
+        """最後から2番目のアイテムと最後のアイテムが両方表示されること"""
+        items = tuple(
+            CommandPaletteItem(id=f"item_{i}", label=f"Item {i}", shortcut=None, enabled=True)
+            for i in range(14)
+        )
+        # 最後から2番目のアイテム（インデックス12）を選択
+        result, title = _select_command_palette_window(items, 12)
+
+        assert len(result) == 8
+        # 最後から2番目と最後のアイテムが両方表示されていること
+        visible_indices = [idx for idx, _ in result]
+        assert 12 in visible_indices
+        assert 13 in visible_indices
+        assert result[-1][0] == 13  # 最後のアイテムが表示されている

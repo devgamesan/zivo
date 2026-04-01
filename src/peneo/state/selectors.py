@@ -36,7 +36,7 @@ from .models import (
 )
 
 SIDE_PANE_SORT = SortState(field="name", descending=False, directories_first=True)
-COMMAND_PALETTE_VISIBLE_WINDOW = 9
+COMMAND_PALETTE_VISIBLE_WINDOW = 8
 MIN_SEARCH_VISIBLE_WINDOW = 3
 _SEARCH_OVERHEAD_ROWS = 5
 
@@ -777,14 +777,17 @@ def _select_search_window(
     total = len(results)
     if total == 0:
         return (), title
+    if total <= visible_window:
+        return tuple(enumerate(results)), f"{title} (1-{total} / {total})"
 
-    start = max(
-        0,
-        min(
-            cursor_index - (visible_window // 2),
-            max(0, total - visible_window),
-        ),
-    )
+    # 3段階アルゴリズムでスクロール位置を決定
+    # 1. 中央揃えの理想的な位置を計算
+    ideal_start = cursor_index - (visible_window // 2)
+    # 2. 先頭境界を適用
+    start = max(0, ideal_start)
+    # 3. 末尾境界を適用（末尾が必ず見えるように）
+    max_start = max(0, total - visible_window)
+    start = min(start, max_start)
     end = min(total, start + visible_window)
     visible_results = tuple((index, results[index]) for index in range(start, end))
     return visible_results, f"{title} ({start + 1}-{end} / {total})"
@@ -798,13 +801,14 @@ def _select_command_palette_window(
     if total <= COMMAND_PALETTE_VISIBLE_WINDOW:
         return tuple(enumerate(items)), "Command Palette"
 
-    start = max(
-        0,
-        min(
-            cursor_index - (COMMAND_PALETTE_VISIBLE_WINDOW // 2),
-            max(0, total - COMMAND_PALETTE_VISIBLE_WINDOW),
-        ),
-    )
+    # 3段階アルゴリズムでスクロール位置を決定
+    # 1. 中央揃えの理想的な位置を計算
+    ideal_start = cursor_index - (COMMAND_PALETTE_VISIBLE_WINDOW // 2)
+    # 2. 先頭境界を適用
+    start = max(0, ideal_start)
+    # 3. 末尾境界を適用（末尾が必ず見えるように）
+    max_start = max(0, total - COMMAND_PALETTE_VISIBLE_WINDOW)
+    start = min(start, max_start)
     end = min(total, start + COMMAND_PALETTE_VISIBLE_WINDOW)
     visible_items = tuple((index, items[index]) for index in range(start, end))
     return visible_items, f"Command Palette ({start + 1}-{end} / {total})"
