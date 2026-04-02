@@ -7,6 +7,8 @@ from peneo.models import ExternalLaunchRequest
 
 from .actions import (
     Action,
+    AddBookmark,
+    BeginBookmarkSearch,
     BeginCommandPalette,
     BeginCreateInput,
     BeginDeleteTargets,
@@ -29,6 +31,7 @@ from .actions import (
     OpenPathWithDefaultApp,
     OpenTerminalAtPath,
     ReloadDirectory,
+    RemoveBookmark,
     RequestBrowserSnapshot,
     SetCommandPaletteQuery,
     SubmitCommandPalette,
@@ -129,6 +132,10 @@ def _request_palette_snapshot(
 def _handle_begin_history_search(state: AppState) -> ReduceResult:
     history_items = tuple(reversed(state.history.back)) + state.history.forward
     return done(_enter_palette(state, source="history", history_results=history_items))
+
+
+def _handle_begin_bookmark_search(state: AppState) -> ReduceResult:
+    return done(_enter_palette(state, source="bookmarks"))
 
 
 def _handle_move_palette_cursor(
@@ -306,6 +313,8 @@ def _handle_submit_palette(
         return _handle_submit_grep_search_palette(state, reduce_state)
     if state.command_palette.source == "history":
         return _handle_submit_history_palette(state, reduce_state)
+    if state.command_palette.source == "bookmarks":
+        return _handle_submit_bookmarks_palette(state, reduce_state)
     if state.command_palette.source == "go_to_path":
         return _handle_submit_go_to_path_palette(state, reduce_state)
     return _handle_submit_commands_palette(state, reduce_state)
@@ -369,6 +378,30 @@ def _handle_submit_history_palette(
     )
 
 
+def _handle_submit_bookmarks_palette(
+    state: AppState,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    items = get_command_palette_items(state)
+    if not items:
+        return _notify(state, level="warning", message="No bookmarks")
+
+    selected_item = items[
+        normalize_command_palette_cursor(state, state.command_palette.cursor_index)
+    ]
+    if selected_item.path is None or not Path(selected_item.path).is_dir():
+        return _notify(
+            state,
+            level="error",
+            message="Bookmarked path does not exist or is not a directory",
+        )
+    return _request_palette_snapshot(
+        state,
+        reduce_state,
+        path=selected_item.path,
+    )
+
+
 def _handle_submit_go_to_path_palette(
     state: AppState,
     reduce_state: ReducerFn,
@@ -424,6 +457,8 @@ def _run_palette_command_item(
         return _run_grep_search_command(next_state, reduce_state)
     if item_id == "history_search":
         return _run_history_search_command(next_state, reduce_state)
+    if item_id == "bookmark_search":
+        return _run_bookmark_search_command(next_state, reduce_state)
     if item_id == "go_back":
         return _run_go_back_command(next_state, reduce_state)
     if item_id == "go_forward":
@@ -450,6 +485,10 @@ def _run_palette_command_item(
         return _run_open_file_manager_command(next_state, reduce_state)
     if item_id == "open_terminal":
         return _run_open_terminal_command(next_state, reduce_state)
+    if item_id == "add_bookmark":
+        return _run_add_bookmark_command(next_state, reduce_state)
+    if item_id == "remove_bookmark":
+        return _run_remove_bookmark_command(next_state, reduce_state)
     if item_id == "toggle_hidden":
         return _run_toggle_hidden_command(next_state, reduce_state)
     if item_id == "edit_config":
@@ -480,6 +519,13 @@ def _run_history_search_command(
     reduce_state: ReducerFn,
 ) -> ReduceResult:
     return reduce_state(state, BeginHistorySearch())
+
+
+def _run_bookmark_search_command(
+    state: AppState,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    return reduce_state(state, BeginBookmarkSearch())
 
 
 def _run_go_back_command(
@@ -627,6 +673,20 @@ def _run_open_terminal_command(
     reduce_state: ReducerFn,
 ) -> ReduceResult:
     return reduce_state(state, OpenTerminalAtPath(state.current_path))
+
+
+def _run_add_bookmark_command(
+    state: AppState,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    return reduce_state(state, AddBookmark(path=state.current_path))
+
+
+def _run_remove_bookmark_command(
+    state: AppState,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    return reduce_state(state, RemoveBookmark(path=state.current_path))
 
 
 def _run_toggle_hidden_command(
@@ -822,6 +882,9 @@ def handle_palette_action(
 
     if isinstance(action, BeginHistorySearch):
         return _handle_begin_history_search(state)
+
+    if isinstance(action, BeginBookmarkSearch):
+        return _handle_begin_bookmark_search(state)
 
     if isinstance(action, BeginGoToPath):
         return done(_enter_palette(state, source="go_to_path"))

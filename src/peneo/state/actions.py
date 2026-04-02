@@ -93,6 +93,11 @@ class BeginHistorySearch:
 
 
 @dataclass(frozen=True)
+class BeginBookmarkSearch:
+    """Open the command palette in bookmark-list mode."""
+
+
+@dataclass(frozen=True)
 class BeginGoToPath:
     """Open the command palette in go-to-path mode."""
 
@@ -282,6 +287,20 @@ class OpenPathInEditor:
 @dataclass(frozen=True)
 class OpenTerminalAtPath:
     """Open a new terminal rooted at the supplied directory path."""
+
+    path: str
+
+
+@dataclass(frozen=True)
+class AddBookmark:
+    """Persist the supplied directory path as a bookmark."""
+
+    path: str
+
+
+@dataclass(frozen=True)
+class RemoveBookmark:
+    """Remove the supplied directory path from bookmarks."""
 
     path: str
 
@@ -603,6 +622,7 @@ Action = (
     | BeginFileSearch
     | BeginGrepSearch
     | BeginHistorySearch
+    | BeginBookmarkSearch
     | BeginCommandPalette
     | CancelCommandPalette
     | MoveCommandPaletteCursor
@@ -632,6 +652,8 @@ Action = (
     | OpenPathWithDefaultApp
     | OpenPathInEditor
     | OpenTerminalAtPath
+    | AddBookmark
+    | RemoveBookmark
     | ToggleSplitTerminal
     | FocusSplitTerminal
     | SendSplitTerminalInput

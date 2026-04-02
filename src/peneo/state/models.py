@@ -19,7 +19,14 @@ UiMode = Literal["BROWSING", "FILTER", "RENAME", "CREATE", "PALETTE", "CONFIRM",
 SortField = Literal["name", "modified", "size"]
 ClipboardMode = Literal["copy", "cut", "none"]
 NameConflictKind = Literal["rename", "create_file", "create_dir"]
-CommandPaletteSource = Literal["commands", "file_search", "grep_search", "history", "go_to_path"]
+CommandPaletteSource = Literal[
+    "commands",
+    "file_search",
+    "grep_search",
+    "history",
+    "bookmarks",
+    "go_to_path",
+]
 SplitTerminalStatus = Literal["closed", "starting", "running"]
 SplitTerminalFocusTarget = Literal["browser", "terminal"]
 DirectorySizeStatus = Literal["pending", "ready", "failed"]

@@ -2,10 +2,11 @@
 
 from dataclasses import replace
 
-from peneo.models import ExternalLaunchRequest
+from peneo.models import BookmarkConfig, ExternalLaunchRequest
 
 from .actions import (
     Action,
+    AddBookmark,
     ConfigSaveCompleted,
     ConfigSaveFailed,
     CycleConfigEditorValue,
@@ -18,6 +19,7 @@ from .actions import (
     OpenPathWithDefaultApp,
     OpenTerminalAtPath,
     PasteFromClipboardToTerminal,
+    RemoveBookmark,
     SaveConfigEditor,
     SendSplitTerminalInput,
     SetTerminalHeight,
@@ -113,6 +115,70 @@ def handle_terminal_config_action(
                 request_id=request_id,
                 path=state.config_editor.path,
                 config=state.config_editor.draft,
+            ),
+        )
+
+    if isinstance(action, AddBookmark):
+        if action.path in state.config.bookmarks.paths:
+            return done(
+                replace(
+                    state,
+                    notification=NotificationState(
+                        level="info",
+                        message="Directory is already bookmarked",
+                    ),
+                )
+            )
+        next_config = replace(
+            state.config,
+            bookmarks=BookmarkConfig(
+                paths=(*state.config.bookmarks.paths, action.path),
+            ),
+        )
+        request_id = state.next_request_id
+        return done(
+            replace(
+                state,
+                notification=None,
+                pending_config_save_request_id=request_id,
+                next_request_id=request_id + 1,
+            ),
+            RunConfigSaveEffect(
+                request_id=request_id,
+                path=state.config_path,
+                config=next_config,
+            ),
+        )
+
+    if isinstance(action, RemoveBookmark):
+        if action.path not in state.config.bookmarks.paths:
+            return done(
+                replace(
+                    state,
+                    notification=NotificationState(
+                        level="warning",
+                        message="Directory is not bookmarked",
+                    ),
+                )
+            )
+        next_config = replace(
+            state.config,
+            bookmarks=BookmarkConfig(
+                paths=tuple(path for path in state.config.bookmarks.paths if path != action.path),
+            ),
+        )
+        request_id = state.next_request_id
+        return done(
+            replace(
+                state,
+                notification=None,
+                pending_config_save_request_id=request_id,
+                next_request_id=request_id + 1,
+            ),
+            RunConfigSaveEffect(
+                request_id=request_id,
+                path=state.config_path,
+                config=next_config,
             ),
         )
 

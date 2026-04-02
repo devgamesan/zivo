@@ -1,6 +1,13 @@
 from pathlib import Path
 
-from peneo.models import AppConfig, BehaviorConfig, DisplayConfig, EditorConfig, TerminalConfig
+from peneo.models import (
+    AppConfig,
+    BehaviorConfig,
+    BookmarkConfig,
+    DisplayConfig,
+    EditorConfig,
+    TerminalConfig,
+)
 from peneo.services.config import AppConfigLoader, LiveConfigSaveService, resolve_config_path
 
 
@@ -30,6 +37,7 @@ def test_loader_creates_default_config_when_missing(tmp_path) -> None:
     assert 'theme = "textual-dark"' in written
     assert "show_directory_sizes = false" in written
     assert 'default_sort_field = "name"' in written
+    assert '# paths = ["/home/user/src", "/home/user/docs"]' in written
 
 
 def test_loader_reads_valid_config_values(tmp_path) -> None:
@@ -53,6 +61,9 @@ def test_loader_reads_valid_config_values(tmp_path) -> None:
         [behavior]
         confirm_delete = false
         paste_conflict_action = "rename"
+
+        [bookmarks]
+        paths = ["/tmp/project", "~/notes", "/tmp/project"]
         """,
         encoding="utf-8",
     )
@@ -71,6 +82,7 @@ def test_loader_reads_valid_config_values(tmp_path) -> None:
     assert result.config.display.directories_first is False
     assert result.config.behavior.confirm_delete is False
     assert result.config.behavior.paste_conflict_action == "rename"
+    assert result.config.bookmarks.paths == ("/tmp/project", str((Path.home() / "notes").resolve()))
 
 
 def test_loader_keeps_valid_values_and_warns_for_invalid_entries(tmp_path) -> None:
@@ -92,6 +104,9 @@ def test_loader_keeps_valid_values_and_warns_for_invalid_entries(tmp_path) -> No
         [behavior]
         confirm_delete = "yes"
         paste_conflict_action = "explode"
+
+        [bookmarks]
+        paths = ["relative/path", 3]
         """,
         encoding="utf-8",
     )
@@ -106,7 +121,8 @@ def test_loader_keeps_valid_values_and_warns_for_invalid_entries(tmp_path) -> No
     assert result.config.display.default_sort_field == "name"
     assert result.config.behavior.confirm_delete is True
     assert result.config.behavior.paste_conflict_action == "prompt"
-    assert len(result.warnings) == 7
+    assert result.config.bookmarks.paths == ()
+    assert len(result.warnings) == 9
 
 
 def test_loader_warns_for_invalid_editor_command_syntax(tmp_path) -> None:
@@ -148,6 +164,7 @@ def test_config_save_service_writes_normalized_config_file(tmp_path) -> None:
                 confirm_delete=False,
                 paste_conflict_action="rename",
             ),
+            bookmarks=BookmarkConfig(paths=("/tmp/project", "/tmp/docs")),
         ),
     )
 
@@ -163,3 +180,4 @@ def test_config_save_service_writes_normalized_config_file(tmp_path) -> None:
     assert 'default_sort_field = "size"' in written
     assert "confirm_delete = false" in written
     assert 'paste_conflict_action = "rename"' in written
+    assert 'paths = ["/tmp/project", "/tmp/docs"]' in written

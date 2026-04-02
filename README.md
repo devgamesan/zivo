@@ -121,6 +121,7 @@ The supported settings are:
 | `display` | `directories_first` | `true` / `false` | Keeps directories grouped before files in the main pane. |
 | `behavior` | `confirm_delete` | `true` / `false` | Shows a confirmation dialog before moving items to trash. |
 | `behavior` | `paste_conflict_action` | `prompt` / `overwrite` / `skip` / `rename` | Chooses the default paste-conflict behavior. `prompt` keeps the conflict dialog enabled. |
+| `bookmarks` | `paths` | Array of absolute path strings | Bookmarked directories shown by `Ctrl+B` and `Show bookmarks` in the command palette. Duplicate paths are removed when the config is loaded. |
 
 Example:
 
@@ -144,6 +145,9 @@ directories_first = true
 [behavior]
 confirm_delete = true
 paste_conflict_action = "prompt"
+
+[bookmarks]
+paths = ["/home/user/src", "/home/user/docs"]
 ```
 
 Invalid config values do not stop startup. Peneo falls back to built-in defaults and shows a warning after the initial directory load.
@@ -163,6 +167,7 @@ The main keys are listed below.
 | Normal | `Ctrl+J` | Open go-to-path input to navigate to a specific path |
 | Normal | `Alt+Home` | Go to home directory |
 | Normal | `Ctrl+O` | Open the directory history list and jump to a selected directory |
+| Normal | `Ctrl+B` | Open the bookmark list and jump to a selected directory |
 | Normal | `Enter` | Enter a directory, or open a file with the default app |
 | Normal | `e` | Open the focused file in a terminal editor, using `editor.command` -> `$EDITOR` -> built-in defaults |
 | Normal | `F5` | Reload the current directory |
@@ -206,6 +211,7 @@ Less frequent actions are grouped in the command palette opened with `:`.
 | `Find files` | Always | Opens recursive file search. |
 | `Grep search` | Always | Opens recursive grep search (`ripgrep` / `rg` required on `PATH`). |
 | `History search` | Always | Opens directory history list and jump to a selected directory. |
+| `Show bookmarks` | Always | Opens the saved bookmark list and jumps to the selected directory. |
 | `Go back` | Directory history has a previous entry | Moves to the previous directory in history. |
 | `Go forward` | Directory history has a forward entry | Moves to the next directory in history. |
 | `Go to path` | Always | Opens go-to-path input to navigate to a specific path. |
@@ -218,6 +224,7 @@ Less frequent actions are grouped in the command palette opened with `:`.
 | `Move to trash` | At least one target is selected or focused | Moves the selected items, or the focused item, to trash (confirmation is enabled by default and can be configured). |
 | `Open in file manager` | Always | Opens the current directory in the OS file manager. |
 | `Open terminal` | Always | Launches an external terminal rooted at the current directory, using `config.toml` templates before built-in fallbacks. |
+| `Bookmark this directory` / `Remove bookmark` | Always | Saves or removes the current directory in `[bookmarks].paths`. The label reflects whether the current directory is already bookmarked. |
 | `Show hidden files` / `Hide hidden files` | Always | Toggles hidden-file visibility for the browser panes. The label reflects the current visibility state. |
 | `Edit config` | Always | Opens the settings overlay for startup defaults. You can edit the preferred terminal editor, hidden-file visibility, directory-size visibility, theme, sorting, default paste-conflict behavior, and delete confirmation. Use `↑` / `↓` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
 | `Create file` | Always | Starts the inline create-file flow in the current directory. |

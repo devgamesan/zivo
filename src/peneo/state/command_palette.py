@@ -64,6 +64,23 @@ def get_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, ...]
             if _matches_query(item, query)
         )
 
+    if state.command_palette.source == "bookmarks":
+        query = state.command_palette.query
+        return tuple(
+            item
+            for item in (
+                CommandPaletteItem(
+                    id=f"bookmark_result:{index}",
+                    label=_display_path(path),
+                    shortcut=None,
+                    enabled=True,
+                    path=path,
+                )
+                for index, path in enumerate(state.config.bookmarks.paths)
+            )
+            if _matches_query(item, query)
+        )
+
     if state.command_palette.source == "go_to_path":
         preview = state.command_palette.go_to_path_preview
         if preview:
@@ -108,6 +125,7 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
     single_target_entry = _single_target_entry(state, target_paths)
     has_target = bool(target_paths)
     has_single_target = single_target_entry is not None
+    current_path_is_bookmarked = state.current_path in state.config.bookmarks.paths
 
     items = [
         CommandPaletteItem(
@@ -126,6 +144,12 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             id="history_search",
             label="History search",
             shortcut="Ctrl+O",
+            enabled=True,
+        ),
+        CommandPaletteItem(
+            id="bookmark_search",
+            label="Show bookmarks",
+            shortcut="Ctrl+B",
             enabled=True,
         ),
         CommandPaletteItem(
@@ -221,6 +245,16 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             CommandPaletteItem(
                 id="open_terminal",
                 label="Open terminal here",
+                shortcut=None,
+                enabled=True,
+            ),
+            CommandPaletteItem(
+                id="remove_bookmark" if current_path_is_bookmarked else "add_bookmark",
+                label=(
+                    "Remove bookmark"
+                    if current_path_is_bookmarked
+                    else "Bookmark this directory"
+                ),
                 shortcut=None,
                 enabled=True,
             ),

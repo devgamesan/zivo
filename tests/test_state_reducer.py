@@ -1,6 +1,8 @@
 from dataclasses import replace
 
 from peneo.models import (
+    AppConfig,
+    BookmarkConfig,
     CreatePathRequest,
     ExternalLaunchRequest,
     FileMutationResult,
@@ -11,7 +13,9 @@ from peneo.models import (
     TrashDeleteRequest,
 )
 from peneo.state import (
+    AddBookmark,
     AttributeInspectionState,
+    BeginBookmarkSearch,
     BeginCommandPalette,
     BeginCreateInput,
     BeginDeleteTargets,
@@ -86,6 +90,7 @@ from peneo.state import (
     PasteConflictState,
     PendingInputState,
     ReloadDirectory,
+    RemoveBookmark,
     RequestBrowserSnapshot,
     RequestDirectorySizes,
     ResolvePasteConflict,
@@ -564,7 +569,7 @@ def test_move_command_palette_cursor_clamps_to_visible_commands() -> None:
     next_state = _reduce_state(state, MoveCommandPaletteCursor(delta=20))
 
     assert next_state.command_palette is not None
-    assert next_state.command_palette.cursor_index == 19
+    assert next_state.command_palette.cursor_index == 20
 
 
 def test_set_command_palette_query_resets_cursor() -> None:
@@ -634,6 +639,13 @@ def test_begin_history_search_with_empty_history() -> None:
     assert next_state.command_palette.history_results == ()
 
 
+def test_begin_bookmark_search_enters_bookmarks_mode() -> None:
+    next_state = _reduce_state(build_initial_app_state(), BeginBookmarkSearch())
+
+    assert next_state.ui_mode == "PALETTE"
+    assert next_state.command_palette == CommandPaletteState(source="bookmarks")
+
+
 def test_begin_go_to_path_enters_palette_mode() -> None:
     next_state = _reduce_state(build_initial_app_state(), BeginGoToPath())
 
@@ -677,6 +689,49 @@ def test_submit_history_palette_with_empty_history_shows_warning() -> None:
 
     assert result.state.notification is not None
     assert result.state.notification.message == "No directory history"
+
+
+def test_submit_bookmarks_palette_navigates_to_selected_directory(tmp_path) -> None:
+    bookmarked_path = tmp_path / "project"
+    bookmarked_path.mkdir()
+    state = build_initial_app_state(
+        config=AppConfig(bookmarks=BookmarkConfig(paths=(str(bookmarked_path),)))
+    )
+    state = replace(
+        state,
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(source="bookmarks"),
+    )
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.command_palette is None
+    assert result.effects == (
+        LoadBrowserSnapshotEffect(
+            request_id=1,
+            path=str(bookmarked_path),
+            cursor_path=None,
+            blocking=True,
+        ),
+    )
+
+
+def test_submit_bookmarks_palette_with_invalid_path_shows_error() -> None:
+    state = build_initial_app_state(
+        config=AppConfig(bookmarks=BookmarkConfig(paths=("/tmp/does-not-exist",)))
+    )
+    state = replace(
+        state,
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(source="bookmarks"),
+    )
+
+    next_state = _reduce_state(state, SubmitCommandPalette())
+
+    assert next_state.notification == NotificationState(
+        level="error",
+        message="Bookmarked path does not exist or is not a directory",
+    )
 
 
 def test_set_command_palette_query_updates_go_to_path_preview(tmp_path) -> None:
@@ -856,6 +911,60 @@ def test_save_config_editor_emits_config_save_effect() -> None:
             request_id=1,
             path="/tmp/peneo/config.toml",
             config=result.state.config_editor.draft,
+        ),
+    )
+
+
+def test_add_bookmark_emits_config_save_effect() -> None:
+    state = build_initial_app_state(config_path="/tmp/peneo/config.toml")
+
+    result = reduce_app_state(state, AddBookmark(path="/home/tadashi/develop/peneo"))
+
+    assert result.state.pending_config_save_request_id == 1
+    assert result.effects == (
+        RunConfigSaveEffect(
+            request_id=1,
+            path="/tmp/peneo/config.toml",
+            config=AppConfig(
+                bookmarks=BookmarkConfig(paths=("/home/tadashi/develop/peneo",))
+            ),
+        ),
+    )
+
+
+def test_add_bookmark_ignores_duplicate_path() -> None:
+    state = build_initial_app_state(
+        config=AppConfig(bookmarks=BookmarkConfig(paths=("/home/tadashi/develop/peneo",)))
+    )
+
+    next_state = _reduce_state(state, AddBookmark(path="/home/tadashi/develop/peneo"))
+
+    assert next_state.notification == NotificationState(
+        level="info",
+        message="Directory is already bookmarked",
+    )
+
+
+def test_remove_bookmark_emits_config_save_effect() -> None:
+    state = build_initial_app_state(
+        config_path="/tmp/peneo/config.toml",
+        config=AppConfig(
+            bookmarks=BookmarkConfig(
+                paths=("/home/tadashi/develop/peneo", "/home/tadashi/src")
+            )
+        ),
+    )
+
+    result = reduce_app_state(state, RemoveBookmark(path="/home/tadashi/develop/peneo"))
+
+    assert result.state.pending_config_save_request_id == 1
+    assert result.effects == (
+        RunConfigSaveEffect(
+            request_id=1,
+            path="/tmp/peneo/config.toml",
+            config=AppConfig(
+                bookmarks=BookmarkConfig(paths=("/home/tadashi/src",))
+            ),
         ),
     )
 
@@ -1075,6 +1184,64 @@ def test_submit_command_palette_begins_history_search() -> None:
     assert result.state.ui_mode == "PALETTE"
     assert result.state.command_palette is not None
     assert result.state.command_palette.source == "history"
+
+
+def test_submit_command_palette_begins_bookmark_search() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("show bookmarks"))
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.ui_mode == "PALETTE"
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.source == "bookmarks"
+
+
+def test_submit_command_palette_adds_current_directory_bookmark() -> None:
+    state = _reduce_state(
+        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        BeginCommandPalette(),
+    )
+    state = _reduce_state(state, SetCommandPaletteQuery("bookmark this directory"))
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.command_palette is None
+    assert result.effects == (
+        RunConfigSaveEffect(
+            request_id=1,
+            path="/tmp/peneo/config.toml",
+            config=AppConfig(
+                bookmarks=BookmarkConfig(paths=("/home/tadashi/develop/peneo",))
+            ),
+        ),
+    )
+
+
+def test_submit_command_palette_removes_current_directory_bookmark() -> None:
+    state = _reduce_state(
+        build_initial_app_state(
+            config_path="/tmp/peneo/config.toml",
+            config=AppConfig(
+                bookmarks=BookmarkConfig(paths=("/home/tadashi/develop/peneo", "/home/tadashi/src"))
+            ),
+        ),
+        BeginCommandPalette(),
+    )
+    state = _reduce_state(state, SetCommandPaletteQuery("remove bookmark"))
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.command_palette is None
+    assert result.effects == (
+        RunConfigSaveEffect(
+            request_id=1,
+            path="/tmp/peneo/config.toml",
+            config=AppConfig(
+                bookmarks=BookmarkConfig(paths=("/home/tadashi/src",))
+            ),
+        ),
+    )
 
 
 def test_submit_command_palette_goes_back() -> None:

@@ -1,6 +1,7 @@
 from dataclasses import replace
 
 from peneo.state import (
+    BeginBookmarkSearch,
     BeginCommandPalette,
     BeginDeleteTargets,
     BeginFileSearch,
@@ -98,6 +99,7 @@ def test_iter_bound_keys_includes_printable_text_input_keys() -> None:
     assert ":" in keys
     assert "space" in keys
     assert "ctrl+g" in keys
+    assert "ctrl+b" in keys
     assert "enter" in keys
 
 
@@ -215,6 +217,15 @@ def test_browsing_ctrl_g_begins_grep_search() -> None:
 
     assert len(actions) == 2
     assert isinstance(actions[1], BeginGrepSearch)
+
+
+def test_browsing_ctrl_b_begins_bookmark_search() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="ctrl+b")
+
+    assert len(actions) == 2
+    assert isinstance(actions[1], BeginBookmarkSearch)
 
 
 def test_filter_q_updates_query_instead_of_exiting() -> None:

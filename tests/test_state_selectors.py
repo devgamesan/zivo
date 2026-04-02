@@ -2,7 +2,7 @@ from dataclasses import replace
 from stat import S_IFREG
 
 import peneo.state.selectors as selectors_module
-from peneo.models import AppConfig, EditorConfig, PasteConflict, PasteRequest
+from peneo.models import AppConfig, BookmarkConfig, EditorConfig, PasteConflict, PasteRequest
 from peneo.state import (
     AttributeInspectionState,
     BeginCommandPalette,
@@ -45,6 +45,7 @@ from peneo.state import (
     select_target_paths,
     select_visible_current_entry_states,
 )
+from peneo.state import command_palette as command_palette_module
 from peneo.state.command_palette import CommandPaletteItem
 from peneo.state.selectors import _select_command_palette_window
 from tests.state_test_helpers import entry, pane, reduce_state
@@ -52,6 +53,10 @@ from tests.state_test_helpers import entry, pane, reduce_state
 
 def _reduce_state(state, action):
     return reduce_state(state, action)
+
+
+def _display_path_for_test(path: str) -> str:
+    return command_palette_module._display_path(path)
 
 
 def test_select_current_entries_applies_filter_and_sort() -> None:
@@ -629,6 +634,32 @@ def test_select_command_palette_state_enables_history_navigation_items() -> None
     assert any(item.label == "Go forward" and item.enabled for item in palette_state.items)
 
 
+def test_select_command_palette_state_shows_bookmark_items() -> None:
+    state = build_initial_app_state(
+        config=AppConfig(
+            bookmarks=BookmarkConfig(
+                paths=(
+                    "/home/tadashi/src",
+                    "/home/tadashi/docs",
+                )
+            )
+        )
+    )
+    state = replace(
+        _reduce_state(state, BeginCommandPalette()),
+        command_palette=CommandPaletteState(source="bookmarks", query="docs"),
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert palette_state.title == "Bookmarks"
+    assert [item.label for item in palette_state.items] == [
+        _display_path_for_test("/home/tadashi/docs")
+    ]
+    assert palette_state.empty_message == "No bookmarks"
+
+
 def test_select_command_palette_state_filters_query() -> None:
     state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
     state = replace(
@@ -659,6 +690,36 @@ def test_select_command_palette_state_uses_hidden_toggle_label_from_state() -> N
 
     assert visible_palette_state is not None
     assert [item.label for item in visible_palette_state.items] == ["Hide hidden files"]
+
+
+def test_select_command_palette_state_switches_bookmark_command_label() -> None:
+    state = build_initial_app_state()
+    palette_state = select_command_palette_state(
+        replace(
+            _reduce_state(state, BeginCommandPalette()),
+            command_palette=replace(CommandPaletteState(), query="bookmark"),
+        )
+    )
+
+    assert palette_state is not None
+    assert any(item.label == "Bookmark this directory" for item in palette_state.items)
+
+    bookmarked_state = build_initial_app_state(
+        config=AppConfig(
+            bookmarks=BookmarkConfig(
+                paths=("/home/tadashi/develop/peneo",)
+            )
+        )
+    )
+    bookmarked_palette_state = select_command_palette_state(
+        replace(
+            _reduce_state(bookmarked_state, BeginCommandPalette()),
+            command_palette=replace(CommandPaletteState(), query="bookmark"),
+        )
+    )
+
+    assert bookmarked_palette_state is not None
+    assert any(item.label == "Remove bookmark" for item in bookmarked_palette_state.items)
 
 
 def test_select_attribute_dialog_state_formats_selected_entry() -> None:

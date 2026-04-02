@@ -3,6 +3,7 @@
 from .config import (
     AppConfig,
     BehaviorConfig,
+    BookmarkConfig,
     ConfigLoadResult,
     ConfigSortField,
     ConfigTheme,
@@ -48,6 +49,7 @@ __all__ = [
     "AppConfig",
     "AttributeDialogState",
     "BehaviorConfig",
+    "BookmarkConfig",
     "CommandPaletteItemViewState",
     "CommandPaletteViewState",
     "ConfigDialogState",

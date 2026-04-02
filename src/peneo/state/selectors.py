@@ -175,6 +175,8 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             return HelpBarState(("type text / re:pattern | enter jump | esc cancel",))
         if state.command_palette is not None and state.command_palette.source == "history":
             return HelpBarState(("type path | enter jump | esc cancel",))
+        if state.command_palette is not None and state.command_palette.source == "bookmarks":
+            return HelpBarState(("type path | enter jump | esc cancel",))
         return HelpBarState(("type command | enter run | esc cancel",))
     if state.ui_mode == "BUSY":
         return HelpBarState(("processing...",))
@@ -278,6 +280,24 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
                 for index, item in visible_items
             ),
             empty_message="No directory history",
+        )
+
+    if state.command_palette.source == "bookmarks":
+        items = get_command_palette_items(state)
+        visible_items, _palette_title = _select_command_palette_window(items, cursor_index)
+        return CommandPaletteViewState(
+            title="Bookmarks",
+            query=state.command_palette.query,
+            items=tuple(
+                CommandPaletteItemViewState(
+                    label=item.label,
+                    shortcut=item.shortcut,
+                    enabled=item.enabled,
+                    selected=index == cursor_index,
+                )
+                for index, item in visible_items
+            ),
+            empty_message="No bookmarks",
         )
 
     if state.command_palette.source == "go_to_path":
