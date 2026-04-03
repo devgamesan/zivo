@@ -186,6 +186,10 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             return HelpBarState(("type path | enter jump | esc cancel",))
         if state.command_palette is not None and state.command_palette.source == "bookmarks":
             return HelpBarState(("type path | enter jump | esc cancel",))
+        if state.command_palette is not None and state.command_palette.source == "go_to_path":
+            return HelpBarState(
+                ("type path | up/down select | tab complete | enter jump | esc cancel",)
+            )
         return HelpBarState(("type command | enter run | esc cancel",))
     if state.ui_mode == "BUSY":
         return HelpBarState(("processing...",))
@@ -322,29 +326,25 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
         )
 
     if state.command_palette.source == "go_to_path":
-        preview = state.command_palette.go_to_path_preview
-        if preview:
-            # Display preview with ~ replacement
-            from .command_palette import _display_path
-            display_preview = _display_path(preview)
-            return CommandPaletteViewState(
-                title="Go to path",
-                query=state.command_palette.query,
-                items=(
-                    CommandPaletteItemViewState(
-                        label=display_preview,
-                        shortcut=None,
-                        enabled=True,
-                        selected=True,
-                    ),
-                ),
-                empty_message="Path does not exist or is not a directory",
-            )
+        items = get_command_palette_items(state)
+        visible_items, _palette_title = _select_command_palette_window(items, cursor_index)
         return CommandPaletteViewState(
             title="Go to path",
             query=state.command_palette.query,
-            items=(),
-            empty_message="Type a path to jump to",
+            items=tuple(
+                CommandPaletteItemViewState(
+                    label=item.label,
+                    shortcut=item.shortcut,
+                    enabled=item.enabled,
+                    selected=index == cursor_index,
+                )
+                for index, item in visible_items
+            ),
+            empty_message=(
+                "Type a path to jump to"
+                if not state.command_palette.query.strip()
+                else "No matching directories"
+            ),
         )
 
     items = get_command_palette_items(state)

@@ -171,7 +171,7 @@ The main keys are listed below.
 | Normal | `→` / `l` | Enter the item if it is a directory |
 | Normal | `Alt+←` | Go back to the previous directory in history |
 | Normal | `Alt+→` | Go forward to the next directory in history |
-| Normal | `Ctrl+J` | Open go-to-path input to navigate to a specific path |
+| Normal | `Ctrl+J` | Open go-to-path input to navigate to a specific path with directory completion |
 | Normal | `Alt+Home` | Go to home directory |
 | Normal | `Ctrl+O` | Open the directory history list and jump to a selected directory |
 | Normal | `Ctrl+B` | Open the bookmark list and jump to a selected directory |
@@ -226,7 +226,7 @@ Less frequent actions are grouped in the command palette opened with `:`.
 | `Show bookmarks` | Always | Opens the saved bookmark list and jumps to the selected directory. |
 | `Go back` | Directory history has a previous entry | Moves to the previous directory in history. |
 | `Go forward` | Directory history has a forward entry | Moves to the next directory in history. |
-| `Go to path` | Always | Opens go-to-path input to navigate to a specific path. |
+| `Go to path` | Always | Opens go-to-path input to navigate to a specific path, shows matching directories, and supports `Tab` completion for the selected candidate. |
 | `Go to home directory` | Always | Navigates to the home directory. |
 | `Reload directory` | Always | Reloads the current directory. |
 | `Toggle split terminal` | Always | Opens or closes the embedded split terminal. |

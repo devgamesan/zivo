@@ -687,6 +687,46 @@ def test_select_command_palette_state_shows_bookmark_items() -> None:
     assert palette_state.empty_message == "No bookmarks"
 
 
+def test_select_command_palette_state_shows_go_to_path_candidates() -> None:
+    state = replace(
+        _reduce_state(build_initial_app_state(), BeginCommandPalette()),
+        command_palette=CommandPaletteState(
+            source="go_to_path",
+            query="do",
+            cursor_index=1,
+            go_to_path_candidates=(
+                "/home/tadashi/docs",
+                "/home/tadashi/downloads",
+            ),
+        ),
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert palette_state.title == "Go to path"
+    assert [item.label for item in palette_state.items] == [
+        _display_path_for_test("/home/tadashi/docs"),
+        _display_path_for_test("/home/tadashi/downloads"),
+    ]
+    assert palette_state.items[1].selected is True
+    assert palette_state.empty_message == "No matching directories"
+
+
+def test_select_help_bar_state_for_go_to_path_palette_mentions_tab_completion() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(source="go_to_path"),
+    )
+
+    help_bar = select_help_bar_state(state)
+
+    assert help_bar.lines == (
+        "type path | up/down select | tab complete | enter jump | esc cancel",
+    )
+
+
 def test_select_command_palette_state_filters_query() -> None:
     state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
     state = replace(

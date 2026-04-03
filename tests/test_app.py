@@ -1567,6 +1567,60 @@ async def test_app_command_palette_create_file_opens_context_input() -> None:
 
 
 @pytest.mark.asyncio
+async def test_app_go_to_path_shows_candidates_and_tabs_to_selected_directory(tmp_path) -> None:
+    path = str(tmp_path)
+    docs_path = str(tmp_path / "docs")
+    downloads_path = str(tmp_path / "downloads")
+    Path(docs_path).mkdir()
+    Path(downloads_path).mkdir()
+    Path(docs_path, "guide.md").write_text("guide\n", encoding="utf-8")
+    Path(downloads_path, "archive.zip").write_text("zip\n", encoding="utf-8")
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (
+                    DirectoryEntryState(docs_path, "docs", "dir"),
+                    DirectoryEntryState(downloads_path, "downloads", "dir"),
+                ),
+                child_path=docs_path,
+            ),
+            docs_path: _build_snapshot(
+                docs_path,
+                (DirectoryEntryState(f"{docs_path}/guide.md", "guide.md", "file"),),
+            ),
+            downloads_path: _build_snapshot(
+                downloads_path,
+                (DirectoryEntryState(f"{downloads_path}/archive.zip", "archive.zip", "file"),),
+            ),
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("ctrl+j")
+        await pilot.press("d", "o")
+        await asyncio.sleep(0.05)
+
+        assert app.app_state.command_palette is not None
+        assert app.app_state.command_palette.go_to_path_candidates == (
+            docs_path,
+            downloads_path,
+        )
+
+        await pilot.press("down", "tab")
+        await asyncio.sleep(0.05)
+
+        assert app.app_state.command_palette.query == "downloads"
+
+        await pilot.press("tab", "enter")
+        await _wait_for_snapshot_loaded(app, downloads_path)
+
+        assert app.app_state.current_path == downloads_path
+
+
+@pytest.mark.asyncio
 async def test_app_command_palette_find_file_jumps_to_matching_parent_directory() -> None:
     path = "/tmp/peneo-command-palette-find-file"
     docs_path = f"{path}/docs"

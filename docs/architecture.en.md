@@ -230,7 +230,7 @@ sequenceDiagram
   - `Create file`
   - `Create directory`
 - Palette sources are `commands`, `file_search`, `grep_search`, `history`, `bookmarks`, and `go_to_path`
-- `go_to_path` shows a single preview candidate while the user types
+- `go_to_path` shows matching directory candidates while the user types and lets `Tab` complete the selected one
 
 ### `src/peneo/services/`
 

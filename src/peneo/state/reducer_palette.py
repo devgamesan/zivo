@@ -58,6 +58,7 @@ from .reducer_common import (
     expand_and_validate_path,
     filter_file_search_results,
     is_regex_file_search_query,
+    list_matching_directory_paths,
     single_target_entry,
     single_target_path,
 )
@@ -295,11 +296,11 @@ def _handle_set_go_to_path_query(
     next_palette: CommandPaletteState,
     query: str,
 ) -> ReduceResult:
-    expanded_path = expand_and_validate_path(query, state.current_path)
+    matches = list_matching_directory_paths(query, state.current_path)
     return done(
         replace(
             state,
-            command_palette=replace(next_palette, go_to_path_preview=expanded_path),
+            command_palette=replace(next_palette, go_to_path_candidates=matches),
         )
     )
 
@@ -410,10 +411,17 @@ def _handle_submit_go_to_path_palette(
     state: AppState,
     reduce_state: ReducerFn,
 ) -> ReduceResult:
-    expanded_path = expand_and_validate_path(
-        state.command_palette.query,
-        state.current_path,
-    )
+    items = get_command_palette_items(state)
+    expanded_path = None
+    if items:
+        expanded_path = items[
+            normalize_command_palette_cursor(state, state.command_palette.cursor_index)
+        ].path
+    if expanded_path is None:
+        expanded_path = expand_and_validate_path(
+            state.command_palette.query,
+            state.current_path,
+        )
     if expanded_path is None:
         return _notify(
             state,
