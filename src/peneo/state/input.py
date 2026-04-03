@@ -19,10 +19,12 @@ from .actions import (
     CancelFilterInput,
     CancelPasteConflict,
     CancelPendingInput,
+    CancelZipCompressConfirmation,
     ClearSelection,
     ConfirmArchiveExtract,
     ConfirmDeleteTargets,
     ConfirmFilterInput,
+    ConfirmZipCompress,
     CopyTargets,
     CutTargets,
     CycleConfigEditorValue,
@@ -179,7 +181,7 @@ def dispatch_key_input(
     if state.ui_mode == "PALETTE":
         return _dispatch_command_palette_input(state, key=key, character=character)
 
-    if state.ui_mode in {"RENAME", "CREATE", "EXTRACT"}:
+    if state.ui_mode in {"RENAME", "CREATE", "EXTRACT", "ZIP"}:
         return _dispatch_pending_input(state, key=key, character=character)
 
     return _dispatch_browsing_input(state, key)
@@ -198,7 +200,7 @@ def _normalize_input_character(
     if _terminal_has_focus(state):
         return resolved_character
 
-    if state.ui_mode in {"PALETTE", "RENAME", "CREATE", "EXTRACT"}:
+    if state.ui_mode in {"PALETTE", "RENAME", "CREATE", "EXTRACT", "ZIP"}:
         return resolved_character
 
     if state.ui_mode == "FILTER" and not resolved_character.isspace():
@@ -505,6 +507,13 @@ def _dispatch_confirm_input(state: AppState, key: str) -> DispatchedActions:
         if key == "enter":
             return _supported(ConfirmArchiveExtract())
         return _warn("Use Enter to continue extraction or Esc to return")
+
+    if state.zip_compress_confirmation is not None:
+        if key == "escape":
+            return _supported(CancelZipCompressConfirmation())
+        if key == "enter":
+            return _supported(ConfirmZipCompress())
+        return _warn("Use Enter to overwrite the zip or Esc to return")
 
     if state.name_conflict is not None:
         if key in {"enter", "escape"}:
