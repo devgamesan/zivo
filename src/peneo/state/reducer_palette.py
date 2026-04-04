@@ -4,6 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from peneo.archive_utils import is_supported_archive_path
+from peneo.models.external_launch import ExternalLaunchRequest
 
 from .actions import (
     Action,
@@ -61,6 +62,7 @@ from .reducer_common import (
     filter_file_search_results,
     is_regex_file_search_query,
     list_matching_directory_paths,
+    run_external_launch_request,
     single_target_entry,
     single_target_path,
 )
@@ -387,12 +389,10 @@ def _handle_open_grep_result_in_editor(
     selected_result = results[
         normalize_command_palette_cursor(state, state.command_palette.cursor_index)
     ]
-    return done(
-        replace(
-            state,
-            notification=None,
-        ),
-        OpenPathInEditor(
+    return run_external_launch_request(
+        replace(state, notification=None),
+        ExternalLaunchRequest(
+            kind="open_editor",
             path=selected_result.path,
             line_number=selected_result.line_number,
         ),

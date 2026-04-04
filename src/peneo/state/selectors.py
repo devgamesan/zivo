@@ -200,7 +200,7 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
         if state.command_palette is not None and state.command_palette.source == "file_search":
             return HelpBarState(("type filename | enter jump | esc cancel",))
         if state.command_palette is not None and state.command_palette.source == "grep_search":
-            return HelpBarState(("type text / re:pattern | enter jump | esc cancel",))
+            return HelpBarState(("type text / re:pattern | enter jump | e edit | esc cancel",))
         if state.command_palette is not None and state.command_palette.source == "history":
             return HelpBarState(("type path | enter jump | esc cancel",))
         if state.command_palette is not None and state.command_palette.source == "bookmarks":
