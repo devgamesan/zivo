@@ -496,8 +496,26 @@ def sync_child_pane(
     cursor_path: str | None,
     reduce_state: ReducerFn,
 ) -> ReduceResult:
+    import sys
+    print(f"[DEBUG] sync_child_pane called: cursor_path={cursor_path}", file=sys.stderr)
+
     entry = current_entry_for_path(state, cursor_path)
-    if entry is None or (entry.kind != "dir" and not is_supported_archive_path(entry.path)):
+    print(f"[DEBUG] entry: {entry}", file=sys.stderr)
+
+    if entry is None:
+        print(f"[DEBUG] entry is None, returning empty child pane", file=sys.stderr)
+        next_state = replace(
+            state,
+            child_pane=PaneState(directory_path=state.current_path, entries=()),
+            pending_child_pane_request_id=None,
+        )
+        return maybe_request_directory_sizes(next_state, reduce_state)
+
+    print(f"[DEBUG] entry.kind={entry.kind}, entry.path={entry.path}", file=sys.stderr)
+    print(f"[DEBUG] is_supported_archive={is_supported_archive_path(entry.path)}", file=sys.stderr)
+
+    if entry.kind != "dir" and not is_supported_archive_path(entry.path):
+        print(f"[DEBUG] Not dir and not archive, returning empty child pane", file=sys.stderr)
         next_state = replace(
             state,
             child_pane=PaneState(directory_path=state.current_path, entries=()),
@@ -509,12 +527,10 @@ def sync_child_pane(
         entry.path == state.child_pane.directory_path
         and state.pending_child_pane_request_id is None
     ):
+        print(f"[DEBUG] Same path and no pending request, skipping", file=sys.stderr)
         return maybe_request_directory_sizes(state, reduce_state)
 
-    import sys
-    print(f"[DEBUG] sync_child_pane: cursor_path={cursor_path}, entry.path={entry.path}, entry.kind={entry.kind}", file=sys.stderr)
-    print(f"[DEBUG] is_supported_archive={is_supported_archive_path(entry.path)}", file=sys.stderr)
-
+    print(f"[DEBUG] Loading child pane for: {entry.path}", file=sys.stderr)
     request_id = state.next_request_id
     next_state = replace(
         state,
