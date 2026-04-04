@@ -44,6 +44,7 @@ from peneo.state import (
     MoveCursorAndSelectRange,
     NameConflictState,
     NotificationState,
+    OpenFindResultInEditor,
     OpenGrepResultInEditor,
     OpenPathInEditor,
     OpenPathWithDefaultApp,
@@ -633,7 +634,7 @@ def test_palette_down_moves_cursor() -> None:
     assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=1))
 
 
-def test_palette_e_key_opens_grep_result_in_editor() -> None:
+def test_palette_ctrl_e_opens_grep_result_in_editor() -> None:
     from peneo.state.models import CommandPaletteState
     state = replace(
         build_initial_app_state(),
@@ -644,12 +645,12 @@ def test_palette_e_key_opens_grep_result_in_editor() -> None:
         ),
     )
 
-    actions = dispatch_key_input(state, key="e")
+    actions = dispatch_key_input(state, key="ctrl+e")
 
     assert actions == (SetNotification(None), OpenGrepResultInEditor())
 
 
-def test_palette_e_key_does_not_open_editor_for_other_sources() -> None:
+def test_palette_ctrl_e_opens_find_result_in_editor() -> None:
     from peneo.state.models import CommandPaletteState
     state = replace(
         build_initial_app_state(),
@@ -660,9 +661,25 @@ def test_palette_e_key_does_not_open_editor_for_other_sources() -> None:
         ),
     )
 
+    actions = dispatch_key_input(state, key="ctrl+e")
+
+    assert actions == (SetNotification(None), OpenFindResultInEditor())
+
+
+def test_palette_e_key_does_not_open_editor_for_other_sources() -> None:
+    from peneo.state.models import CommandPaletteState
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="commands",
+            query="test",
+        ),
+    )
+
     actions = dispatch_key_input(state, key="e", character="e")
 
-    # e キーは file_search では OpenGrepResultInEditor を生成せず、文字として扱われる
+    # e キーは commands では OpenFindResultInEditor を生成せず、文字として扱われる
     assert actions == (SetNotification(None), SetCommandPaletteQuery("teste"))
 
 

@@ -32,6 +32,7 @@ from .actions import (
     GrepSearchCompleted,
     GrepSearchFailed,
     MoveCommandPaletteCursor,
+    OpenFindResultInEditor,
     OpenGrepResultInEditor,
     OpenPathInEditor,
     OpenPathWithDefaultApp,
@@ -395,6 +396,28 @@ def _handle_open_grep_result_in_editor(
             kind="open_editor",
             path=selected_result.path,
             line_number=selected_result.line_number,
+        ),
+    )
+
+
+def _handle_open_find_result_in_editor(
+    state: AppState,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    results = state.command_palette.file_search_results
+    message = state.command_palette.file_search_error_message or "No matching files"
+    if not results:
+        return _notify(state, level="warning", message=message)
+
+    selected_result = results[
+        normalize_command_palette_cursor(state, state.command_palette.cursor_index)
+    ]
+    return run_external_launch_request(
+        replace(state, ui_mode="BROWSING", notification=None),
+        ExternalLaunchRequest(
+            kind="open_editor",
+            path=selected_result.path,
+            line_number=None,  # File search doesn't have line numbers
         ),
     )
 
@@ -1026,5 +1049,8 @@ def handle_palette_action(
 
     if isinstance(action, OpenGrepResultInEditor):
         return _handle_open_grep_result_in_editor(state, reduce_state)
+
+    if isinstance(action, OpenFindResultInEditor):
+        return _handle_open_find_result_in_editor(state, reduce_state)
 
     return None

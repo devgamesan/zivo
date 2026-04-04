@@ -340,6 +340,11 @@ class OpenGrepResultInEditor:
 
 
 @dataclass(frozen=True)
+class OpenFindResultInEditor:
+    """Open the selected file search result in editor."""
+
+
+@dataclass(frozen=True)
 class OpenTerminalAtPath:
     """Open a new terminal rooted at the supplied directory path."""
 
@@ -856,6 +861,8 @@ Action = (
     | ExitCurrentPath
     | OpenPathWithDefaultApp
     | OpenPathInEditor
+    | OpenGrepResultInEditor
+    | OpenFindResultInEditor
     | OpenTerminalAtPath
     | ShowAttributes
     | CopyPathsToClipboard

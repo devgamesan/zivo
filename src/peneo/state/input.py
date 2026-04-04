@@ -48,6 +48,7 @@ from .actions import (
     MoveConfigEditorCursor,
     MoveCursor,
     MoveCursorAndSelectRange,
+    OpenFindResultInEditor,
     OpenGrepResultInEditor,
     OpenPathInEditor,
     OpenPathWithDefaultApp,
@@ -571,16 +572,19 @@ def _dispatch_command_palette_input(
         current_query = state.command_palette.query if state.command_palette is not None else ""
         return _supported(SetCommandPaletteQuery(current_query[:-1]))
 
-    if (
-        key == "e"
-        and state.command_palette is not None
-        and state.command_palette.source == "grep_search"
-    ):
-        return _supported(OpenGrepResultInEditor())
+    if key == "ctrl+e" and state.command_palette is not None:
+        if state.command_palette.source == "grep_search":
+            return _supported(OpenGrepResultInEditor())
+        if state.command_palette.source == "file_search":
+            return _supported(OpenFindResultInEditor())
 
     if character and character.isprintable():
         current_query = state.command_palette.query if state.command_palette is not None else ""
         return _supported(SetCommandPaletteQuery(f"{current_query}{character}"))
+
+    source = state.command_palette.source if state.command_palette is not None else None
+    if source in ("grep_search", "file_search"):
+        return _warn("Use arrows, type to filter, Enter, Ctrl+E for editor, or Esc")
 
     return _warn("Use arrows, type to filter, Enter to run, or Esc to cancel")
 

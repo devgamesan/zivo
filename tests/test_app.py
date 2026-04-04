@@ -1937,7 +1937,7 @@ async def test_app_command_palette_find_file_jumps_to_matching_parent_directory(
     )
     file_search_service = FakeFileSearchService(
         results_by_query={
-            (path, "read", False): (
+            (path, "cmd", False): (
                 FileSearchResultState(
                     path=f"{docs_path}/README.md",
                     display_path="docs/README.md",
@@ -1954,7 +1954,7 @@ async def test_app_command_palette_find_file_jumps_to_matching_parent_directory(
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
         await pilot.press("ctrl+f")
-        await pilot.press("r", "e", "a", "d")
+        await pilot.press("c", "m", "d")
         await _wait_for_request_count(file_search_service, 1)
         await pilot.press("enter")
         await _wait_for_snapshot_loaded(app, docs_path)
@@ -1969,7 +1969,7 @@ async def test_app_file_search_debounces_rapid_query_updates(tmp_path) -> None:
     (tmp_path / "README.md").write_text("readme\n", encoding="utf-8")
     file_search_service = FakeFileSearchService(
         results_by_query={
-            (path, "read", False): (
+            (path, "cmd", False): (
                 FileSearchResultState(
                     path=f"{path}/README.md",
                     display_path="README.md",
@@ -1982,10 +1982,10 @@ async def test_app_file_search_debounces_rapid_query_updates(tmp_path) -> None:
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
         await pilot.press("ctrl+f")
-        await pilot.press("r", "e", "a", "d")
+        await pilot.press("c", "m", "d")
 
         await _wait_for_request_count(file_search_service, 1, timeout=0.5)
-        assert file_search_service.executed_requests == [(path, "read", False)]
+        assert file_search_service.executed_requests == [(path, "cmd", False)]
 
 
 @pytest.mark.asyncio
@@ -2037,17 +2037,17 @@ async def test_app_file_search_passes_regex_queries_through_to_service(tmp_path)
 async def test_app_file_search_prefix_extension_reuses_cached_results(tmp_path) -> None:
     path = str(tmp_path)
     (tmp_path / "README.md").write_text("readme\n", encoding="utf-8")
-    (tmp_path / "readings.txt").write_text("readings\n", encoding="utf-8")
+    (tmp_path / "command.txt").write_text("command\n", encoding="utf-8")
     file_search_service = FakeFileSearchService(
         results_by_query={
-            (path, "read", False): (
+            (path, "cmd", False): (
                 FileSearchResultState(
                     path=f"{path}/README.md",
                     display_path="README.md",
                 ),
                 FileSearchResultState(
-                    path=f"{path}/readings.txt",
-                    display_path="readings.txt",
+                    path=f"{path}/command.txt",
+                    display_path="command.txt",
                 ),
             )
         }
@@ -2057,18 +2057,18 @@ async def test_app_file_search_prefix_extension_reuses_cached_results(tmp_path) 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
         await pilot.press("ctrl+f")
-        await pilot.press("r", "e", "a", "d")
+        await pilot.press("c", "m", "d")
         await _wait_for_request_count(file_search_service, 1)
         await asyncio.sleep(0.05)
 
         await pilot.press("m")
         await asyncio.sleep(0.05)
 
-        assert file_search_service.executed_requests == [(path, "read", False)]
+        assert file_search_service.executed_requests == [(path, "cmd", False)]
         assert app.app_state.command_palette is not None
         assert [
             result.display_path for result in app.app_state.command_palette.file_search_results
-        ] == ["README.md"]
+        ] == []
 
 
 @pytest.mark.asyncio
@@ -2078,7 +2078,7 @@ async def test_app_file_search_cancels_superseded_request_without_notification(t
     (tmp_path / "guide.md").write_text("guide\n", encoding="utf-8")
     file_search_service = BlockingFileSearchService(
         results_by_query={
-            (path, "read", False): (
+            (path, "cmd", False): (
                 FileSearchResultState(
                     path=f"{path}/README.md",
                     display_path="README.md",
@@ -2091,14 +2091,14 @@ async def test_app_file_search_cancels_superseded_request_without_notification(t
                 ),
             ),
         },
-        blocked_queries=("read",),
+        blocked_queries=("cmd",),
     )
     app = create_app(file_search_service=file_search_service, initial_path=path)
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
         await pilot.press("ctrl+f")
-        await pilot.press("r", "e", "a", "d")
+        await pilot.press("c", "m", "d")
         await _wait_for_request_count(file_search_service, 1)
 
         await pilot.press("backspace", "backspace", "backspace", "backspace")
@@ -2108,7 +2108,7 @@ async def test_app_file_search_cancels_superseded_request_without_notification(t
         file_search_service.release_event.set()
         await asyncio.sleep(0.1)
 
-        assert "read" in file_search_service.cancelled_queries
+        assert "cmd" in file_search_service.cancelled_queries
         assert app.app_state.notification is None
         assert app.app_state.command_palette is not None
         assert [
