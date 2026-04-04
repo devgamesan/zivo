@@ -377,6 +377,27 @@ class BlockingGrepSearchService:
         return self.results_by_query.get(key, ())
 
 
+class BlockingDirectorySizeService:
+    def __init__(self) -> None:
+        self.executed_requests: list[tuple[str, ...]] = []
+        self.release_event = threading.Event()
+
+    def calculate_sizes(
+        self,
+        paths: tuple[str, ...],
+        *,
+        is_cancelled=None,
+    ) -> tuple[tuple[tuple[str, int], ...], tuple[tuple[str, str], ...]]:
+        self.executed_requests.append(paths)
+        while not self.release_event.wait(0.01):
+            if is_cancelled is not None and is_cancelled():
+                return (), ()
+        return tuple((path, 1_000 * (index + 1)) for index, path in enumerate(paths)), ()
+
+    def release(self) -> None:
+        self.release_event.set()
+
+
 async def _wait_for_row_count(app, expected_count: int, timeout: float = 0.5) -> None:
     deadline = asyncio.get_running_loop().time() + timeout
     while True:
@@ -1378,6 +1399,118 @@ async def test_app_refresh_keeps_parent_pane_items_when_entries_are_unchanged() 
         await asyncio.sleep(0.05)
 
         assert tuple(app.query_one("#parent-pane-list", ListView).children) == parent_items
+
+
+@pytest.mark.asyncio
+async def test_app_selection_toggle_avoids_rebuilding_large_current_pane(monkeypatch) -> None:
+    path = "/tmp/peneo-large-selection"
+    current_entries = tuple(
+        DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
+        for index in range(1000)
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                current_entries,
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await _wait_for_row_count(app, 1000, timeout=2.0)
+
+        current_table = app.query_one("#current-pane-table", DataTable)
+        original_clear = DataTable.clear
+        original_add_row = DataTable.add_row
+        clear_calls = 0
+        add_row_calls = 0
+
+        def counting_clear(self, columns: bool = False):
+            nonlocal clear_calls
+            if self is current_table:
+                clear_calls += 1
+            return original_clear(self, columns=columns)
+
+        def counting_add_row(self, *cells, **kwargs):
+            nonlocal add_row_calls
+            if self is current_table:
+                add_row_calls += 1
+            return original_add_row(self, *cells, **kwargs)
+
+        monkeypatch.setattr(DataTable, "clear", counting_clear)
+        monkeypatch.setattr(DataTable, "add_row", counting_add_row)
+
+        await pilot.press("space")
+        await asyncio.sleep(0.05)
+
+        first_row = current_table.get_row_at(0)
+
+        assert clear_calls == 0
+        assert add_row_calls == 0
+        assert app.app_state.current_pane.selected_paths == {f"{path}/file_0000.txt"}
+        assert current_table.cursor_row == 1
+        assert isinstance(first_row[0], Text)
+        assert first_row[0].plain == "*"
+
+
+@pytest.mark.asyncio
+async def test_app_directory_size_update_avoids_rebuilding_large_current_pane(monkeypatch) -> None:
+    path = "/tmp/peneo-large-dir-size"
+    current_entries = tuple(
+        DirectoryEntryState(f"{path}/dir_{index:04d}", f"dir_{index:04d}", "dir")
+        for index in range(1000)
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                current_entries,
+                child_path=current_entries[0].path,
+            )
+        }
+    )
+    directory_size_service = BlockingDirectorySizeService()
+    app = create_app(
+        snapshot_loader=loader,
+        directory_size_service=directory_size_service,
+        app_config=AppConfig(display=DisplayConfig(show_directory_sizes=True)),
+        initial_path=path,
+    )
+
+    async with app.run_test():
+        await _wait_for_snapshot_loaded(app, path)
+        await _wait_for_row_count(app, 1000, timeout=2.0)
+
+        current_table = app.query_one("#current-pane-table", DataTable)
+        original_clear = DataTable.clear
+        original_add_row = DataTable.add_row
+        clear_calls = 0
+        add_row_calls = 0
+
+        def counting_clear(self, columns: bool = False):
+            nonlocal clear_calls
+            if self is current_table:
+                clear_calls += 1
+            return original_clear(self, columns=columns)
+
+        def counting_add_row(self, *cells, **kwargs):
+            nonlocal add_row_calls
+            if self is current_table:
+                add_row_calls += 1
+            return original_add_row(self, *cells, **kwargs)
+
+        monkeypatch.setattr(DataTable, "clear", counting_clear)
+        monkeypatch.setattr(DataTable, "add_row", counting_add_row)
+
+        directory_size_service.release()
+        await _wait_for_directory_sizes(app, timeout=2.0)
+        await _wait_for_table_cell(app, "3.0 KB", 0, 2, timeout=2.0)
+
+        assert clear_calls == 0
+        assert add_row_calls == 0
 
 
 @pytest.mark.asyncio

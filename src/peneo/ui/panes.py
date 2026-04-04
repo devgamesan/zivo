@@ -305,11 +305,15 @@ class MainPane(Vertical):
         if not entries_changed and not cursor_changed:
             return
 
+        previous_entries = self._entries
         self._entries = next_entries
         self._cursor_index = cursor_index
         table = self.query_one(DataTable)
         if entries_changed:
-            self._rebuild_table(table)
+            if self._should_rebuild_rows(table, previous_entries, next_entries):
+                self._rebuild_table(table)
+            else:
+                self._update_changed_rows(table, previous_entries, next_entries)
         if entries_changed or cursor_changed:
             self._apply_cursor_state(table)
 
@@ -371,6 +375,39 @@ class MainPane(Vertical):
             return
         self._rebuild_table(table)
 
+    def _should_rebuild_rows(
+        self,
+        table: DataTable,
+        previous_entries: Sequence[PaneEntry],
+        next_entries: Sequence[PaneEntry],
+    ) -> bool:
+        if table.size.width != self._last_table_width:
+            return True
+        if len(previous_entries) != len(next_entries):
+            return True
+        return self._entry_row_keys(previous_entries) != self._entry_row_keys(next_entries)
+
+    def _update_changed_rows(
+        self,
+        table: DataTable,
+        previous_entries: Sequence[PaneEntry],
+        next_entries: Sequence[PaneEntry],
+    ) -> None:
+        column_widths = self._allocate_column_widths(table)
+        for index, (previous_entry, next_entry) in enumerate(
+            zip(previous_entries, next_entries, strict=False)
+        ):
+            if previous_entry == next_entry:
+                continue
+            next_cells = self._build_row_cells(next_entry, column_widths)
+            row_key = self._row_key(next_entry, index)
+            for column_key, next_cell in zip(
+                self.COLUMN_KEYS,
+                next_cells,
+                strict=False,
+            ):
+                table.update_cell(row_key, column_key, next_cell)
+
     def _rebuild_table(self, table: DataTable) -> None:
         column_widths = self._allocate_column_widths(table)
         table.clear(columns=True)
@@ -388,38 +425,57 @@ class MainPane(Vertical):
             width=column_widths["modified"],
             key=self.COLUMN_KEYS[3],
         )
-        for entry in self._entries:
+        for index, entry in enumerate(self._entries):
             table.add_row(
-                self._render_cell(
-                    entry.selection_marker,
-                    entry.selected,
-                    entry.cut,
-                    entry.executable,
-                    entry.kind,
-                ),
-                self._render_cell(
-                    truncate_middle(build_entry_label(entry), column_widths["name"]),
-                    entry.selected,
-                    entry.cut,
-                    entry.executable,
-                    entry.kind,
-                ),
-                self._render_cell(
-                    entry.size_label,
-                    entry.selected,
-                    entry.cut,
-                    entry.executable,
-                    entry.kind,
-                ),
-                self._render_cell(
-                    entry.modified_label,
-                    entry.selected,
-                    entry.cut,
-                    entry.executable,
-                    entry.kind,
-                ),
+                *self._build_row_cells(entry, column_widths),
+                key=self._row_key(entry, index),
             )
         self._last_table_width = table.size.width
+
+    @classmethod
+    def _entry_row_keys(cls, entries: Sequence[PaneEntry]) -> tuple[str, ...]:
+        return tuple(cls._row_key(entry, index) for index, entry in enumerate(entries))
+
+    @staticmethod
+    def _row_key(entry: PaneEntry, index: int) -> str:
+        return entry.path or f"__row__:{index}"
+
+    @classmethod
+    def _build_row_cells(
+        cls,
+        entry: PaneEntry,
+        column_widths: dict[str, int],
+    ) -> tuple[Text, Text, Text, Text]:
+        return (
+            cls._render_cell(
+                entry.selection_marker,
+                entry.selected,
+                entry.cut,
+                entry.executable,
+                entry.kind,
+            ),
+            cls._render_cell(
+                truncate_middle(build_entry_label(entry), column_widths["name"]),
+                entry.selected,
+                entry.cut,
+                entry.executable,
+                entry.kind,
+            ),
+            cls._render_cell(
+                entry.size_label,
+                entry.selected,
+                entry.cut,
+                entry.executable,
+                entry.kind,
+            ),
+            cls._render_cell(
+                entry.modified_label,
+                entry.selected,
+                entry.cut,
+                entry.executable,
+                entry.kind,
+            ),
+        )
 
     @classmethod
     def _allocate_column_widths(cls, table: DataTable) -> dict[str, int]:

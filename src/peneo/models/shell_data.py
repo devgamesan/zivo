@@ -19,6 +19,7 @@ class PaneEntry:
     selected: bool = False
     cut: bool = False
     executable: bool = False
+    path: str = ""
 
     @property
     def kind_label(self) -> str:
@@ -168,11 +169,41 @@ def build_dummy_shell_data() -> ThreePaneShellData:
     """Return static data for the initial three-pane shell."""
 
     current_entries = (
-        PaneEntry("docs", "dir", "-", "2026-03-21 09:10"),
-        PaneEntry("src", "dir", "-", "2026-03-20 19:42"),
-        PaneEntry("tests", "dir", "-", "2026-03-20 19:42"),
-        PaneEntry("README.md", "file", "2.1 KB", "2026-03-21 08:55"),
-        PaneEntry("pyproject.toml", "file", "712 B", "2026-03-20 18:11"),
+        PaneEntry(
+            "docs",
+            "dir",
+            "-",
+            "2026-03-21 09:10",
+            path="/home/tadashi/develop/peneo/docs",
+        ),
+        PaneEntry(
+            "src",
+            "dir",
+            "-",
+            "2026-03-20 19:42",
+            path="/home/tadashi/develop/peneo/src",
+        ),
+        PaneEntry(
+            "tests",
+            "dir",
+            "-",
+            "2026-03-20 19:42",
+            path="/home/tadashi/develop/peneo/tests",
+        ),
+        PaneEntry(
+            "README.md",
+            "file",
+            "2.1 KB",
+            "2026-03-21 08:55",
+            path="/home/tadashi/develop/peneo/README.md",
+        ),
+        PaneEntry(
+            "pyproject.toml",
+            "file",
+            "712 B",
+            "2026-03-20 18:11",
+            path="/home/tadashi/develop/peneo/pyproject.toml",
+        ),
     )
 
     return ThreePaneShellData(

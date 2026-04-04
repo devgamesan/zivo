@@ -4,15 +4,18 @@
 主要な操作のパフォーマンスを測定するベンチマークテストを提供します。
 """
 
+from dataclasses import replace
+
 import pytest
 
 from peneo.adapters.filesystem import LocalFilesystemAdapter
-from peneo.services.directory_size import DirectorySizeService
+from peneo.services.directory_size import LiveDirectorySizeService
 from peneo.state import (
     AppState,
     CommandPaletteSource,
     CommandPaletteState,
-    build_initial_app_state,
+    PaneState,
+    build_placeholder_app_state,
 )
 from peneo.state.command_palette import get_command_palette_items
 from peneo.state.reducer_common import list_matching_directory_paths
@@ -23,6 +26,22 @@ from tests.benchmark_fixtures import (
     create_large_directory,
 )
 from tests.benchmark_utils import benchmark, measure_import_time, measure_startup_time
+
+
+def _build_benchmark_state(path: str) -> AppState:
+    adapter = LocalFilesystemAdapter()
+    entries = adapter.list_directory(path)
+    cursor_path = entries[0].path if entries else None
+    state = build_placeholder_app_state(path)
+    return replace(
+        state,
+        current_path=path,
+        current_pane=PaneState(
+            directory_path=path,
+            entries=entries,
+            cursor_path=cursor_path,
+        ),
+    )
 
 
 class TestStartupBenchmarks:
@@ -92,15 +111,15 @@ class TestDirectoryBenchmarks:
         create_large_directory(tmp_path / "test_dir", num_dirs=100, num_files=400)
 
         adapter = LocalFilesystemAdapter()
-        service = DirectorySizeService(adapter)
+        service = LiveDirectorySizeService(filesystem=adapter)
 
         @benchmark(iterations=5, warmup=1)
         def _calculate_sizes():
-            # ディレクトリ内のファイルのサイズを計算
+            # ディレクトリ内のサブディレクトリサイズをまとめて計算
             entries = adapter.list_directory(str(tmp_path / "test_dir"))
-            file_entries = [e for e in entries if e.kind == "file"]
-            service.calculate_directory_sizes(
-                tuple(e.path for e in file_entries[:10]),  # 最初の10ファイル
+            dir_entries = [e for e in entries if e.kind == "dir"]
+            return service.calculate_sizes(
+                tuple(e.path for e in dir_entries[:10]),
             )
 
         result = _calculate_sizes()
@@ -121,7 +140,7 @@ class TestSelectorBenchmarks:
         create_flat_directory(tmp_path / "test_dir", num_entries=num_entries)
 
         # 初期状態を構築
-        state = build_initial_app_state(str(tmp_path / "test_dir"))
+        state = _build_benchmark_state(str(tmp_path / "test_dir"))
 
         @benchmark(iterations=100, warmup=10)
         def _select_shell_data():
@@ -168,22 +187,13 @@ class TestSelectorBenchmarks:
         create_flat_directory(tmp_path / "test_dir", num_entries=num_candidates)
 
         # go-to-path ソースのコマンドパレット状態を作成
-        state = build_initial_app_state(str(tmp_path / "test_dir"))
+        state = _build_benchmark_state(str(tmp_path / "test_dir"))
 
         # go_to_path_candidates を設定
         candidates = tuple(
             str(tmp_path / "test_dir" / f"dir_{i:05d}")
             for i in range(min(num_candidates, 100))
         )
-
-        # ディレクトリを作成
-        for candidate in candidates:
-            candidate_path = candidate
-            if "dir_" in candidate_path:
-                try:
-                    candidate_path.mkdir(exist_ok=True)
-                except (OSError, FileNotFoundError):
-                    pass
 
         state = AppState(
             **{
@@ -302,7 +312,7 @@ class TestQuickBenchmarks:
     def test_quick_selector_performance(self, tmp_path):
         """セレクタの簡易測定"""
         create_flat_directory(tmp_path / "test_dir", num_entries=1000)
-        state = build_initial_app_state(str(tmp_path / "test_dir"))
+        state = _build_benchmark_state(str(tmp_path / "test_dir"))
 
         @benchmark(iterations=50, warmup=5)
         def _select_shell_data():
