@@ -8,6 +8,7 @@ from .actions import (
     AddBookmark,
     BeginBookmarkSearch,
     BeginCommandPalette,
+    BeginCreateInput,
     BeginDeleteTargets,
     BeginFileSearch,
     BeginFilterInput,
@@ -121,6 +122,8 @@ BROWSING_KEYMAP = {
     "b": "toggle_bookmark",
     "c": "copy_paths_to_clipboard",
     "ctrl+j": "begin_go_to_path",
+    "ctrl+n": "create_file",
+    "ctrl+shift+n": "create_dir",
 }
 
 CONFLICT_KEYMAP = {
@@ -353,6 +356,12 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
 
     if command == "go_to_home_directory":
         return _supported(GoToHomeDirectory())
+
+    if command == "create_file":
+        return _supported(BeginCreateInput("file"))
+
+    if command == "create_dir":
+        return _supported(BeginCreateInput("dir"))
 
     if command == "toggle_split_terminal":
         return _supported(ToggleSplitTerminal())

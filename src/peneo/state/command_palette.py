@@ -306,13 +306,13 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             CommandPaletteItem(
                 id="create_file",
                 label="Create file",
-                shortcut=None,
+                shortcut="Ctrl+N",
                 enabled=True,
             ),
             CommandPaletteItem(
                 id="create_dir",
                 label="Create directory",
-                shortcut=None,
+                shortcut="Ctrl+Shift+N",
                 enabled=True,
             )
         ]

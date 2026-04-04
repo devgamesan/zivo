@@ -5,6 +5,7 @@ from peneo.state import (
     AddBookmark,
     BeginBookmarkSearch,
     BeginCommandPalette,
+    BeginCreateInput,
     BeginDeleteTargets,
     BeginFileSearch,
     BeginFilterInput,
@@ -318,6 +319,26 @@ def test_browsing_ctrl_b_begins_bookmark_search() -> None:
 
     assert len(actions) == 2
     assert isinstance(actions[1], BeginBookmarkSearch)
+
+
+def test_browsing_ctrl_n_begins_create_file() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="ctrl+n")
+
+    assert len(actions) == 2
+    assert isinstance(actions[1], BeginCreateInput)
+    assert actions[1].kind == "file"
+
+
+def test_browsing_ctrl_shift_n_begins_create_directory() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="ctrl+shift+n")
+
+    assert len(actions) == 2
+    assert isinstance(actions[1], BeginCreateInput)
+    assert actions[1].kind == "dir"
 
 
 def test_browsing_b_adds_bookmark_for_current_directory() -> None:
