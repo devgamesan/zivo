@@ -17,6 +17,7 @@ from peneo.models import (
     ConfigLoadResult,
     DisplayConfig,
     EditorConfig,
+    LoggingConfig,
     TerminalConfig,
 )
 from peneo.models.config import BehaviorConfig
@@ -87,6 +88,7 @@ class AppConfigLoader:
         editor = _load_editor_config(document.get("editor"), warnings)
         display = _load_display_config(document.get("display"), warnings)
         behavior = _load_behavior_config(document.get("behavior"), warnings)
+        logging = _load_logging_config(document.get("logging"), warnings)
         bookmarks = _load_bookmark_config(document.get("bookmarks"), warnings)
         return ConfigLoadResult(
             config=AppConfig(
@@ -94,6 +96,7 @@ class AppConfigLoader:
                 editor=editor,
                 display=display,
                 behavior=behavior,
+                logging=logging,
                 bookmarks=bookmarks,
             ),
             path=str(path),
@@ -306,6 +309,35 @@ def _load_bookmark_config(section: object, warnings: list[str]) -> BookmarkConfi
     return BookmarkConfig(paths=tuple(dict.fromkeys(paths)))
 
 
+def _load_logging_config(section: object, warnings: list[str]) -> LoggingConfig:
+    config = LoggingConfig()
+    if section is None:
+        return config
+    if not isinstance(section, dict):
+        warnings.append("logging must be a table; using defaults.")
+        return config
+
+    config = replace(
+        config,
+        enabled=_read_bool(
+            section,
+            key="enabled",
+            default=config.enabled,
+            warnings=warnings,
+            section_name="logging",
+        ),
+    )
+
+    path = section.get("path", config.path)
+    if path is None:
+        return config
+    if not isinstance(path, str):
+        warnings.append("logging.path must be a string; using default.")
+        return config
+    normalized_path = path.strip() or None
+    return replace(config, path=normalized_path)
+
+
 def _load_command_templates(
     section: dict[str, object],
     key: str,
@@ -400,6 +432,12 @@ def render_app_config(config: AppConfig) -> str:
         confirm_delete = {confirm_delete}
         paste_conflict_action = "{paste_conflict_action}"
 
+        [logging]
+        # Optional file output for startup and unhandled exceptions.
+        # Leave empty to write peneo.log next to config.toml.
+        enabled = {logging_enabled}
+        path = {logging_path}
+
         [bookmarks]
         # Optional bookmarked directories shown in the command palette.
         # Use absolute paths.
@@ -420,6 +458,8 @@ def render_app_config(config: AppConfig) -> str:
         directories_first=_render_bool(config.display.directories_first),
         confirm_delete=_render_bool(config.behavior.confirm_delete),
         paste_conflict_action=config.behavior.paste_conflict_action,
+        logging_enabled=_render_bool(config.logging.enabled),
+        logging_path=_render_optional_toml_string(config.logging.path),
         bookmark_paths=_render_command_array(config.bookmarks.paths),
     ).lstrip()
 

@@ -127,6 +127,8 @@ The supported settings are:
 | `display` | `directories_first` | `true` / `false` | Keeps directories grouped before files in the main pane. |
 | `behavior` | `confirm_delete` | `true` / `false` | Shows a confirmation dialog before moving items to trash. |
 | `behavior` | `paste_conflict_action` | `prompt` / `overwrite` / `skip` / `rename` | Chooses the default paste-conflict behavior. `prompt` keeps the conflict dialog enabled. |
+| `logging` | `enabled` | `true` / `false` | Enables file output for startup failures and unhandled exceptions. |
+| `logging` | `path` | Path string | Optional log file path. Leave empty to use `peneo.log` next to `config.toml`. |
 | `bookmarks` | `paths` | Array of absolute path strings | Bookmarked directories shown by `Ctrl+B` and `Show bookmarks` in the command palette. Duplicate paths are removed when the config is loaded. |
 
 Example:
@@ -152,11 +154,16 @@ directories_first = true
 confirm_delete = true
 paste_conflict_action = "prompt"
 
+[logging]
+enabled = true
+path = ""
+
 [bookmarks]
 paths = ["/home/user/src", "/home/user/docs"]
 ```
 
 Invalid config values do not stop startup. Peneo falls back to built-in defaults and shows a warning after the initial directory load.
+When logging is enabled, startup failures and unhandled exceptions are appended to the configured log file for later investigation.
 
 ## Basic Operations
 

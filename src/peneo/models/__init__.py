@@ -9,6 +9,7 @@ from .config import (
     ConfigTheme,
     DisplayConfig,
     EditorConfig,
+    LoggingConfig,
     PasteConflictAction,
     TerminalConfig,
 )
@@ -85,6 +86,7 @@ __all__ = [
     "FileMutationRequest",
     "HelpBarState",
     "InputBarState",
+    "LoggingConfig",
     "MutationResultLevel",
     "PaneEntry",
     "PasteConflictAction",

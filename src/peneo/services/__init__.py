@@ -65,6 +65,11 @@ from .grep_search import (
     InvalidGrepSearchQueryError,
     LiveGrepSearchService,
 )
+from .logging import (
+    LoggingSetupResult,
+    configure_file_logging,
+    resolve_default_log_path,
+)
 from .split_terminal import (
     FakeSplitTerminalService,
     LiveSplitTerminalService,
@@ -102,6 +107,7 @@ __all__ = [
     "FakeClipboardOperationService",
     "FakeExternalLaunchService",
     "FileMutationService",
+    "LoggingSetupResult",
     "LiveArchiveExtractService",
     "LiveArchiveListService",
     "LiveExternalLaunchService",
@@ -117,6 +123,7 @@ __all__ = [
     "FakeSplitTerminalService",
     "SplitTerminalService",
     "SplitTerminalSession",
+    "configure_file_logging",
     "default_extract_destination",
     "detect_archive_format",
     "is_supported_archive_path",
@@ -124,6 +131,7 @@ __all__ = [
     "render_app_config",
     "resolve_extract_destination_input",
     "resolve_config_path",
+    "resolve_default_log_path",
     "resolve_zip_destination_input",
     "snapshot_from_app_state",
     "ZipCompressService",
