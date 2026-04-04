@@ -268,6 +268,7 @@ class CommandPaletteState:
     grep_search_error_message: str | None = None
     history_results: tuple[str, ...] = ()
     go_to_path_candidates: tuple[str, ...] = ()
+    go_to_path_selection_active: bool = True
 
 
 @dataclass(frozen=True)

@@ -149,16 +149,19 @@ def _handle_move_palette_cursor(
 ) -> ReduceResult:
     if state.command_palette is None:
         return done(state)
+    next_palette = replace(
+        state.command_palette,
+        cursor_index=normalize_command_palette_cursor(
+            state,
+            state.command_palette.cursor_index + action.delta,
+        ),
+    )
+    if state.command_palette.source == "go_to_path":
+        next_palette = replace(next_palette, go_to_path_selection_active=True)
     return done(
         replace(
             state,
-            command_palette=replace(
-                state.command_palette,
-                cursor_index=normalize_command_palette_cursor(
-                    state,
-                    state.command_palette.cursor_index + action.delta,
-                ),
-            ),
+            command_palette=next_palette,
         )
     )
 
@@ -297,10 +300,15 @@ def _handle_set_go_to_path_query(
     query: str,
 ) -> ReduceResult:
     matches = list_matching_directory_paths(query, state.current_path)
+    has_trailing_separator = query.endswith("/")
     return done(
         replace(
             state,
-            command_palette=replace(next_palette, go_to_path_candidates=matches),
+            command_palette=replace(
+                next_palette,
+                go_to_path_candidates=matches,
+                go_to_path_selection_active=not has_trailing_separator,
+            ),
         )
     )
 
@@ -413,7 +421,7 @@ def _handle_submit_go_to_path_palette(
 ) -> ReduceResult:
     items = get_command_palette_items(state)
     expanded_path = None
-    if items:
+    if items and state.command_palette.go_to_path_selection_active:
         expanded_path = items[
             normalize_command_palette_cursor(state, state.command_palette.cursor_index)
         ].path

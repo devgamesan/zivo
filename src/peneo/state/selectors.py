@@ -328,6 +328,7 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
     if state.command_palette.source == "go_to_path":
         items = get_command_palette_items(state)
         visible_items, _palette_title = _select_command_palette_window(items, cursor_index)
+        selection_active = state.command_palette.go_to_path_selection_active
         return CommandPaletteViewState(
             title="Go to path",
             query=state.command_palette.query,
@@ -336,7 +337,7 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
                     label=item.label,
                     shortcut=item.shortcut,
                     enabled=item.enabled,
-                    selected=index == cursor_index,
+                    selected=selection_active and index == cursor_index,
                 )
                 for index, item in visible_items
             ),

@@ -727,6 +727,26 @@ def test_select_help_bar_state_for_go_to_path_palette_mentions_tab_completion() 
     )
 
 
+def test_select_command_palette_state_go_to_path_can_show_candidates_without_selection() -> None:
+    state = replace(
+        _reduce_state(build_initial_app_state(), BeginCommandPalette()),
+        command_palette=CommandPaletteState(
+            source="go_to_path",
+            query="docs/",
+            go_to_path_candidates=(
+                "/home/tadashi/docs/api",
+                "/home/tadashi/docs/guides",
+            ),
+            go_to_path_selection_active=False,
+        ),
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert [item.selected for item in palette_state.items] == [False, False]
+
+
 def test_select_command_palette_state_filters_query() -> None:
     state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
     state = replace(

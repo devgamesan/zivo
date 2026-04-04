@@ -1621,6 +1621,44 @@ async def test_app_go_to_path_shows_candidates_and_tabs_to_selected_directory(tm
 
 
 @pytest.mark.asyncio
+async def test_app_go_to_path_submit_after_completion_stays_on_completed_directory(
+    tmp_path,
+) -> None:
+    path = str(tmp_path)
+    docs_path = str(tmp_path / "docs")
+    api_path = str(tmp_path / "docs" / "api")
+    Path(api_path).mkdir(parents=True)
+    Path(api_path, "reference.md").write_text("reference\n", encoding="utf-8")
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (DirectoryEntryState(docs_path, "docs", "dir"),),
+                child_path=docs_path,
+            ),
+            docs_path: _build_snapshot(
+                docs_path,
+                (DirectoryEntryState(api_path, "api", "dir"),),
+                child_path=api_path,
+            ),
+            api_path: _build_snapshot(
+                api_path,
+                (DirectoryEntryState(f"{api_path}/reference.md", "reference.md", "file"),),
+            ),
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("ctrl+j")
+        await pilot.press("d", "o", "tab", "enter")
+        await _wait_for_snapshot_loaded(app, docs_path)
+
+        assert app.app_state.current_path == docs_path
+
+
+@pytest.mark.asyncio
 async def test_app_command_palette_find_file_jumps_to_matching_parent_directory() -> None:
     path = "/tmp/peneo-command-palette-find-file"
     docs_path = f"{path}/docs"
