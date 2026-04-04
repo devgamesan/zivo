@@ -83,14 +83,16 @@ class LiveBrowserSnapshotLoader:
             return PaneState(directory_path=str(child_path), entries=child_entries)
 
         if is_supported_archive_path(child_path):
-            import sys
-            print(f"[DEBUG] Loading archive: {child_path}", file=sys.stderr)
+            with open("/tmp/peneo_debug.log", "a") as f:
+                f.write(f"[DEBUG] Loading archive: {child_path}\n")
             try:
                 child_entries = self.archive_list.list_archive_entries(str(child_path))
-                print(f"[DEBUG] Archive entries: {len(child_entries)}", file=sys.stderr)
+                with open("/tmp/peneo_debug.log", "a") as f:
+                    f.write(f"[DEBUG] Archive entries: {len(child_entries)}\n")
                 return PaneState(directory_path=str(child_path), entries=child_entries)
             except OSError as e:
-                print(f"[DEBUG] Archive error: {e}", file=sys.stderr)
+                with open("/tmp/peneo_debug.log", "a") as f:
+                    f.write(f"[DEBUG] Archive error: {e}\n")
                 return PaneState(directory_path=current_path, entries=())
 
         return PaneState(directory_path=current_path, entries=())

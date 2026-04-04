@@ -496,14 +496,16 @@ def sync_child_pane(
     cursor_path: str | None,
     reduce_state: ReducerFn,
 ) -> ReduceResult:
-    import sys
-    print(f"[DEBUG] sync_child_pane called: cursor_path={cursor_path}", file=sys.stderr)
+    with open("/tmp/peneo_debug.log", "a") as f:
+        f.write(f"[DEBUG] sync_child_pane called: cursor_path={cursor_path}\n")
 
     entry = current_entry_for_path(state, cursor_path)
-    print(f"[DEBUG] entry: {entry}", file=sys.stderr)
+    with open("/tmp/peneo_debug.log", "a") as f:
+        f.write(f"[DEBUG] entry: {entry}\n")
 
     if entry is None:
-        print(f"[DEBUG] entry is None, returning empty child pane", file=sys.stderr)
+        with open("/tmp/peneo_debug.log", "a") as f:
+            f.write(f"[DEBUG] entry is None, returning empty child pane\n")
         next_state = replace(
             state,
             child_pane=PaneState(directory_path=state.current_path, entries=()),
@@ -511,11 +513,13 @@ def sync_child_pane(
         )
         return maybe_request_directory_sizes(next_state, reduce_state)
 
-    print(f"[DEBUG] entry.kind={entry.kind}, entry.path={entry.path}", file=sys.stderr)
-    print(f"[DEBUG] is_supported_archive={is_supported_archive_path(entry.path)}", file=sys.stderr)
+    with open("/tmp/peneo_debug.log", "a") as f:
+        f.write(f"[DEBUG] entry.kind={entry.kind}, entry.path={entry.path}\n")
+        f.write(f"[DEBUG] is_supported_archive={is_supported_archive_path(entry.path)}\n")
 
     if entry.kind != "dir" and not is_supported_archive_path(entry.path):
-        print(f"[DEBUG] Not dir and not archive, returning empty child pane", file=sys.stderr)
+        with open("/tmp/peneo_debug.log", "a") as f:
+            f.write(f"[DEBUG] Not dir and not archive, returning empty child pane\n")
         next_state = replace(
             state,
             child_pane=PaneState(directory_path=state.current_path, entries=()),
@@ -527,10 +531,12 @@ def sync_child_pane(
         entry.path == state.child_pane.directory_path
         and state.pending_child_pane_request_id is None
     ):
-        print(f"[DEBUG] Same path and no pending request, skipping", file=sys.stderr)
+        with open("/tmp/peneo_debug.log", "a") as f:
+            f.write(f"[DEBUG] Same path and no pending request, skipping\n")
         return maybe_request_directory_sizes(state, reduce_state)
 
-    print(f"[DEBUG] Loading child pane for: {entry.path}", file=sys.stderr)
+    with open("/tmp/peneo_debug.log", "a") as f:
+        f.write(f"[DEBUG] Loading child pane for: {entry.path}\n")
     request_id = state.next_request_id
     next_state = replace(
         state,
