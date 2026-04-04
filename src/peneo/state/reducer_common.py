@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import replace
 from pathlib import Path
 
-from peneo.archive_utils import resolve_zip_destination_input
+from peneo.archive_utils import is_supported_archive_path, resolve_zip_destination_input
 from peneo.models import (
     AppConfig,
     CreatePathRequest,
@@ -497,7 +497,7 @@ def sync_child_pane(
     reduce_state: ReducerFn,
 ) -> ReduceResult:
     entry = current_entry_for_path(state, cursor_path)
-    if entry is None or entry.kind != "dir":
+    if entry is None or (entry.kind != "dir" and not is_supported_archive_path(entry.path)):
         next_state = replace(
             state,
             child_pane=PaneState(directory_path=state.current_path, entries=()),

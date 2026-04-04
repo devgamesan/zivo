@@ -14,6 +14,11 @@ from .archive_extract import (
     FakeArchiveExtractService,
     LiveArchiveExtractService,
 )
+from .archive_list import (
+    ArchiveListService,
+    FakeArchiveListService,
+    LiveArchiveListService,
+)
 from .browser_snapshot import (
     BrowserSnapshotLoader,
     FakeBrowserSnapshotLoader,
@@ -75,6 +80,7 @@ from .zip_compress import (
 __all__ = [
     "AppConfigLoader",
     "ArchiveExtractService",
+    "ArchiveListService",
     "BrowserSnapshotLoader",
     "ClipboardOperationService",
     "ConfigSaveService",
@@ -85,6 +91,7 @@ __all__ = [
     "FileSearchService",
     "GrepSearchService",
     "FakeArchiveExtractService",
+    "FakeArchiveListService",
     "FakeFileMutationService",
     "FakeFileSearchService",
     "FakeGrepSearchService",
@@ -96,6 +103,7 @@ __all__ = [
     "FakeExternalLaunchService",
     "FileMutationService",
     "LiveArchiveExtractService",
+    "LiveArchiveListService",
     "LiveExternalLaunchService",
     "LiveFileSearchService",
     "LiveGrepSearchService",
