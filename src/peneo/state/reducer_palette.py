@@ -58,6 +58,7 @@ from .reducer_common import (
     expand_and_validate_path,
     filter_file_search_results,
     is_regex_file_search_query,
+    list_matching_directory_paths,
     single_target_entry,
     single_target_path,
 )
@@ -148,16 +149,19 @@ def _handle_move_palette_cursor(
 ) -> ReduceResult:
     if state.command_palette is None:
         return done(state)
+    next_palette = replace(
+        state.command_palette,
+        cursor_index=normalize_command_palette_cursor(
+            state,
+            state.command_palette.cursor_index + action.delta,
+        ),
+    )
+    if state.command_palette.source == "go_to_path":
+        next_palette = replace(next_palette, go_to_path_selection_active=True)
     return done(
         replace(
             state,
-            command_palette=replace(
-                state.command_palette,
-                cursor_index=normalize_command_palette_cursor(
-                    state,
-                    state.command_palette.cursor_index + action.delta,
-                ),
-            ),
+            command_palette=next_palette,
         )
     )
 
@@ -295,11 +299,16 @@ def _handle_set_go_to_path_query(
     next_palette: CommandPaletteState,
     query: str,
 ) -> ReduceResult:
-    expanded_path = expand_and_validate_path(query, state.current_path)
+    matches = list_matching_directory_paths(query, state.current_path)
+    has_trailing_separator = query.endswith("/")
     return done(
         replace(
             state,
-            command_palette=replace(next_palette, go_to_path_preview=expanded_path),
+            command_palette=replace(
+                next_palette,
+                go_to_path_candidates=matches,
+                go_to_path_selection_active=not has_trailing_separator,
+            ),
         )
     )
 
@@ -410,10 +419,17 @@ def _handle_submit_go_to_path_palette(
     state: AppState,
     reduce_state: ReducerFn,
 ) -> ReduceResult:
-    expanded_path = expand_and_validate_path(
-        state.command_palette.query,
-        state.current_path,
-    )
+    items = get_command_palette_items(state)
+    expanded_path = None
+    if items and state.command_palette.go_to_path_selection_active:
+        expanded_path = items[
+            normalize_command_palette_cursor(state, state.command_palette.cursor_index)
+        ].path
+    if expanded_path is None:
+        expanded_path = expand_and_validate_path(
+            state.command_palette.query,
+            state.current_path,
+        )
     if expanded_path is None:
         return _notify(
             state,

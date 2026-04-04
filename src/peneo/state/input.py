@@ -1,5 +1,6 @@
 """Keyboard dispatcher that normalizes Textual input into reducer actions."""
 
+import os
 import string
 
 from .actions import (
@@ -66,7 +67,9 @@ from .actions import (
     ToggleSelectionAndAdvance,
     ToggleSplitTerminal,
 )
+from .command_palette import normalize_command_palette_cursor
 from .models import AppState, DirectoryEntryState, NotificationState
+from .reducer_common import format_go_to_path_completion
 from .selectors import (
     compute_search_visible_window,
     select_target_paths,
@@ -485,6 +488,28 @@ def _dispatch_command_palette_input(
     key: str,
     character: str | None,
 ) -> DispatchedActions:
+    if (
+        key == "tab"
+        and state.command_palette is not None
+        and state.command_palette.source == "go_to_path"
+    ):
+        candidates = state.command_palette.go_to_path_candidates
+        if not candidates:
+            return _warn("No matching directory to complete")
+
+        selected_path = candidates[
+            normalize_command_palette_cursor(state, state.command_palette.cursor_index)
+        ]
+        completed_query = format_go_to_path_completion(
+            selected_path,
+            state.command_palette.query,
+            state.current_path,
+            append_separator=len(candidates) == 1,
+        )
+        if len(candidates) == 1 and completed_query != os.sep:
+            completed_query = completed_query.rstrip(os.sep) + os.sep
+        return _supported(SetCommandPaletteQuery(completed_query))
+
     if key == "escape":
         return _supported(CancelCommandPalette())
 

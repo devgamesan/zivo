@@ -84,18 +84,16 @@ def get_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, ...]
         )
 
     if state.command_palette.source == "go_to_path":
-        preview = state.command_palette.go_to_path_preview
-        if preview:
-            return (
-                CommandPaletteItem(
-                    id="go_to_path_execute",
-                    label=_display_path(preview),
-                    shortcut=None,
-                    enabled=True,
-                    path=preview,
-                ),
+        return tuple(
+            CommandPaletteItem(
+                id=f"go_to_path_candidate:{index}",
+                label=_display_path(path),
+                shortcut=None,
+                enabled=True,
+                path=path,
             )
-        return ()
+            for index, path in enumerate(state.command_palette.go_to_path_candidates)
+        )
 
     query = state.command_palette.query
 

@@ -17,6 +17,7 @@ from peneo.state import (
     CancelPendingInput,
     CancelZipCompressConfirmation,
     ClearSelection,
+    CommandPaletteState,
     ConfigEditorState,
     ConfirmDeleteTargets,
     ConfirmFilterInput,
@@ -81,6 +82,30 @@ def _focused_split_terminal_state():
             focus_target="terminal",
         ),
     )
+
+
+def _reduce_go_to_path_state(
+    *,
+    query: str,
+    candidates: tuple[str, ...],
+    current_path: str,
+    cursor_index: int = 0,
+):
+    state = replace(
+        build_initial_app_state(),
+        current_path=current_path,
+    )
+    state = replace(
+        state,
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="go_to_path",
+            query=query,
+            cursor_index=cursor_index,
+            go_to_path_candidates=candidates,
+        ),
+    )
+    return state
 
 
 def test_browsing_down_dispatches_move_cursor() -> None:
@@ -608,6 +633,50 @@ def test_palette_bound_space_without_character_updates_query() -> None:
     actions = dispatch_key_input(state, key="space")
 
     assert actions == (SetNotification(None), SetCommandPaletteQuery(" "))
+
+
+def test_go_to_path_palette_tab_completes_selected_candidate() -> None:
+    state = _reduce_go_to_path_state(
+        query="do",
+        candidates=("/tmp/project/docs", "/tmp/project/downloads"),
+        cursor_index=1,
+        current_path="/tmp/project",
+    )
+
+    actions = dispatch_key_input(state, key="tab")
+
+    assert actions == (SetNotification(None), SetCommandPaletteQuery("downloads"))
+
+
+def test_go_to_path_palette_tab_appends_separator_for_single_candidate() -> None:
+    state = _reduce_go_to_path_state(
+        query="do",
+        candidates=("/tmp/project/docs",),
+        current_path="/tmp/project",
+    )
+
+    actions = dispatch_key_input(state, key="tab")
+
+    assert actions == (SetNotification(None), SetCommandPaletteQuery("docs/"))
+
+
+def test_go_to_path_palette_tab_warns_without_candidates() -> None:
+    state = _reduce_go_to_path_state(
+        query="missing",
+        candidates=(),
+        current_path="/tmp/project",
+    )
+
+    actions = dispatch_key_input(state, key="tab")
+
+    assert actions == (
+        SetNotification(
+            NotificationState(
+                level="warning",
+                message="No matching directory to complete",
+            )
+        ),
+    )
 
 
 def test_palette_pageup_moves_cursor_by_page() -> None:

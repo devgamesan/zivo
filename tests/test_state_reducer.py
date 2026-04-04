@@ -855,26 +855,69 @@ def test_submit_bookmarks_palette_with_invalid_path_shows_error() -> None:
     )
 
 
-def test_set_command_palette_query_updates_go_to_path_preview(tmp_path) -> None:
-    state = _reduce_state(build_initial_app_state(), BeginGoToPath())
-    target_path = str(tmp_path)
+def test_set_command_palette_query_updates_go_to_path_candidates(tmp_path) -> None:
+    state = _reduce_state(
+        replace(build_initial_app_state(), current_path=str(tmp_path)),
+        BeginGoToPath(),
+    )
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "downloads").mkdir()
 
     next_state = _reduce_state(
         state,
-        SetCommandPaletteQuery(target_path),
+        SetCommandPaletteQuery("do"),
     )
 
     assert next_state.command_palette is not None
-    assert next_state.command_palette.go_to_path_preview == target_path
+    assert next_state.command_palette.go_to_path_candidates == (
+        str(tmp_path / "docs"),
+        str(tmp_path / "downloads"),
+    )
+
+
+def test_set_command_palette_query_resolves_relative_go_to_path_candidates(tmp_path) -> None:
+    state = _reduce_state(
+        replace(build_initial_app_state(), current_path=str(tmp_path)),
+        BeginGoToPath(),
+    )
+    (tmp_path / "projects").mkdir()
+    (tmp_path / "projects" / "peneo").mkdir()
+
+    next_state = _reduce_state(state, SetCommandPaletteQuery("projects/p"))
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.go_to_path_candidates == (
+        str(tmp_path / "projects" / "peneo"),
+    )
+
+
+def test_set_command_palette_query_with_trailing_separator_clears_go_to_path_selection(
+    tmp_path,
+) -> None:
+    state = _reduce_state(
+        replace(build_initial_app_state(), current_path=str(tmp_path)),
+        BeginGoToPath(),
+    )
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "api").mkdir()
+
+    next_state = _reduce_state(state, SetCommandPaletteQuery("docs/"))
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.go_to_path_candidates == (str(tmp_path / "docs" / "api"),)
+    assert next_state.command_palette.go_to_path_selection_active is False
 
 
 def test_submit_go_to_path_palette_requests_snapshot(tmp_path) -> None:
-    state = _reduce_state(build_initial_app_state(), BeginGoToPath())
+    state = _reduce_state(
+        replace(build_initial_app_state(), current_path=str(tmp_path)),
+        BeginGoToPath(),
+    )
     target_path = tmp_path / "docs"
     target_path.mkdir()
     state = _reduce_state(
         state,
-        SetCommandPaletteQuery(str(target_path)),
+        SetCommandPaletteQuery("do"),
     )
 
     result = reduce_app_state(state, SubmitCommandPalette())
@@ -890,6 +933,56 @@ def test_submit_go_to_path_palette_requests_snapshot(tmp_path) -> None:
         ),
     )
 
+
+def test_submit_go_to_path_palette_uses_selected_candidate(tmp_path) -> None:
+    state = _reduce_state(
+        replace(build_initial_app_state(), current_path=str(tmp_path)),
+        BeginGoToPath(),
+    )
+    (tmp_path / "alpha").mkdir()
+    (tmp_path / "beta").mkdir()
+    state = _reduce_state(state, SetCommandPaletteQuery(""))
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            query=str(tmp_path),
+            go_to_path_candidates=(str(tmp_path / "alpha"), str(tmp_path / "beta")),
+            cursor_index=1,
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.effects == (
+        LoadBrowserSnapshotEffect(
+            request_id=1,
+            path=str(tmp_path / "beta"),
+            cursor_path=None,
+            blocking=True,
+        ),
+    )
+
+
+def test_submit_go_to_path_palette_with_trailing_separator_uses_query_directory(tmp_path) -> None:
+    state = _reduce_state(
+        replace(build_initial_app_state(), current_path=str(tmp_path)),
+        BeginGoToPath(),
+    )
+    (tmp_path / "docs").mkdir()
+    (tmp_path / "docs" / "api").mkdir()
+    state = _reduce_state(state, SetCommandPaletteQuery("docs/"))
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.effects == (
+        LoadBrowserSnapshotEffect(
+            request_id=1,
+            path=str(tmp_path / "docs"),
+            cursor_path=None,
+            blocking=True,
+        ),
+    )
 
 def test_submit_go_to_path_palette_with_invalid_directory_shows_error() -> None:
     state = _reduce_state(build_initial_app_state(), BeginGoToPath())
