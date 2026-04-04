@@ -510,11 +510,11 @@ async def test_app_loads_directory_sizes_when_enabled() -> None:
     async with app.run_test():
         await _wait_for_snapshot_loaded(app, path)
         await _wait_for_row_count(app, 2)
-        await _wait_for_table_cell(app, "4.2 KB", 0, 3)
+        await _wait_for_table_cell(app, "4.2 KB", 0, 2)
 
         table = app.query_one("#current-pane-table", DataTable)
 
-        assert str(table.get_cell_at((0, 3))) == "4.2 KB"
+        assert str(table.get_cell_at((0, 2))) == "4.2 KB"
 
 
 @pytest.mark.asyncio
@@ -559,11 +559,11 @@ async def test_app_keeps_successful_directory_sizes_when_some_paths_fail() -> No
     async with app.run_test():
         await _wait_for_snapshot_loaded(app, path)
         await _wait_for_row_count(app, 2)
-        await _wait_for_table_cell(app, "4.2 KB", 0, 3)
+        await _wait_for_table_cell(app, "4.2 KB", 0, 2)
 
         table = app.query_one("#current-pane-table", DataTable)
 
-        assert str(table.get_cell_at((0, 3))) == "4.2 KB"
+        assert str(table.get_cell_at((0, 2))) == "4.2 KB"
 
 
 @pytest.mark.asyncio
@@ -639,7 +639,7 @@ async def test_app_renders_loaded_three_pane_shell() -> None:
         assert str(current_title.renderable) == "Current Directory"
         assert str(child_title.renderable) == "Child Directory"
         assert parent_entries == ["peneo-app", "sibling"]
-        assert headers == ["Sel", "Type", "Name", "Size", "Modified"]
+        assert headers == ["Sel", "Name", "Size", "Modified"]
         assert current_table.row_count == 2
         assert child_entries == ["spec.md"]
         assert str(current_path_bar.renderable) == f"Current Path: {path}"
@@ -726,7 +726,7 @@ async def test_app_truncates_long_labels_in_all_panes_when_narrow() -> None:
 
         parent_label = str(parent_list.children[0].query_one(Label).renderable)
         child_label = str(child_list.children[0].query_one(Label).renderable)
-        current_name = current_table.get_row_at(0)[2]
+        current_name = current_table.get_row_at(0)[1]
 
         assert "~" in parent_label
         assert "~" in child_label
@@ -827,8 +827,8 @@ async def test_app_keyboard_input_updates_selection_and_child_pane() -> None:
 
         assert isinstance(first_row[0], Text)
         assert first_row[0].plain == "*"
-        assert first_row[0].style == "bold green"
-        assert first_row[2].plain == "docs"
+        assert first_row[0].style == "bold blue"
+        assert first_row[1].plain == "docs"
 
 
 @pytest.mark.asyncio
@@ -910,9 +910,9 @@ async def test_app_cut_marks_row_with_dimmed_style() -> None:
 
         assert app.app_state.clipboard.mode == "cut"
         assert app.app_state.clipboard.paths == (f"{path}/docs",)
-        assert isinstance(first_row[2], Text)
-        assert first_row[2].plain == "docs"
-        assert first_row[2].style == "bright_black dim"
+        assert isinstance(first_row[1], Text)
+        assert first_row[1].plain == "docs"
+        assert first_row[1].style == "blue dim"
 
 
 @pytest.mark.asyncio

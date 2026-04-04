@@ -41,6 +41,13 @@ MIN_SEARCH_VISIBLE_WINDOW = 3
 _SEARCH_OVERHEAD_ROWS = 5
 
 
+def _has_execute_permission(entry: DirectoryEntryState) -> bool:
+    """エントリが実行権限を持っているか判定."""
+    if entry.permissions_mode is None:
+        return False
+    return bool(entry.permissions_mode & 0o111)
+
+
 @dataclass(frozen=True)
 class _CurrentPaneProjection:
     visible_entries: tuple[DirectoryEntryState, ...]
@@ -932,6 +939,7 @@ def _to_pane_entry(
         modified_label=_format_modified_label(entry),
         selected=selected,
         cut=cut,
+        executable=_has_execute_permission(entry),
     )
 
 

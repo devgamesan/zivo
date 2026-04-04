@@ -57,7 +57,7 @@ from peneo.state import (
 )
 from peneo.state import command_palette as command_palette_module
 from peneo.state.command_palette import CommandPaletteItem
-from peneo.state.selectors import _select_command_palette_window
+from peneo.state.selectors import _has_execute_permission, _select_command_palette_window
 from tests.state_test_helpers import entry, pane, reduce_state
 
 
@@ -157,6 +157,66 @@ def test_select_visible_current_entries_sorts_by_size_without_directories_first(
     entries = select_visible_current_entry_states(state)
 
     assert [entry.name for entry in entries] == ["beta.txt", "alpha.txt", "docs"]
+
+
+def test_has_execute_permission_returns_true_for_executable_files() -> None:
+    """0o755 (rwxr-xr-x) の場合に True を返すこと"""
+    entry_state = DirectoryEntryState(
+        "/home/tadashi/develop/peneo/test.sh",
+        "test.sh",
+        "file",
+        permissions_mode=0o755,
+    )
+
+    assert _has_execute_permission(entry_state) is True
+
+
+def test_has_execute_permission_returns_false_for_non_executable_files() -> None:
+    """0o644 (rw-r--r--) の場合に False を返すこと"""
+    entry_state = DirectoryEntryState(
+        "/home/tadashi/develop/peneo/README.md",
+        "README.md",
+        "file",
+        permissions_mode=0o644,
+    )
+
+    assert _has_execute_permission(entry_state) is False
+
+
+def test_has_execute_permission_returns_true_for_execute_only_files() -> None:
+    """0o111 (--x--x--x) の場合に True を返すこと"""
+    entry_state = DirectoryEntryState(
+        "/home/tadashi/develop/peneo/script",
+        "script",
+        "file",
+        permissions_mode=0o111,
+    )
+
+    assert _has_execute_permission(entry_state) is True
+
+
+def test_has_execute_permission_returns_false_for_no_permissions() -> None:
+    """0o000 (---------) の場合に False を返すこと"""
+    entry_state = DirectoryEntryState(
+        "/home/tadashi/develop/peneo/locked",
+        "locked",
+        "file",
+        permissions_mode=0o000,
+    )
+
+    assert _has_execute_permission(entry_state) is False
+
+
+def test_has_execute_permission_returns_false_for_none_permissions() -> None:
+    """permissions_mode が None の場合に False を返すこと"""
+    entry_state = DirectoryEntryState(
+        "/home/tadashi/develop/peneo/unknown",
+        "unknown",
+        "file",
+        permissions_mode=None,
+    )
+
+    assert _has_execute_permission(entry_state) is False
 
 
 def test_select_parent_and_child_entries_hide_hidden_unless_enabled() -> None:

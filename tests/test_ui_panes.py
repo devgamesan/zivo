@@ -29,3 +29,18 @@ def test_build_entry_label_truncates_full_name_detail_string() -> None:
 
     assert "~" in rendered
     assert rendered.endswith("1 KB)")
+
+
+def test_pane_entry_supports_executable_field() -> None:
+    """PaneEntry が executable フィールドをサポートすること"""
+    entry = PaneEntry("script.sh", "file", executable=True)
+
+    assert entry.executable is True
+    assert entry.kind == "file"
+
+
+def test_pane_entry_defaults_executable_to_false() -> None:
+    """PaneEntry の executable がデフォルトで False であること"""
+    entry = PaneEntry("README.md", "file")
+
+    assert entry.executable is False

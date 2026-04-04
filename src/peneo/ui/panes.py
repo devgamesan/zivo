@@ -93,6 +93,12 @@ class SidePane(Vertical):
     """Lightweight pane used for parent and child directory listings."""
 
     CUT_STYLE = "bright_black dim"
+    EXECUTABLE_STYLE = "cyan"
+    EXECUTABLE_SELECTED_STYLE = "bold cyan"
+    EXECUTABLE_CUT_STYLE = "cyan dim"
+    DIRECTORY_STYLE = "blue"
+    DIRECTORY_SELECTED_STYLE = "bold blue"
+    DIRECTORY_CUT_STYLE = "blue dim"
     ENTRY_HORIZONTAL_PADDING = 2
 
     def __init__(
@@ -171,9 +177,32 @@ class SidePane(Vertical):
         label = build_entry_label(entry)
         if render_width > 0:
             label = truncate_middle(label, render_width)
-        if not entry.cut:
-            return Text(label)
-        return Text(label, style=cls.CUT_STYLE)
+
+        # カット状態が最優先
+        if entry.cut:
+            if entry.kind == "dir":
+                return Text(label, style=cls.DIRECTORY_CUT_STYLE)
+            if entry.executable:
+                return Text(label, style=cls.EXECUTABLE_CUT_STYLE)
+            return Text(label, style=cls.CUT_STYLE)
+
+        # ディレクトリ（実行権限に関わらずディレクトリ色を優先）
+        if entry.kind == "dir":
+            if entry.selected:
+                return Text(label, style=cls.DIRECTORY_SELECTED_STYLE)
+            return Text(label, style=cls.DIRECTORY_STYLE)
+
+        # 実行権限付きファイル
+        if entry.executable:
+            if entry.selected:
+                return Text(label, style=cls.EXECUTABLE_SELECTED_STYLE)
+            return Text(label, style=cls.EXECUTABLE_STYLE)
+
+        # 選択状態
+        if entry.selected:
+            return Text(label, style="bold green")
+
+        return Text(label)
 
     def _entry_width(self, list_view: ListView) -> int:
         return max(0, list_view.size.width - self.ENTRY_HORIZONTAL_PADDING)
@@ -182,25 +211,29 @@ class SidePane(Vertical):
 class MainPane(Vertical):
     """Center pane with detailed columns for the current directory."""
 
-    COLUMN_LABELS = ("Sel", "Type", "Name", "Size", "Modified")
-    COLUMN_KEYS = ("sel", "type", "name", "size", "modified")
+    COLUMN_LABELS = ("Sel", "Name", "Size", "Modified")
+    COLUMN_KEYS = ("sel", "name", "size", "modified")
     SELECTED_STYLE = "bold green"
     CUT_STYLE = "bright_black dim"
     SELECTED_CUT_STYLE = "bold bright_black"
+    EXECUTABLE_STYLE = "cyan"
+    EXECUTABLE_SELECTED_STYLE = "bold cyan"
+    EXECUTABLE_CUT_STYLE = "cyan dim"
+    DIRECTORY_STYLE = "blue"
+    DIRECTORY_SELECTED_STYLE = "bold blue"
+    DIRECTORY_CUT_STYLE = "blue dim"
     NAME_MIN_WIDTH = 3
     FIXED_COLUMN_PREFERRED_WIDTHS = {
         "sel": 1,
-        "type": 4,
         "size": 13,
         "modified": 16,
     }
     FIXED_COLUMN_MIN_WIDTHS = {
         "sel": 1,
-        "type": 3,
         "size": 4,
         "modified": 5,
     }
-    FIXED_COLUMN_SHRINK_ORDER = ("modified", "size", "type", "sel")
+    FIXED_COLUMN_SHRINK_ORDER = ("modified", "size", "sel")
 
     def __init__(
         self,
@@ -345,30 +378,46 @@ class MainPane(Vertical):
             self.COLUMN_LABELS[0], width=column_widths["sel"], key=self.COLUMN_KEYS[0]
         )
         table.add_column(
-            self.COLUMN_LABELS[1], width=column_widths["type"], key=self.COLUMN_KEYS[1]
+            self.COLUMN_LABELS[1], width=column_widths["name"], key=self.COLUMN_KEYS[1]
         )
         table.add_column(
-            self.COLUMN_LABELS[2], width=column_widths["name"], key=self.COLUMN_KEYS[2]
+            self.COLUMN_LABELS[2], width=column_widths["size"], key=self.COLUMN_KEYS[2]
         )
         table.add_column(
-            self.COLUMN_LABELS[3], width=column_widths["size"], key=self.COLUMN_KEYS[3]
-        )
-        table.add_column(
-            self.COLUMN_LABELS[4],
+            self.COLUMN_LABELS[3],
             width=column_widths["modified"],
-            key=self.COLUMN_KEYS[4],
+            key=self.COLUMN_KEYS[3],
         )
         for entry in self._entries:
             table.add_row(
-                self._render_cell(entry.selection_marker, entry.selected, entry.cut),
-                self._render_cell(entry.kind_label, entry.selected, entry.cut),
+                self._render_cell(
+                    entry.selection_marker,
+                    entry.selected,
+                    entry.cut,
+                    entry.executable,
+                    entry.kind,
+                ),
                 self._render_cell(
                     truncate_middle(build_entry_label(entry), column_widths["name"]),
                     entry.selected,
                     entry.cut,
+                    entry.executable,
+                    entry.kind,
                 ),
-                self._render_cell(entry.size_label, entry.selected, entry.cut),
-                self._render_cell(entry.modified_label, entry.selected, entry.cut),
+                self._render_cell(
+                    entry.size_label,
+                    entry.selected,
+                    entry.cut,
+                    entry.executable,
+                    entry.kind,
+                ),
+                self._render_cell(
+                    entry.modified_label,
+                    entry.selected,
+                    entry.cut,
+                    entry.executable,
+                    entry.kind,
+                ),
             )
         self._last_table_width = table.size.width
 
@@ -397,18 +446,44 @@ class MainPane(Vertical):
         name_width = max(1, available_content_width - sum(fixed_widths.values()))
         return {
             "sel": fixed_widths["sel"],
-            "type": fixed_widths["type"],
             "name": name_width,
             "size": fixed_widths["size"],
             "modified": fixed_widths["modified"],
         }
 
     @classmethod
-    def _render_cell(cls, value: str, selected: bool, cut: bool) -> Text:
-        if cut and selected:
-            return Text(value, style=cls.SELECTED_CUT_STYLE)
+    def _render_cell(
+        cls,
+        value: str,
+        selected: bool,
+        cut: bool,
+        executable: bool = False,
+        kind: str | None = None,
+    ) -> Text:
+        # カット状態が最優先
         if cut:
+            if kind == "dir":
+                return Text(value, style=cls.DIRECTORY_CUT_STYLE)
+            if executable:
+                return Text(value, style=cls.EXECUTABLE_CUT_STYLE)
+            if selected:
+                return Text(value, style=cls.SELECTED_CUT_STYLE)
             return Text(value, style=cls.CUT_STYLE)
-        if not selected:
-            return Text(value)
-        return Text(value, style=cls.SELECTED_STYLE)
+
+        # ディレクトリ（実行権限に関わらずディレクトリ色を優先）
+        if kind == "dir":
+            if selected:
+                return Text(value, style=cls.DIRECTORY_SELECTED_STYLE)
+            return Text(value, style=cls.DIRECTORY_STYLE)
+
+        # 実行権限付きファイル
+        if executable:
+            if selected:
+                return Text(value, style=cls.EXECUTABLE_SELECTED_STYLE)
+            return Text(value, style=cls.EXECUTABLE_STYLE)
+
+        # 選択状態
+        if selected:
+            return Text(value, style=cls.SELECTED_STYLE)
+
+        return Text(value)
