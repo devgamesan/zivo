@@ -123,7 +123,7 @@ BROWSING_KEYMAP = {
     "c": "copy_paths_to_clipboard",
     "ctrl+j": "begin_go_to_path",
     "ctrl+n": "create_file",
-    "ctrl+shift+n": "create_dir",
+    "ctrl+d": "create_dir",
 }
 
 CONFLICT_KEYMAP = {

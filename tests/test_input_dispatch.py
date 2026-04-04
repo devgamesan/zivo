@@ -331,10 +331,10 @@ def test_browsing_ctrl_n_begins_create_file() -> None:
     assert actions[1].kind == "file"
 
 
-def test_browsing_ctrl_shift_n_begins_create_directory() -> None:
+def test_browsing_ctrl_d_begins_create_directory() -> None:
     state = build_initial_app_state()
 
-    actions = dispatch_key_input(state, key="ctrl+shift+n")
+    actions = dispatch_key_input(state, key="ctrl+d")
 
     assert len(actions) == 2
     assert isinstance(actions[1], BeginCreateInput)

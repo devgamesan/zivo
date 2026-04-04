@@ -312,7 +312,7 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             CommandPaletteItem(
                 id="create_dir",
                 label="Create directory",
-                shortcut="Ctrl+Shift+N",
+                shortcut="Ctrl+D",
                 enabled=True,
             )
         ]
