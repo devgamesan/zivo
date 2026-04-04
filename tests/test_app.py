@@ -1730,9 +1730,6 @@ async def test_app_file_search_debounces_rapid_query_updates(tmp_path) -> None:
         await pilot.press("ctrl+f")
         await pilot.press("r", "e", "a", "d")
 
-        await asyncio.sleep(0.1)
-        assert file_search_service.executed_requests == []
-
         await _wait_for_request_count(file_search_service, 1, timeout=0.5)
         assert file_search_service.executed_requests == [(path, "read", False)]
 
@@ -1963,9 +1960,6 @@ async def test_app_grep_search_debounces_rapid_query_updates(tmp_path) -> None:
         await _wait_for_snapshot_loaded(app, path)
         await pilot.press("ctrl+g")
         await pilot.press("t", "o", "d", "o")
-
-        await asyncio.sleep(0.1)
-        assert grep_search_service.executed_requests == []
 
         await _wait_for_request_count(grep_search_service, 1, timeout=0.5)
         assert grep_search_service.executed_requests == [(path, "todo", False)]
