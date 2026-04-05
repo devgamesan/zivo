@@ -796,6 +796,43 @@ def test_select_shell_data_viewport_projection_skips_offscreen_row_delta_updates
     assert shell.current_pane_update.row_updates == ()
 
 
+def test_select_shell_data_viewport_projection_skips_offscreen_size_delta_updates() -> None:
+    path = "/tmp/peneo-viewport-selector"
+    current_entries = tuple(
+        entry(f"{path}/item_{index:02d}", name=f"item_{index:02d}", kind="dir")
+        for index in range(12)
+    )
+    offscreen_path = current_entries[-1].path
+    state = replace(
+        build_initial_app_state(
+            current_pane_projection_mode="viewport",
+            config=AppConfig(
+                display=replace(
+                    AppConfig().display,
+                    show_directory_sizes=True,
+                )
+            ),
+        ),
+        terminal_height=12,
+        current_pane=pane(path, current_entries, cursor_path=current_entries[0].path),
+        directory_size_cache=(
+            DirectorySizeCacheEntry(
+                offscreen_path,
+                "ready",
+                size_bytes=4_200,
+            ),
+        ),
+        directory_size_delta=DirectorySizeDeltaState(changed_paths=(offscreen_path,), revision=2),
+    )
+
+    shell = select_shell_data(state)
+
+    assert shell.current_entries is None
+    assert shell.current_pane_update.mode == "size_delta"
+    assert shell.current_pane_update.revision == 2
+    assert shell.current_pane_update.size_updates == ()
+
+
 def test_select_shell_data_rebuilds_only_current_entries_when_selection_changes() -> None:
     state = build_initial_app_state()
 

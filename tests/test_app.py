@@ -45,7 +45,10 @@ from peneo.state import (
     DirectoryEntryState,
     FileSearchResultState,
     GrepSearchResultState,
+    JumpCursor,
+    MoveCursor,
     PaneState,
+    SetTerminalHeight,
 )
 from peneo.state.selectors import compute_current_pane_visible_window
 from peneo.ui import (
@@ -1672,7 +1675,8 @@ async def test_app_selection_toggle_avoids_rebuilding_large_current_pane(monkeyp
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
-        await _wait_for_row_count(app, 1000, timeout=2.0)
+        visible_window = compute_current_pane_visible_window(app.app_state.terminal_height)
+        await _wait_for_row_count(app, visible_window, timeout=2.0)
 
         current_table = app.query_one("#current-pane-table", DataTable)
         original_clear = DataTable.clear
@@ -1737,7 +1741,8 @@ async def test_app_directory_size_update_avoids_rebuilding_large_current_pane(mo
 
     async with app.run_test():
         await _wait_for_snapshot_loaded(app, path)
-        await _wait_for_row_count(app, 1000, timeout=2.0)
+        visible_window = compute_current_pane_visible_window(app.app_state.terminal_height)
+        await _wait_for_row_count(app, visible_window, timeout=2.0)
 
         current_table = app.query_one("#current-pane-table", DataTable)
         original_clear = DataTable.clear
@@ -1769,7 +1774,7 @@ async def test_app_directory_size_update_avoids_rebuilding_large_current_pane(mo
 
 
 @pytest.mark.asyncio
-async def test_app_viewport_projection_limits_rendered_rows_for_large_directory() -> None:
+async def test_app_default_viewport_projection_limits_rendered_rows_for_large_directory() -> None:
     path = "/tmp/peneo-viewport-large"
     current_entries = tuple(
         DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
@@ -1783,11 +1788,7 @@ async def test_app_viewport_projection_limits_rendered_rows_for_large_directory(
             )
         }
     )
-    app = create_app(
-        snapshot_loader=loader,
-        initial_path=path,
-        current_pane_projection_mode="viewport",
-    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
 
     async with app.run_test():
         await _wait_for_snapshot_loaded(app, path)
@@ -1804,7 +1805,7 @@ async def test_app_viewport_projection_limits_rendered_rows_for_large_directory(
 
 
 @pytest.mark.asyncio
-async def test_app_viewport_projection_shifts_window_after_cursor_crosses_edge() -> None:
+async def test_app_default_viewport_projection_shifts_window_after_cursor_crosses_edge() -> None:
     path = "/tmp/peneo-viewport-scroll"
     current_entries = tuple(
         DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
@@ -1818,11 +1819,7 @@ async def test_app_viewport_projection_shifts_window_after_cursor_crosses_edge()
             )
         }
     )
-    app = create_app(
-        snapshot_loader=loader,
-        initial_path=path,
-        current_pane_projection_mode="viewport",
-    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
@@ -1841,6 +1838,106 @@ async def test_app_viewport_projection_shifts_window_after_cursor_crosses_edge()
         assert isinstance(last_row[1], Text)
         assert last_row[1].plain == f"file_{visible_window:04d}.txt"
         assert app.app_state.current_pane_window_start == 1
+
+
+@pytest.mark.asyncio
+async def test_app_default_viewport_projection_pages_and_jumps_without_losing_cursor() -> None:
+    path = "/tmp/peneo-viewport-page-jump"
+    current_entries = tuple(
+        DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
+        for index in range(40)
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                current_entries,
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test():
+        await _wait_for_snapshot_loaded(app, path)
+        visible_window = compute_current_pane_visible_window(app.app_state.terminal_height)
+        visible_paths = tuple(entry.path for entry in current_entries)
+        await _wait_for_row_count(app, visible_window, timeout=2.0)
+
+        await app.dispatch_actions(
+            (MoveCursor(delta=visible_window, visible_paths=visible_paths),)
+        )
+        await _wait_for_cursor_path(app, current_entries[visible_window].path, timeout=2.0)
+        await _wait_for_table_cell(app, "file_0001.txt", 0, 1, timeout=2.0)
+        assert app.app_state.current_pane_window_start == 1
+
+        await app.dispatch_actions(
+            (MoveCursor(delta=-visible_window, visible_paths=visible_paths),)
+        )
+        await _wait_for_cursor_path(app, current_entries[0].path, timeout=2.0)
+        await _wait_for_table_cell(app, "file_0000.txt", 0, 1, timeout=2.0)
+        assert app.app_state.current_pane_window_start == 0
+
+        await app.dispatch_actions((JumpCursor(position="end", visible_paths=visible_paths),))
+        window_start_at_end = len(current_entries) - visible_window
+        await _wait_for_cursor_path(app, current_entries[-1].path, timeout=2.0)
+        await _wait_for_table_cell(
+            app,
+            f"file_{window_start_at_end:04d}.txt",
+            0,
+            1,
+            timeout=2.0,
+        )
+        assert app.app_state.current_pane_window_start == window_start_at_end
+
+        await app.dispatch_actions((JumpCursor(position="start", visible_paths=visible_paths),))
+        await _wait_for_cursor_path(app, current_entries[0].path, timeout=2.0)
+        await _wait_for_table_cell(app, "file_0000.txt", 0, 1, timeout=2.0)
+        assert app.app_state.current_pane_window_start == 0
+
+
+@pytest.mark.asyncio
+async def test_app_default_viewport_projection_recalculates_window_after_resize() -> None:
+    path = "/tmp/peneo-viewport-resize"
+    current_entries = tuple(
+        DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
+        for index in range(40)
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                current_entries,
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test():
+        await _wait_for_snapshot_loaded(app, path)
+        visible_window = compute_current_pane_visible_window(app.app_state.terminal_height)
+        visible_paths = tuple(entry.path for entry in current_entries)
+        await _wait_for_row_count(app, visible_window, timeout=2.0)
+
+        await app.dispatch_actions(
+            (MoveCursor(delta=visible_window, visible_paths=visible_paths),)
+        )
+        await _wait_for_cursor_path(app, current_entries[visible_window].path, timeout=2.0)
+
+        await app.dispatch_actions((SetTerminalHeight(height=12),))
+
+        resized_window = compute_current_pane_visible_window(12)
+        resized_window_start = visible_window - resized_window + 1
+        await _wait_for_row_count(app, resized_window, timeout=2.0)
+        await _wait_for_table_cell(
+            app,
+            f"file_{resized_window_start:04d}.txt",
+            0,
+            1,
+            timeout=2.0,
+        )
+
+        assert app.app_state.current_pane_window_start == resized_window_start
+        assert app.app_state.current_pane.cursor_path == current_entries[visible_window].path
 
 
 @pytest.mark.asyncio
@@ -3981,7 +4078,8 @@ async def test_app_large_directory_smoke_with_1000_entries(tmp_path) -> None:
 
     async with app.run_test(size=(80, 20)) as pilot:
         await _wait_for_snapshot_loaded(app, str(tmp_path), timeout=2.0)
-        await _wait_for_row_count(app, 1000, timeout=2.0)
+        visible_window = compute_current_pane_visible_window(app.app_state.terminal_height)
+        await _wait_for_row_count(app, visible_window, timeout=2.0)
         await _wait_for_child_entries(app, ["child-0000.txt"], timeout=2.0)
 
         for _ in range(150):
@@ -3991,8 +4089,8 @@ async def test_app_large_directory_smoke_with_1000_entries(tmp_path) -> None:
         await _wait_for_child_entries(app, ["child-0150.txt"], timeout=2.0)
 
         current_table = app.query_one("#current-pane-table", DataTable)
-        assert current_table.row_count == 1000
-        assert current_table.cursor_row == 150
+        assert current_table.row_count == visible_window
+        assert current_table.cursor_row == visible_window - 1
 
 
 @pytest.mark.asyncio

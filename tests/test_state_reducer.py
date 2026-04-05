@@ -166,6 +166,23 @@ def _reduce_state(state, action):
     return reduce_state(state, action)
 
 
+def _viewport_test_entries(
+    path: str,
+    count: int,
+    *,
+    hidden_indexes: frozenset[int] = frozenset(),
+) -> tuple[DirectoryEntryState, ...]:
+    return tuple(
+        DirectoryEntryState(
+            f"{path}/item_{index:02d}",
+            f"item_{index:02d}",
+            "file",
+            hidden=index in hidden_indexes,
+        )
+        for index in range(count)
+    )
+
+
 def test_set_ui_mode_updates_only_mode() -> None:
     state = build_initial_app_state()
 
@@ -4258,6 +4275,26 @@ class TestSetTerminalHeight:
 
         assert next_state.terminal_height == 48
 
+    def test_repositions_viewport_window_to_keep_cursor_visible(self) -> None:
+        path = "/tmp/peneo-viewport-terminal-height"
+        entries = _viewport_test_entries(path, 20)
+        state = replace(
+            build_initial_app_state(current_pane_projection_mode="viewport"),
+            terminal_height=16,
+            current_pane=PaneState(
+                directory_path=path,
+                entries=entries,
+                cursor_path=entries[16].path,
+            ),
+            child_pane=PaneState(directory_path=path, entries=()),
+            current_pane_window_start=9,
+        )
+
+        next_state = _reduce_state(state, SetTerminalHeight(height=12))
+
+        assert next_state.terminal_height == 12
+        assert next_state.current_pane_window_start == 12
+
     def test_no_change_when_same_height(self) -> None:
         state = build_initial_app_state()
         next_state = _reduce_state(state, SetTerminalHeight(height=24))
@@ -4306,6 +4343,27 @@ def test_jump_cursor_end() -> None:
     )
 
 
+def test_jump_cursor_end_repositions_viewport_window() -> None:
+    path = "/tmp/peneo-viewport-jump"
+    entries = _viewport_test_entries(path, 20)
+    visible_paths = tuple(entry.path for entry in entries)
+    state = replace(
+        build_initial_app_state(current_pane_projection_mode="viewport"),
+        terminal_height=12,
+        current_pane=PaneState(
+            directory_path=path,
+            entries=entries,
+            cursor_path=entries[0].path,
+        ),
+        child_pane=PaneState(directory_path=path, entries=()),
+    )
+
+    result = reduce_app_state(state, JumpCursor(position="end", visible_paths=visible_paths))
+
+    assert result.state.current_pane.cursor_path == entries[-1].path
+    assert result.state.current_pane_window_start == 15
+
+
 def test_jump_cursor_empty_paths() -> None:
     state = build_initial_app_state()
 
@@ -4328,6 +4386,95 @@ def test_jump_cursor_with_filter() -> None:
     )
 
     assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/src"
+
+
+def test_move_cursor_page_down_repositions_viewport_window() -> None:
+    path = "/tmp/peneo-viewport-page"
+    entries = _viewport_test_entries(path, 20)
+    visible_paths = tuple(entry.path for entry in entries)
+    state = replace(
+        build_initial_app_state(current_pane_projection_mode="viewport"),
+        terminal_height=12,
+        current_pane=PaneState(
+            directory_path=path,
+            entries=entries,
+            cursor_path=entries[0].path,
+        ),
+        child_pane=PaneState(directory_path=path, entries=()),
+    )
+
+    result = reduce_app_state(state, MoveCursor(delta=5, visible_paths=visible_paths))
+
+    assert result.state.current_pane.cursor_path == entries[5].path
+    assert result.state.current_pane_window_start == 1
+
+
+def test_set_filter_query_resets_viewport_window_when_cursor_leaves_visible_entries() -> None:
+    path = "/tmp/peneo-viewport-filter"
+    entries = _viewport_test_entries(path, 20)
+    state = replace(
+        build_initial_app_state(current_pane_projection_mode="viewport"),
+        terminal_height=12,
+        current_pane=PaneState(
+            directory_path=path,
+            entries=entries,
+            cursor_path=entries[-1].path,
+        ),
+        child_pane=PaneState(directory_path=path, entries=()),
+        current_pane_window_start=15,
+    )
+
+    next_state = _reduce_state(state, SetFilterQuery("item_0", active=True))
+
+    assert next_state.filter.query == "item_0"
+    assert next_state.current_pane_window_start == 0
+
+
+def test_toggle_hidden_files_clamps_viewport_window_start() -> None:
+    path = "/tmp/peneo-viewport-hidden"
+    entries = _viewport_test_entries(path, 10, hidden_indexes=frozenset({7, 8, 9}))
+    state = replace(
+        build_initial_app_state(current_pane_projection_mode="viewport"),
+        terminal_height=12,
+        show_hidden=True,
+        current_pane=PaneState(
+            directory_path=path,
+            entries=entries,
+            cursor_path=entries[-1].path,
+        ),
+        child_pane=PaneState(directory_path=path, entries=()),
+        current_pane_window_start=5,
+    )
+
+    next_state = _reduce_state(state, ToggleHiddenFiles())
+
+    assert next_state.show_hidden is False
+    assert next_state.current_pane.cursor_path == entries[0].path
+    assert next_state.current_pane_window_start == 0
+
+
+def test_set_sort_keeps_cursor_visible_when_viewport_order_changes() -> None:
+    path = "/tmp/peneo-viewport-sort"
+    entries = _viewport_test_entries(path, 20)
+    state = replace(
+        build_initial_app_state(current_pane_projection_mode="viewport"),
+        terminal_height=12,
+        current_pane=PaneState(
+            directory_path=path,
+            entries=entries,
+            cursor_path=entries[0].path,
+        ),
+        child_pane=PaneState(directory_path=path, entries=()),
+    )
+
+    next_state = _reduce_state(
+        state,
+        SetSort(field="name", descending=True, directories_first=False),
+    )
+
+    assert next_state.sort.descending is True
+    assert next_state.current_pane.cursor_path == entries[0].path
+    assert next_state.current_pane_window_start == 15
 
 
 def test_go_back_does_nothing_when_back_stack_is_empty() -> None:
