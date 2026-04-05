@@ -326,7 +326,6 @@ Less frequent actions are grouped in the command palette opened with `:`.
 ## Related Documents
 
 - Implementation structure: [docs/architecture.en.md](docs/architecture.en.md)
-- MVP notes: [docs/spec_mvp.en.md](docs/spec_mvp.en.md)
 - Performance notes: [docs/performance.en.md](docs/performance.en.md)
 
 ## Development
