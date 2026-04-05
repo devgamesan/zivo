@@ -413,7 +413,7 @@ def _handle_open_find_result_in_editor(
         normalize_command_palette_cursor(state, state.command_palette.cursor_index)
     ]
     return run_external_launch_request(
-        replace(state, ui_mode="BROWSING", notification=None),
+        replace(state, notification=None),
         ExternalLaunchRequest(
             kind="open_editor",
             path=selected_result.path,

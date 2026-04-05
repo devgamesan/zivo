@@ -24,7 +24,6 @@ class SplitTerminalPane(Static):
 
     DEFAULT_STATE = SplitTerminalViewState(
         visible=False,
-        title="Split Terminal",
         status="closed",
         body="",
         focused=False,
@@ -50,7 +49,6 @@ class SplitTerminalPane(Static):
         self._render_pending = False
 
     def compose(self) -> ComposeResult:
-        yield Static("", id="split-terminal-title")
         yield Static("", id="split-terminal-status")
         with VerticalScroll(id="split-terminal-scroll"):
             yield Static("", id="split-terminal-body")
@@ -93,10 +91,8 @@ class SplitTerminalPane(Static):
         self.set_class(state.visible, "-visible")
         self.set_class(state.focused, "-focused")
 
-        title = self.query_one("#split-terminal-title", Static)
         status = self.query_one("#split-terminal-status", Static)
 
-        title.update(state.title)
         status.update(f"Status: {state.status}")
         if was_visible and not state.visible:
             self._reset_terminal_screen()

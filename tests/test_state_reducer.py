@@ -104,6 +104,7 @@ from peneo.state import (
     NameConflictState,
     NotificationState,
     OpenFindResultInEditor,
+    OpenGrepResultInEditor,
     OpenPathInEditor,
     OpenPathWithDefaultApp,
     OpenTerminalAtPath,
@@ -802,7 +803,6 @@ def test_open_path_in_editor_with_line_number_emits_external_launch_effect() -> 
 
 
 def test_open_find_result_in_editor_emits_external_launch_effect() -> None:
-    from peneo.state import FileSearchResultState
     state = _reduce_state(build_initial_app_state(), BeginFileSearch())
     state = replace(
         state,
@@ -821,8 +821,9 @@ def test_open_find_result_in_editor_emits_external_launch_effect() -> None:
 
     result = reduce_app_state(state, OpenFindResultInEditor())
 
-    assert result.state.ui_mode == "BROWSING"
+    assert result.state.ui_mode == "PALETTE"
     assert result.state.next_request_id == 2
+    assert result.state.command_palette == state.command_palette
     assert result.effects == (
         RunExternalLaunchEffect(
             request_id=1,
@@ -830,6 +831,46 @@ def test_open_find_result_in_editor_emits_external_launch_effect() -> None:
                 kind="open_editor",
                 path="/home/tadashi/develop/peneo/README.md",
                 line_number=None,
+            ),
+        ),
+    )
+
+
+def test_open_grep_result_in_editor_keeps_palette_state() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            query="reduce_app_state",
+            grep_search_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/peneo/src/peneo/state/reducer.py",
+                    display_path="src/peneo/state/reducer.py",
+                    line_number=15,
+                    line_text=(
+                        "def reduce_app_state("
+                        "state: AppState, action: Action"
+                        ") -> ReduceResult:"
+                    ),
+                ),
+            ),
+            cursor_index=0,
+        ),
+    )
+
+    result = reduce_app_state(state, OpenGrepResultInEditor())
+
+    assert result.state.ui_mode == "PALETTE"
+    assert result.state.next_request_id == 2
+    assert result.state.command_palette == state.command_palette
+    assert result.effects == (
+        RunExternalLaunchEffect(
+            request_id=1,
+            request=ExternalLaunchRequest(
+                kind="open_editor",
+                path="/home/tadashi/develop/peneo/src/peneo/state/reducer.py",
+                line_number=15,
             ),
         ),
     )
