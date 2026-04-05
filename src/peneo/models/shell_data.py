@@ -43,12 +43,21 @@ class CurrentPaneSizeUpdate:
 
 
 @dataclass(frozen=True)
+class CurrentPaneRowUpdate:
+    """A targeted full-row update for a single current-pane row."""
+
+    path: str
+    entry: PaneEntry
+
+
+@dataclass(frozen=True)
 class CurrentPaneUpdateHint:
     """Describe how the current pane should be refreshed."""
 
-    mode: Literal["full", "size_delta"]
+    mode: Literal["full", "size_delta", "row_delta"]
     revision: int = 0
-    updates: tuple[CurrentPaneSizeUpdate, ...] = ()
+    size_updates: tuple[CurrentPaneSizeUpdate, ...] = ()
+    row_updates: tuple[CurrentPaneRowUpdate, ...] = ()
 
 
 @dataclass(frozen=True)

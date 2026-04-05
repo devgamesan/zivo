@@ -13,6 +13,7 @@ from peneo.models import (
     CommandPaletteViewState,
     ConfigDialogState,
     ConflictDialogState,
+    CurrentPaneRowUpdate,
     CurrentPaneSizeUpdate,
     CurrentPaneUpdateHint,
     CurrentSummaryState,
@@ -72,6 +73,10 @@ def select_shell_data(state: AppState) -> ThreePaneShellData:
         state.directory_size_cache,
         display_directory_sizes,
         state.sort,
+        state.current_pane.selected_paths,
+        _select_cut_paths(state),
+        state.current_pane_delta.changed_paths,
+        state.current_pane_delta.revision,
         state.directory_size_delta.changed_paths,
         state.directory_size_delta.revision,
     )
@@ -691,20 +696,72 @@ def _select_current_pane_update_hint(
     directory_size_cache: tuple[DirectorySizeCacheEntry, ...],
     display_directory_sizes: bool,
     sort: SortState,
-    changed_paths: tuple[str, ...],
-    revision: int,
+    selected_paths: frozenset[str],
+    cut_paths: frozenset[str],
+    row_changed_paths: tuple[str, ...],
+    row_revision: int,
+    size_changed_paths: tuple[str, ...],
+    size_revision: int,
 ) -> CurrentPaneUpdateHint:
-    if sort.field == "size" or not changed_paths:
-        return CurrentPaneUpdateHint(mode="full", revision=revision)
-    return CurrentPaneUpdateHint(
-        mode="size_delta",
-        revision=revision,
-        updates=_select_current_pane_size_updates(
+    if sort.field == "size":
+        return CurrentPaneUpdateHint(mode="full", revision=max(row_revision, size_revision))
+    if row_changed_paths:
+        row_updates = _select_current_pane_row_updates(
             visible_entries,
             directory_size_cache,
             display_directory_sizes,
-            changed_paths,
+            selected_paths,
+            cut_paths,
+            row_changed_paths,
+        )
+        if len(row_updates) != len(frozenset(row_changed_paths)):
+            return CurrentPaneUpdateHint(mode="full", revision=row_revision)
+        return CurrentPaneUpdateHint(
+            mode="row_delta",
+            revision=row_revision,
+            row_updates=row_updates,
+        )
+    if not size_changed_paths:
+        return CurrentPaneUpdateHint(mode="full", revision=size_revision)
+    return CurrentPaneUpdateHint(
+        mode="size_delta",
+        revision=size_revision,
+        size_updates=_select_current_pane_size_updates(
+            visible_entries,
+            directory_size_cache,
+            display_directory_sizes,
+            size_changed_paths,
         ),
+    )
+
+
+@lru_cache(maxsize=256)
+def _select_current_pane_row_updates(
+    visible_entries: tuple[DirectoryEntryState, ...],
+    directory_size_cache: tuple[DirectorySizeCacheEntry, ...],
+    display_directory_sizes: bool,
+    selected_paths: frozenset[str],
+    cut_paths: frozenset[str],
+    changed_paths: tuple[str, ...],
+) -> tuple[CurrentPaneRowUpdate, ...]:
+    changed_path_set = frozenset(changed_paths)
+    return tuple(
+        CurrentPaneRowUpdate(
+            path=entry.path,
+            entry=_to_pane_entry(
+                entry,
+                name_detail=_format_current_entry_name_detail(entry),
+                size_label_override=_format_entry_size_label(
+                    entry,
+                    directory_size_cache,
+                    display_directory_sizes=display_directory_sizes,
+                ),
+                selected=entry.path in selected_paths,
+                cut=entry.path in cut_paths,
+            ),
+        )
+        for entry in visible_entries
+        if entry.path in changed_path_set
     )
 
 

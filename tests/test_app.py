@@ -1144,6 +1144,53 @@ async def test_app_cut_marks_row_with_dimmed_style() -> None:
 
 
 @pytest.mark.asyncio
+async def test_app_cut_uses_targeted_row_updates(monkeypatch) -> None:
+    path = "/tmp/peneo-cut-row-delta"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (
+                    DirectoryEntryState(f"{path}/docs", "docs", "dir"),
+                    DirectoryEntryState(f"{path}/README.md", "README.md", "file", size_bytes=120),
+                ),
+                child_path=f"{path}/docs",
+            )
+        }
+    )
+    set_entries_calls = 0
+    apply_row_updates_calls = 0
+    original_set_entries = MainPane.set_entries
+    original_apply_row_updates = MainPane.apply_row_updates
+
+    def wrapped_set_entries(self, entries, cursor_index=None):
+        nonlocal set_entries_calls
+        set_entries_calls += 1
+        return original_set_entries(self, entries, cursor_index)
+
+    def wrapped_apply_row_updates(self, updates):
+        nonlocal apply_row_updates_calls
+        apply_row_updates_calls += 1
+        return original_apply_row_updates(self, updates)
+
+    monkeypatch.setattr(MainPane, "set_entries", wrapped_set_entries)
+    monkeypatch.setattr(MainPane, "apply_row_updates", wrapped_apply_row_updates)
+
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await _wait_for_row_count(app, 2)
+        full_refresh_calls_before_cut = set_entries_calls
+
+        await pilot.press("x")
+        await asyncio.sleep(0.05)
+
+        assert set_entries_calls == full_refresh_calls_before_cut
+        assert apply_row_updates_calls == 1
+
+
+@pytest.mark.asyncio
 async def test_app_right_enters_directory_and_backspace_returns_to_parent() -> None:
     root = "/tmp/peneo-nav"
     docs = f"{root}/docs"
@@ -1605,6 +1652,24 @@ async def test_app_selection_toggle_avoids_rebuilding_large_current_pane(monkeyp
             )
         }
     )
+    set_entries_calls = 0
+    apply_row_updates_calls = 0
+    original_set_entries = MainPane.set_entries
+    original_apply_row_updates = MainPane.apply_row_updates
+
+    def wrapped_set_entries(self, entries, cursor_index=None):
+        nonlocal set_entries_calls
+        set_entries_calls += 1
+        return original_set_entries(self, entries, cursor_index)
+
+    def wrapped_apply_row_updates(self, updates):
+        nonlocal apply_row_updates_calls
+        apply_row_updates_calls += 1
+        return original_apply_row_updates(self, updates)
+
+    monkeypatch.setattr(MainPane, "set_entries", wrapped_set_entries)
+    monkeypatch.setattr(MainPane, "apply_row_updates", wrapped_apply_row_updates)
+
     app = create_app(snapshot_loader=loader, initial_path=path)
 
     async with app.run_test() as pilot:
@@ -1631,6 +1696,7 @@ async def test_app_selection_toggle_avoids_rebuilding_large_current_pane(monkeyp
 
         monkeypatch.setattr(DataTable, "clear", counting_clear)
         monkeypatch.setattr(DataTable, "add_row", counting_add_row)
+        full_refresh_calls_before_toggle = set_entries_calls
 
         await pilot.press("space")
         await asyncio.sleep(0.05)
@@ -1639,6 +1705,8 @@ async def test_app_selection_toggle_avoids_rebuilding_large_current_pane(monkeyp
 
         assert clear_calls == 0
         assert add_row_calls == 0
+        assert set_entries_calls == full_refresh_calls_before_toggle
+        assert apply_row_updates_calls == 1
         assert app.app_state.current_pane.selected_paths == {f"{path}/file_0000.txt"}
         assert current_table.cursor_row == 1
         assert isinstance(first_row[0], Text)
