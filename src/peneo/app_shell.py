@@ -105,7 +105,9 @@ async def refresh_shell(
 
     current_path_bar.set_path(shell.current_path)
     if shell.current_pane_update.mode == "size_delta":
-        current_pane.apply_size_updates(shell.current_pane_update.updates)
+        current_pane.apply_size_updates(shell.current_pane_update.size_updates)
+    elif shell.current_pane_update.mode == "row_delta":
+        current_pane.apply_row_updates(shell.current_pane_update.row_updates)
     else:
         current_pane.set_entries(shell.current_entries or (), shell.current_cursor_index)
     current_pane.set_cursor_state(

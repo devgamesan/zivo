@@ -12,6 +12,7 @@ from textual.css.query import NoMatches
 from textual.widgets import DataTable, Label, ListItem, ListView
 
 from peneo.models.shell_data import (
+    CurrentPaneRowUpdate,
     CurrentPaneSizeUpdate,
     CurrentSummaryState,
     InputBarState,
@@ -445,6 +446,41 @@ class MainPane(Vertical):
                 )
             except KeyError:
                 continue
+
+    def apply_row_updates(self, updates: Sequence[CurrentPaneRowUpdate]) -> None:
+        """Update only the supplied rows without rebuilding the table."""
+
+        if not updates:
+            return
+
+        update_by_path = {update.path: update.entry for update in updates}
+        changed_rows: list[tuple[str, PaneEntry]] = []
+        next_entries: list[PaneEntry] = []
+        for entry in self._entries:
+            next_entry = update_by_path.get(entry.path)
+            if next_entry is None or next_entry == entry:
+                next_entries.append(entry)
+                continue
+            next_entries.append(next_entry)
+            changed_rows.append((entry.path, next_entry))
+
+        if not changed_rows:
+            return
+
+        self._entries = tuple(next_entries)
+        table = self.query_one(DataTable)
+        column_widths = self._allocate_column_widths(table)
+        for row_key, entry in changed_rows:
+            next_cells = self._build_row_cells(entry, column_widths)
+            for column_key, next_cell in zip(
+                self.COLUMN_KEYS,
+                next_cells,
+                strict=False,
+            ):
+                try:
+                    table.update_cell(row_key, column_key, next_cell)
+                except KeyError:
+                    continue
 
     def _sync_cursor(self, table: DataTable) -> None:
         if not self._entries or self._cursor_index is None:

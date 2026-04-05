@@ -65,6 +65,7 @@ from peneo.state import (
     ConfirmZipCompress,
     CopyPathsToClipboard,
     CopyTargets,
+    CurrentPaneDeltaState,
     CutTargets,
     CycleConfigEditorValue,
     DeleteConfirmationState,
@@ -325,6 +326,74 @@ def test_non_directory_size_action_clears_transient_directory_size_delta() -> No
 
     assert result.state.notification == NotificationState(level="info", message="Ready")
     assert result.state.directory_size_delta == DirectorySizeDeltaState(revision=4)
+
+
+def test_toggle_selection_sets_transient_current_pane_delta() -> None:
+    state = build_initial_app_state()
+    path = "/home/tadashi/develop/peneo/README.md"
+
+    next_state = _reduce_state(state, ToggleSelection(path))
+
+    assert next_state.current_pane.selected_paths == frozenset({path})
+    assert next_state.current_pane_delta == CurrentPaneDeltaState(
+        changed_paths=(path,),
+        revision=1,
+    )
+
+
+def test_cut_targets_sets_transient_current_pane_delta() -> None:
+    state = build_initial_app_state()
+    path = "/home/tadashi/develop/peneo/docs"
+
+    next_state = _reduce_state(state, CutTargets((path,)))
+
+    assert next_state.clipboard.mode == "cut"
+    assert next_state.current_pane_delta == CurrentPaneDeltaState(
+        changed_paths=(path,),
+        revision=1,
+    )
+
+
+def test_move_cursor_and_select_range_sets_transient_current_pane_delta() -> None:
+    state = build_initial_app_state()
+    visible_paths = tuple(entry.path for entry in state.current_pane.entries)
+
+    next_state = _reduce_state(
+        state,
+        MoveCursorAndSelectRange(delta=1, visible_paths=visible_paths),
+    )
+
+    assert next_state.current_pane.selected_paths == frozenset(
+        {
+            "/home/tadashi/develop/peneo/docs",
+            "/home/tadashi/develop/peneo/src",
+        }
+    )
+    assert next_state.current_pane_delta == CurrentPaneDeltaState(
+        changed_paths=(
+            "/home/tadashi/develop/peneo/docs",
+            "/home/tadashi/develop/peneo/src",
+        ),
+        revision=1,
+    )
+
+
+def test_non_selection_action_clears_transient_current_pane_delta() -> None:
+    state = replace(
+        build_initial_app_state(),
+        current_pane_delta=CurrentPaneDeltaState(
+            changed_paths=("/home/tadashi/develop/peneo/docs",),
+            revision=4,
+        ),
+    )
+
+    result = reduce_app_state(
+        state,
+        SetNotification(NotificationState(level="info", message="Ready")),
+    )
+
+    assert result.state.notification == NotificationState(level="info", message="Ready")
+    assert result.state.current_pane_delta == CurrentPaneDeltaState(revision=4)
 
 
 def test_toggle_selection_uses_absolute_paths() -> None:
