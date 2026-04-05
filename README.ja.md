@@ -332,7 +332,6 @@ paths = ["/home/user/src", "/home/user/docs"]
 ## 関連ドキュメント
 
 - 実装構造: [docs/architecture.md](docs/architecture.md)
-- MVP メモ: [docs/spec_mvp.md](docs/spec_mvp.md)
 - 性能確認メモ: [docs/performance.md](docs/performance.md)
 
 ## 開発者向け

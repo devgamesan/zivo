@@ -430,7 +430,6 @@ def build_initial_app_state(
         ),
     )
     child_entries = (
-        DirectoryEntryState(f"{docs_path}/spec_mvp.md", "spec_mvp.md", "file"),
         DirectoryEntryState(f"{docs_path}/notes.md", "notes.md", "file"),
         DirectoryEntryState(f"{docs_path}/wireframes", "wireframes", "dir"),
     )
