@@ -50,3 +50,67 @@ uv run pytest tests/test_app.py -k main_flow_round_trip_on_live_filesystem -q
 uv run python -m pytest tests/test_state_selectors.py -q
 uv run python -m pytest tests/test_app.py -k 'refresh or large_directory_smoke_with_1000_entries' -q
 ```
+
+## Issue #304 Viewport-Aware Projection Spike
+
+### Date
+
+- 2026-04-05
+
+### Added for the spike
+
+- `scripts/benchmark_current_pane_projection.py`
+  - manual benchmark script comparing current-pane `cursor move`, `page scroll`, `selection toggle`, and `directory size` reflection under `full` vs `viewport`
+- `create_app(..., current_pane_projection_mode="viewport")`
+  - comparison-only spike that keeps `DataTable` and limits current-pane rendering to a terminal-height-derived window
+
+### Measurement setup
+
+- Python: `uv run python`
+- terminal height: 24
+- viewport window: 16 rows
+- the benchmark focuses on the `select_shell_data()` projection/update-hint path
+- this is a local manual benchmark for Issue #304, not a CI benchmark
+
+### Re-run commands
+
+```bash
+uv run python scripts/benchmark_current_pane_projection.py --entries 10000 --iterations 200
+uv run python scripts/benchmark_current_pane_projection.py --entries 50000 --iterations 100
+```
+
+### Observations
+
+#### 10,000 entries
+
+| mode | operation | rendered rows | mean |
+| --- | --- | ---: | ---: |
+| full | cursor move | 10000 | 5.26 ms |
+| full | page scroll | 10000 | 4.77 ms |
+| full | selection toggle | 10000 | 5.27 ms |
+| full | directory size reflect | 10000 | 8.55 ms |
+| viewport | cursor move | 16 | 2.48 ms |
+| viewport | page scroll | 16 | 2.48 ms |
+| viewport | selection toggle | 16 | 2.42 ms |
+| viewport | directory size reflect | 16 | 2.45 ms |
+
+#### 50,000 entries
+
+| mode | operation | rendered rows | mean |
+| --- | --- | ---: | ---: |
+| full | cursor move | 50000 | 26.59 ms |
+| full | page scroll | 50000 | 24.39 ms |
+| full | selection toggle | 50000 | 26.50 ms |
+| full | directory size reflect | 50000 | 42.46 ms |
+| viewport | cursor move | 16 | 12.25 ms |
+| viewport | page scroll | 16 | 12.10 ms |
+| viewport | selection toggle | 16 | 12.11 ms |
+| viewport | directory size reflect | 16 | 12.27 ms |
+
+### Decision notes
+
+- Keeping `DataTable` and windowing only the current-pane projection already lowers the cost consistently
+- The improvement is about 2x at 10,000 entries and up to about 3.5x for `directory size` reflection at 50,000 entries
+- Even after windowing, the 50,000-entry case still spends about 12 ms per call, so fixed costs outside projection remain
+- That means we cannot conclude that virtualization is unnecessary; at minimum, excluding offscreen rows from current-pane projection is worth pursuing
+- This spike is for comparison only. Scroll-offset persistence and page-scroll UX still need follow-up design work

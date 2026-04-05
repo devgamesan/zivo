@@ -47,6 +47,7 @@ from peneo.state import (
     GrepSearchResultState,
     PaneState,
 )
+from peneo.state.selectors import compute_current_pane_visible_window
 from peneo.ui import (
     AttributeDialog,
     CommandPalette,
@@ -1765,6 +1766,81 @@ async def test_app_directory_size_update_avoids_rebuilding_large_current_pane(mo
 
         assert clear_calls == 0
         assert add_row_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_app_viewport_projection_limits_rendered_rows_for_large_directory() -> None:
+    path = "/tmp/peneo-viewport-large"
+    current_entries = tuple(
+        DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
+        for index in range(1000)
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                current_entries,
+            )
+        }
+    )
+    app = create_app(
+        snapshot_loader=loader,
+        initial_path=path,
+        current_pane_projection_mode="viewport",
+    )
+
+    async with app.run_test():
+        await _wait_for_snapshot_loaded(app, path)
+        visible_window = compute_current_pane_visible_window(app.app_state.terminal_height)
+        await _wait_for_row_count(app, visible_window, timeout=2.0)
+
+        table = app.query_one("#current-pane-table", DataTable)
+        first_row = table.get_row_at(0)
+
+        assert table.row_count == visible_window
+        assert isinstance(first_row[1], Text)
+        assert first_row[1].plain == "file_0000.txt"
+        assert app.app_state.current_pane_window_start == 0
+
+
+@pytest.mark.asyncio
+async def test_app_viewport_projection_shifts_window_after_cursor_crosses_edge() -> None:
+    path = "/tmp/peneo-viewport-scroll"
+    current_entries = tuple(
+        DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
+        for index in range(40)
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                current_entries,
+            )
+        }
+    )
+    app = create_app(
+        snapshot_loader=loader,
+        initial_path=path,
+        current_pane_projection_mode="viewport",
+    )
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        visible_window = compute_current_pane_visible_window(app.app_state.terminal_height)
+        await _wait_for_row_count(app, visible_window, timeout=2.0)
+
+        table = app.query_one("#current-pane-table", DataTable)
+        for _ in range(visible_window):
+            await pilot.press("down")
+        await _wait_for_cursor_path(app, current_entries[visible_window].path, timeout=2.0)
+        await _wait_for_table_cell(app, "file_0001.txt", 0, 1, timeout=2.0)
+
+        last_row = table.get_row_at(table.row_count - 1)
+
+        assert table.row_count == visible_window
+        assert isinstance(last_row[1], Text)
+        assert last_row[1].plain == f"file_{visible_window:04d}.txt"
+        assert app.app_state.current_pane_window_start == 1
 
 
 @pytest.mark.asyncio

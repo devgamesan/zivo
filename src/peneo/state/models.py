@@ -44,6 +44,7 @@ CommandPaletteSource = Literal[
 SplitTerminalStatus = Literal["closed", "starting", "running"]
 SplitTerminalFocusTarget = Literal["browser", "terminal"]
 DirectorySizeStatus = Literal["pending", "ready", "failed"]
+CurrentPaneProjectionMode = Literal["full", "viewport"]
 ConfigFieldId = Literal[
     "editor.command",
     "display.show_hidden_files",
@@ -368,6 +369,8 @@ class AppState:
     pending_config_save_request_id: int | None = None
     pending_shell_command_request_id: int | None = None
     terminal_height: int = 24
+    current_pane_projection_mode: CurrentPaneProjectionMode = "full"
+    current_pane_window_start: int = 0
     next_request_id: int = 1
 
 
@@ -380,6 +383,7 @@ def build_initial_app_state(
     confirm_delete: bool = True,
     paste_conflict_action: PasteConflictAction = "prompt",
     post_reload_notification: NotificationState | None = None,
+    current_pane_projection_mode: CurrentPaneProjectionMode = "full",
 ) -> AppState:
     """Return a deterministic initial state used by selector and reducer tests."""
 
@@ -448,6 +452,7 @@ def build_initial_app_state(
         paste_conflict_action=paste_conflict_action,
         filter=FilterState(query="", active=False),
         post_reload_notification=post_reload_notification,
+        current_pane_projection_mode=current_pane_projection_mode,
     )
 
 
@@ -461,6 +466,7 @@ def build_placeholder_app_state(
     confirm_delete: bool = True,
     paste_conflict_action: PasteConflictAction = "prompt",
     post_reload_notification: NotificationState | None = None,
+    current_pane_projection_mode: CurrentPaneProjectionMode = "full",
 ) -> AppState:
     """Return an empty browser state used before the first snapshot loads."""
 
@@ -478,4 +484,5 @@ def build_placeholder_app_state(
         confirm_delete=confirm_delete,
         paste_conflict_action=paste_conflict_action,
         post_reload_notification=post_reload_notification,
+        current_pane_projection_mode=current_pane_projection_mode,
     )

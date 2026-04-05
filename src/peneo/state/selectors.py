@@ -44,6 +44,8 @@ SIDE_PANE_SORT = SortState(field="name", descending=False, directories_first=Tru
 COMMAND_PALETTE_VISIBLE_WINDOW = 8
 MIN_SEARCH_VISIBLE_WINDOW = 3
 _SEARCH_OVERHEAD_ROWS = 5
+MIN_CURRENT_PANE_VISIBLE_WINDOW = 5
+_CURRENT_PANE_OVERHEAD_ROWS = 8
 
 
 def _has_execute_permission(entry: DirectoryEntryState) -> bool:
@@ -56,6 +58,7 @@ def _has_execute_permission(entry: DirectoryEntryState) -> bool:
 @dataclass(frozen=True)
 class _CurrentPaneProjection:
     visible_entries: tuple[DirectoryEntryState, ...]
+    projected_entries: tuple[DirectoryEntryState, ...]
     cursor_index: int | None
     cursor_entry: DirectoryEntryState | None
     summary: CurrentSummaryState
@@ -69,7 +72,7 @@ def select_shell_data(state: AppState) -> ThreePaneShellData:
         state.config.display.show_directory_sizes or state.sort.field == "size"
     )
     current_pane_update = _select_current_pane_update_hint(
-        current_pane.visible_entries,
+        current_pane.projected_entries,
         state.directory_size_cache,
         display_directory_sizes,
         state.sort,
@@ -85,7 +88,7 @@ def select_shell_data(state: AppState) -> ThreePaneShellData:
         parent_entries=select_parent_entries(state),
         current_entries=(
             _select_current_pane_entries(
-                current_pane.visible_entries,
+                current_pane.projected_entries,
                 state.directory_size_cache,
                 display_directory_sizes,
                 state.current_pane.selected_paths,
@@ -698,10 +701,19 @@ def select_visible_current_entry_states(state: AppState) -> tuple[DirectoryEntry
 
 def _select_current_pane_projection(state: AppState) -> _CurrentPaneProjection:
     visible_entries = select_visible_current_entry_states(state)
-    cursor_index = _find_current_cursor_index(visible_entries, state.current_pane.cursor_path)
-    cursor_entry = None if cursor_index is None else visible_entries[cursor_index]
+    global_cursor_index = _find_current_cursor_index(
+        visible_entries,
+        state.current_pane.cursor_path,
+    )
+    projected_entries, cursor_index = _project_current_pane_entries(
+        state,
+        visible_entries,
+        global_cursor_index,
+    )
+    cursor_entry = None if global_cursor_index is None else visible_entries[global_cursor_index]
     return _CurrentPaneProjection(
         visible_entries=visible_entries,
+        projected_entries=projected_entries,
         cursor_index=cursor_index,
         cursor_entry=cursor_entry,
         summary=_build_current_summary(
@@ -710,6 +722,27 @@ def _select_current_pane_projection(state: AppState) -> _CurrentPaneProjection:
             state.sort,
         ),
     )
+
+
+def _project_current_pane_entries(
+    state: AppState,
+    visible_entries: tuple[DirectoryEntryState, ...],
+    global_cursor_index: int | None,
+) -> tuple[tuple[DirectoryEntryState, ...], int | None]:
+    if state.current_pane_projection_mode != "viewport":
+        return visible_entries, global_cursor_index
+
+    if not visible_entries:
+        return (), None
+
+    visible_window = compute_current_pane_visible_window(state.terminal_height)
+    max_window_start = max(0, len(visible_entries) - visible_window)
+    window_start = min(state.current_pane_window_start, max_window_start)
+    window_end = min(len(visible_entries), window_start + visible_window)
+    local_cursor_index = None
+    if global_cursor_index is not None:
+        local_cursor_index = global_cursor_index - window_start
+    return visible_entries[window_start:window_end], local_cursor_index
 
 
 @lru_cache(maxsize=256)
@@ -730,7 +763,7 @@ def _select_visible_current_entry_states(
 
 @lru_cache(maxsize=256)
 def _select_current_pane_update_hint(
-    visible_entries: tuple[DirectoryEntryState, ...],
+    projected_entries: tuple[DirectoryEntryState, ...],
     directory_size_cache: tuple[DirectorySizeCacheEntry, ...],
     display_directory_sizes: bool,
     sort: SortState,
@@ -745,14 +778,15 @@ def _select_current_pane_update_hint(
         return CurrentPaneUpdateHint(mode="full", revision=max(row_revision, size_revision))
     if row_changed_paths:
         row_updates = _select_current_pane_row_updates(
-            visible_entries,
+            projected_entries,
             directory_size_cache,
             display_directory_sizes,
             selected_paths,
             cut_paths,
             row_changed_paths,
         )
-        if len(row_updates) != len(frozenset(row_changed_paths)):
+        projected_paths = frozenset(entry.path for entry in projected_entries)
+        if len(row_updates) != len(frozenset(row_changed_paths) & projected_paths):
             return CurrentPaneUpdateHint(mode="full", revision=row_revision)
         return CurrentPaneUpdateHint(
             mode="row_delta",
@@ -765,7 +799,7 @@ def _select_current_pane_update_hint(
         mode="size_delta",
         revision=size_revision,
         size_updates=_select_current_pane_size_updates(
-            visible_entries,
+            projected_entries,
             directory_size_cache,
             display_directory_sizes,
             size_changed_paths,
@@ -1003,6 +1037,12 @@ def compute_search_visible_window(terminal_height: int) -> int:
     """Calculate visible search items based on terminal height."""
     palette_rows = max(1, terminal_height // 2)
     return max(MIN_SEARCH_VISIBLE_WINDOW, palette_rows - _SEARCH_OVERHEAD_ROWS)
+
+
+def compute_current_pane_visible_window(terminal_height: int) -> int:
+    """Estimate how many current-pane rows are visible in the terminal."""
+
+    return max(MIN_CURRENT_PANE_VISIBLE_WINDOW, terminal_height - _CURRENT_PANE_OVERHEAD_ROWS)
 
 
 def _select_file_search_window(

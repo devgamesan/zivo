@@ -5,7 +5,8 @@
 ## 目次
 
 1. [スモークテスト（既存）](#スモークテスト既存)
-2. [現在の方針](#現在の方針)
+2. [Issue #304 viewport-aware projection スパイク](#issue-304-viewport-aware-projection-スパイク)
+3. [現在の方針](#現在の方針)
 
 ---
 
@@ -62,6 +63,72 @@ uv run python -m pytest tests/test_app.py -k 'refresh or large_directory_smoke_w
 
 ---
 
+## Issue #304 viewport-aware projection スパイク
+
+### 実施日
+
+- 2026-04-05
+
+### 追加したもの
+
+- `scripts/benchmark_current_pane_projection.py`
+  - current pane の `cursor move` / `page scroll` / `selection toggle` / `directory size` 反映を、`full` と `viewport` で同条件比較する手動計測スクリプト
+- `create_app(..., current_pane_projection_mode="viewport")`
+  - `DataTable` は維持したまま、current pane の表示を terminal 高さ由来の window に絞る比較用スパイク
+
+### 計測条件
+
+- Python: `uv run python`
+- terminal height: 24
+- viewport window: 16 rows
+- 測定対象は `select_shell_data()` を中心にした projection/update hint 生成コスト
+- CI benchmark ではなく、Issue #304 の判断材料を残すためのローカル手動計測
+
+### 再実行コマンド
+
+```bash
+uv run python scripts/benchmark_current_pane_projection.py --entries 10000 --iterations 200
+uv run python scripts/benchmark_current_pane_projection.py --entries 50000 --iterations 100
+```
+
+### 観察結果
+
+#### 10,000 entries
+
+| mode | operation | rendered rows | mean |
+| --- | --- | ---: | ---: |
+| full | cursor move | 10000 | 5.26 ms |
+| full | page scroll | 10000 | 4.77 ms |
+| full | selection toggle | 10000 | 5.27 ms |
+| full | directory size reflect | 10000 | 8.55 ms |
+| viewport | cursor move | 16 | 2.48 ms |
+| viewport | page scroll | 16 | 2.48 ms |
+| viewport | selection toggle | 16 | 2.42 ms |
+| viewport | directory size reflect | 16 | 2.45 ms |
+
+#### 50,000 entries
+
+| mode | operation | rendered rows | mean |
+| --- | --- | ---: | ---: |
+| full | cursor move | 50000 | 26.59 ms |
+| full | page scroll | 50000 | 24.39 ms |
+| full | selection toggle | 50000 | 26.50 ms |
+| full | directory size reflect | 50000 | 42.46 ms |
+| viewport | cursor move | 16 | 12.25 ms |
+| viewport | page scroll | 16 | 12.10 ms |
+| viewport | selection toggle | 16 | 12.11 ms |
+| viewport | directory size reflect | 16 | 12.27 ms |
+
+### 判断メモ
+
+- `DataTable` 自体を置き換えなくても、current pane の projection を window 化するだけで処理時間は一貫して下がった
+- 改善幅は 10,000 entries で約 2 倍、50,000 entries では `directory size` 反映で約 3.5 倍
+- 50,000 entries では viewport 化後も 12 ms 前後かかるため、selector 以外の比較的固定コストは残る
+- つまり「仮想化は不要」とは言えず、少なくとも current pane 側で offscreen row を projection 対象から外す価値はある
+- このスパイクは比較用であり、scroll offset の保持方法や page 移動時の UX 調整は follow-up で詰める
+
+---
+
 ## 現在の方針
 
 - 自動ベンチマークは削除した
@@ -75,4 +142,5 @@ uv run python -m pytest tests/test_app.py -k 'refresh or large_directory_smoke_w
 uv run pytest tests/test_app.py -k large_directory_smoke_with_1000_entries --durations=1 -q
 uv run pytest tests/test_app.py -k main_flow_round_trip_on_live_filesystem -q
 uv run pytest tests/test_state_selectors.py -q
+uv run python scripts/benchmark_current_pane_projection.py --entries 10000 --iterations 200
 ```

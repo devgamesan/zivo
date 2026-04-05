@@ -59,7 +59,11 @@ from peneo.state import (
 )
 from peneo.state import command_palette as command_palette_module
 from peneo.state.command_palette import CommandPaletteItem
-from peneo.state.selectors import _has_execute_permission, _select_command_palette_window
+from peneo.state.selectors import (
+    _has_execute_permission,
+    _select_command_palette_window,
+    compute_current_pane_visible_window,
+)
 from tests.state_test_helpers import entry, pane, reduce_state
 
 
@@ -697,6 +701,101 @@ def test_select_shell_data_reuses_current_entries_when_only_cursor_changes() -> 
     assert moved_shell.child_entries == initial_shell.child_entries
 
 
+def test_select_shell_data_viewport_projection_limits_rendered_entries() -> None:
+    path = "/tmp/peneo-viewport-selector"
+    current_entries = tuple(
+        entry(f"{path}/item_{index:02d}", name=f"item_{index:02d}")
+        for index in range(12)
+    )
+    state = replace(
+        build_initial_app_state(current_pane_projection_mode="viewport"),
+        terminal_height=12,
+        current_pane=pane(path, current_entries, cursor_path=current_entries[0].path),
+    )
+
+    shell = select_shell_data(state)
+
+    visible_window = compute_current_pane_visible_window(state.terminal_height)
+    assert len(shell.current_entries) == visible_window
+    assert [entry.name for entry in shell.current_entries] == [
+        f"item_{index:02d}" for index in range(visible_window)
+    ]
+    assert shell.current_cursor_index == 0
+    assert shell.current_summary.item_count == len(current_entries)
+
+
+def test_select_shell_data_viewport_projection_reuses_window_for_cursor_move_inside_window(
+) -> None:
+    path = "/tmp/peneo-viewport-selector"
+    current_entries = tuple(
+        entry(f"{path}/item_{index:02d}", name=f"item_{index:02d}")
+        for index in range(12)
+    )
+    state = replace(
+        build_initial_app_state(current_pane_projection_mode="viewport"),
+        terminal_height=12,
+        current_pane=pane(path, current_entries, cursor_path=current_entries[0].path),
+    )
+
+    initial_shell = select_shell_data(state)
+    moved_shell = select_shell_data(_reduce_state(state, SetCursorPath(current_entries[3].path)))
+
+    assert moved_shell.current_entries is initial_shell.current_entries
+    assert moved_shell.current_cursor_index == 3
+
+
+def test_select_shell_data_viewport_projection_shifts_window_after_cursor_crosses_edge() -> None:
+    path = "/tmp/peneo-viewport-selector"
+    current_entries = tuple(
+        entry(f"{path}/item_{index:02d}", name=f"item_{index:02d}")
+        for index in range(12)
+    )
+    state = replace(
+        build_initial_app_state(current_pane_projection_mode="viewport"),
+        terminal_height=12,
+        current_pane=pane(path, current_entries, cursor_path=current_entries[0].path),
+    )
+
+    initial_shell = select_shell_data(state)
+    moved_shell = select_shell_data(_reduce_state(state, SetCursorPath(current_entries[5].path)))
+
+    assert moved_shell.current_entries is not initial_shell.current_entries
+    assert [entry.name for entry in moved_shell.current_entries] == [
+        "item_01",
+        "item_02",
+        "item_03",
+        "item_04",
+        "item_05",
+    ]
+    assert moved_shell.current_cursor_index == 4
+
+
+def test_select_shell_data_viewport_projection_skips_offscreen_row_delta_updates() -> None:
+    path = "/tmp/peneo-viewport-selector"
+    current_entries = tuple(
+        entry(f"{path}/item_{index:02d}", name=f"item_{index:02d}")
+        for index in range(12)
+    )
+    offscreen_path = current_entries[-1].path
+    state = replace(
+        build_initial_app_state(current_pane_projection_mode="viewport"),
+        terminal_height=12,
+        current_pane=pane(path, current_entries, cursor_path=current_entries[0].path),
+        current_pane_delta=CurrentPaneDeltaState(changed_paths=(offscreen_path,), revision=1),
+    )
+
+    shell = select_shell_data(
+        replace(
+            state,
+            current_pane=replace(state.current_pane, selected_paths=frozenset({offscreen_path})),
+        )
+    )
+
+    assert shell.current_entries is None
+    assert shell.current_pane_update.mode == "row_delta"
+    assert shell.current_pane_update.row_updates == ()
+
+
 def test_select_shell_data_rebuilds_only_current_entries_when_selection_changes() -> None:
     state = build_initial_app_state()
 
@@ -722,6 +821,7 @@ def test_select_shell_data_includes_selected_cut_and_contextual_models() -> None
     state = replace(
         state,
         filter=replace(state.filter, query="read", active=True),
+        current_pane_delta=CurrentPaneDeltaState(),
         notification=NotificationState(level="info", message="Ready"),
     )
 
