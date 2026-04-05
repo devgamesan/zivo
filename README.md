@@ -352,7 +352,7 @@ uv run pytest
 
 ### Install from TestPyPI
 
-For testing pre-release versions, install from TestPyPI:
+Tagged releases are published to TestPyPI before they are promoted to PyPI. To test that package:
 
 ```bash
 uv tool install \
@@ -360,3 +360,14 @@ uv tool install \
   --extra-index-url https://pypi.org/simple/ \
   peneo
 ```
+
+### Maintainer release setup
+
+`.github/workflows/release.yml` publishes tagged releases in this order: build/test, TestPyPI, PyPI, then GitHub Releases. Before pushing a `v*.*.*` tag, configure these repository secrets with `gh`:
+
+```bash
+printf '%s' "$TEST_PYPI_API_TOKEN" | gh secret set TEST_PYPI_API_TOKEN
+printf '%s' "$PYPI_API_TOKEN" | gh secret set PYPI_API_TOKEN
+```
+
+Use project-scoped API tokens when possible, and keep the token values out of tracked files.

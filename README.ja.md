@@ -358,7 +358,7 @@ uv run pytest
 
 ### TestPyPI からインストール
 
-リリース前のバージョンをテストする場合は、TestPyPI からインストールできます:
+タグ付きリリースは PyPI へ公開される前に TestPyPI へ公開されます。公開内容を確認する場合は次のコマンドを使います:
 
 ```bash
 uv tool install \
@@ -366,3 +366,14 @@ uv tool install \
   --extra-index-url https://pypi.org/simple/ \
   peneo
 ```
+
+### メンテナー向けリリース設定
+
+`.github/workflows/release.yml` はタグ付きリリースで build/test を実行し、その後 TestPyPI、PyPI、GitHub Releases の順に公開します。`v*.*.*` タグを push する前に、次の repository secrets を `gh` で設定してください。
+
+```bash
+printf '%s' "$TEST_PYPI_API_TOKEN" | gh secret set TEST_PYPI_API_TOKEN
+printf '%s' "$PYPI_API_TOKEN" | gh secret set PYPI_API_TOKEN
+```
+
+可能であれば project scope の API token を使い、token の値は追跡対象ファイルへ書かないでください。
