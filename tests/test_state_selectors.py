@@ -970,7 +970,6 @@ def test_select_split_terminal_state_builds_terminal_view() -> None:
 
     assert terminal_state.visible is True
     assert terminal_state.focused is True
-    assert terminal_state.title == "Split Terminal"
     assert terminal_state.body == "Shell ready."
 
 

@@ -82,7 +82,6 @@ class SplitTerminalViewState:
     """Display state for the embedded split terminal pane."""
 
     visible: bool
-    title: str
     status: str
     body: str
     focused: bool = False
@@ -257,7 +256,6 @@ def build_dummy_shell_data() -> ThreePaneShellData:
         current_context_input=None,
         split_terminal=SplitTerminalViewState(
             visible=False,
-            title="Split Terminal",
             status="closed",
             body="",
             focused=False,

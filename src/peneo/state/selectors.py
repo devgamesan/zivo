@@ -456,7 +456,6 @@ def select_split_terminal_state(state: AppState) -> SplitTerminalViewState:
     if not split_terminal.visible:
         return SplitTerminalViewState(
             visible=False,
-            title="Split Terminal",
             status="closed",
             body="",
             focused=False,
@@ -468,7 +467,6 @@ def select_split_terminal_state(state: AppState) -> SplitTerminalViewState:
         body = "Shell ready."
     return SplitTerminalViewState(
         visible=True,
-        title="Split Terminal",
         status=split_terminal.status,
         body=body,
         focused=split_terminal.focus_target == "terminal",
