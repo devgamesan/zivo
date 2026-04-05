@@ -63,6 +63,8 @@ uv run python -m pytest tests/test_app.py -k 'refresh or large_directory_smoke_w
   - manual benchmark script comparing current-pane `cursor move`, `page scroll`, `selection toggle`, and `directory size` reflection under `full` vs `viewport`
 - `create_app(..., current_pane_projection_mode="viewport")`
   - comparison-only spike that keeps `DataTable` and limits current-pane rendering to a terminal-height-derived window
+- Formal adoption in Issue #326
+  - on 2026-04-05, viewport-aware projection became the default runtime path and gained regression coverage for `pageup` / `pagedown` / `home` / `end`, filter and sort changes, hidden-file toggles, reloads, and resize handling
 
 ### Measurement setup
 
@@ -113,4 +115,11 @@ uv run python scripts/benchmark_current_pane_projection.py --entries 50000 --ite
 - The improvement is about 2x at 10,000 entries and up to about 3.5x for `directory size` reflection at 50,000 entries
 - Even after windowing, the 50,000-entry case still spends about 12 ms per call, so fixed costs outside projection remain
 - That means we cannot conclude that virtualization is unnecessary; at minimum, excluding offscreen rows from current-pane projection is worth pursuing
-- This spike is for comparison only. Scroll-offset persistence and page-scroll UX still need follow-up design work
+- Issue #326 promoted that direction from a comparison spike to the normal implementation path
+- `current_pane_projection_mode` remains as an internal benchmark/test switch, while normal startup now uses viewport projection by default
+
+## Current policy
+
+- Automated benchmarks remain out of CI and release workflows
+- The normal current pane uses viewport-aware projection, while summary and selected counts continue to reflect the full filtered entry set
+- Performance checks stay manual and scenario-driven when behavior changes warrant them

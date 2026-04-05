@@ -80,7 +80,7 @@ from peneo.state import (
     ZipCompressProgress,
 )
 
-CHILD_PANE_DEBOUNCE_SECONDS = 0.2
+CHILD_PANE_DEBOUNCE_SECONDS = 0.0
 FILE_SEARCH_DEBOUNCE_SECONDS = 0.2
 GREP_SEARCH_DEBOUNCE_SECONDS = 0.2
 
@@ -269,6 +269,9 @@ def schedule_browser_snapshot(app: Any, effect: LoadBrowserSnapshotEffect) -> No
 
 def schedule_child_pane_snapshot(app: Any, effect: LoadChildPaneSnapshotEffect) -> None:
     _cancel_timer(app, "_child_pane_timer")
+    if CHILD_PANE_DEBOUNCE_SECONDS <= 0:
+        start_child_pane_snapshot(app, effect)
+        return
     timer = app.set_timer(
         CHILD_PANE_DEBOUNCE_SECONDS,
         partial(start_child_pane_snapshot, app, effect),

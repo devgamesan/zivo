@@ -75,6 +75,8 @@ uv run python -m pytest tests/test_app.py -k 'refresh or large_directory_smoke_w
   - current pane の `cursor move` / `page scroll` / `selection toggle` / `directory size` 反映を、`full` と `viewport` で同条件比較する手動計測スクリプト
 - `create_app(..., current_pane_projection_mode="viewport")`
   - `DataTable` は維持したまま、current pane の表示を terminal 高さ由来の window に絞る比較用スパイク
+- Issue #326 での正式採用
+  - 2026-04-05 に viewport-aware projection を通常起動の既定経路へ昇格し、`pageup` / `pagedown` / `home` / `end` / filter / sort / hidden-file toggle / reload / resize 後も window を正規化する回帰テストを追加した
 
 ### 計測条件
 
@@ -125,7 +127,8 @@ uv run python scripts/benchmark_current_pane_projection.py --entries 50000 --ite
 - 改善幅は 10,000 entries で約 2 倍、50,000 entries では `directory size` 反映で約 3.5 倍
 - 50,000 entries では viewport 化後も 12 ms 前後かかるため、selector 以外の比較的固定コストは残る
 - つまり「仮想化は不要」とは言えず、少なくとも current pane 側で offscreen row を projection 対象から外す価値はある
-- このスパイクは比較用であり、scroll offset の保持方法や page 移動時の UX 調整は follow-up で詰める
+- Issue #326 で、この方針を comparison-only spike から通常実装へ昇格した
+- `current_pane_projection_mode` はベンチマークとテストのための内部切り替えとして残し、通常起動では viewport projection を使う
 
 ---
 
@@ -133,6 +136,7 @@ uv run python scripts/benchmark_current_pane_projection.py --entries 50000 --ite
 
 - 自動ベンチマークは削除した
 - CI と release workflow では通常のテストのみを実行する
+- 通常起動の current pane は viewport-aware projection を使い、summary と selected count は全件基準のまま維持する
 - 性能確認は必要な変更ごとに、人手で対象シナリオを決めて実施する
 - 大規模 fixture や反復回数の多い性能計測を、日常の自動チェックへ戻さない
 

@@ -69,6 +69,7 @@ class _RecordingTimer:
 class _RecordingSnapshotLoader:
     invalidated_paths: list[tuple[str, ...]] = field(default_factory=list)
     load_browser_snapshot_calls: list[tuple[str, str | None]] = field(default_factory=list)
+    load_child_pane_snapshot_calls: list[tuple[str, str | None]] = field(default_factory=list)
 
     def invalidate_directory_listing_cache(self, paths: tuple[str, ...] = ()) -> None:
         self.invalidated_paths.append(paths)
@@ -80,6 +81,14 @@ class _RecordingSnapshotLoader:
     ) -> None:
         self.load_browser_snapshot_calls.append((path, cursor_path))
         return None
+
+    def load_child_pane_snapshot(
+        self,
+        current_path: str,
+        cursor_path: str | None,
+    ) -> PaneState:
+        self.load_child_pane_snapshot_calls.append((current_path, cursor_path))
+        return PaneState(directory_path=current_path, entries=())
 
 
 @dataclass
@@ -370,7 +379,9 @@ def test_schedule_file_search_replaces_existing_timer() -> None:
 
 
 def test_schedule_child_pane_snapshot_replaces_existing_timer() -> None:
-    app = _RecordingApp()
+    app = _RecordingApp(
+        _app_state=replace(build_initial_app_state(), pending_child_pane_request_id=5),
+    )
     existing_timer = _RecordingTimer(
         interval=0.1,
         callback=lambda: None,
@@ -388,9 +399,10 @@ def test_schedule_child_pane_snapshot_replaces_existing_timer() -> None:
     )
 
     assert existing_timer.stopped is True
-    assert len(app.set_timer_calls) == 1
-    assert app.set_timer_calls[0]["name"] == "child-pane-snapshot-debounce:5"
-    assert app._child_pane_timer is app.set_timer_calls[0]["timer"]
+    assert app.set_timer_calls == []
+    assert app._child_pane_timer is None
+    assert len(app.run_worker_calls) == 1
+    assert app.run_worker_calls[0]["name"] == "child-pane-snapshot:5"
 
 
 def test_cancel_pending_runtime_helpers_clear_active_tracking() -> None:

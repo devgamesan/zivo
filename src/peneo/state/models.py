@@ -466,7 +466,7 @@ def build_placeholder_app_state(
     confirm_delete: bool = True,
     paste_conflict_action: PasteConflictAction = "prompt",
     post_reload_notification: NotificationState | None = None,
-    current_pane_projection_mode: CurrentPaneProjectionMode = "full",
+    current_pane_projection_mode: CurrentPaneProjectionMode = "viewport",
 ) -> AppState:
     """Return an empty browser state used before the first snapshot loads."""
 

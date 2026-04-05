@@ -369,7 +369,7 @@ class PeneoApp(App[None]):
         config_path: str | None = None,
         startup_notification: NotificationState | None = None,
         initial_path: str | Path | None = None,
-        current_pane_projection_mode: Literal["full", "viewport"] = "full",
+        current_pane_projection_mode: Literal["full", "viewport"] = "viewport",
     ) -> None:
         super().__init__()
         self._app_config = app_config or AppConfig()
@@ -604,9 +604,13 @@ def create_app(
     config_path: str | None = None,
     startup_notification: NotificationState | None = None,
     initial_path: str | Path | None = None,
-    current_pane_projection_mode: Literal["full", "viewport"] = "full",
+    current_pane_projection_mode: Literal["full", "viewport"] = "viewport",
 ) -> PeneoApp:
-    """Create the application instance."""
+    """Create the application instance.
+
+    The projection mode override is retained for tests and manual benchmarks.
+    Normal runtime uses viewport projection by default.
+    """
 
     return PeneoApp(
         snapshot_loader=snapshot_loader,
