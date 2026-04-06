@@ -252,14 +252,14 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             if state.config.help_bar.palette_file_search:
                 return HelpBarState(state.config.help_bar.palette_file_search)
             return HelpBarState(
-                ("type filename | up/down select | enter jump | Ctrl+E edit | esc cancel",)
+                ("type filename | ↑↓ select | enter jump | Ctrl+E edit | esc cancel",)
             )
         if state.command_palette is not None and state.command_palette.source == "grep_search":
             if state.config.help_bar.palette_grep_search:
                 return HelpBarState(state.config.help_bar.palette_grep_search)
             return HelpBarState(
                 (
-                    "type text / re:pattern | up/down select | "
+                    "type text / re:pattern | ↑↓ select | "
                     "enter jump | Ctrl+E edit | esc cancel",
                 )
             )
@@ -275,11 +275,11 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             if state.config.help_bar.palette_go_to_path:
                 return HelpBarState(state.config.help_bar.palette_go_to_path)
             return HelpBarState(
-                ("type path | up/down select | tab complete | enter jump | esc cancel",)
+                ("type path | ↑↓ select | tab complete | enter jump | esc cancel",)
             )
         if state.config.help_bar.palette:
             return HelpBarState(state.config.help_bar.palette)
-        return HelpBarState(("type command | enter run | esc cancel",))
+        return HelpBarState(("type command | ↑↓ select | enter run | esc cancel",))
     if state.ui_mode == "BUSY":
         if state.config.help_bar.busy:
             return HelpBarState(state.config.help_bar.busy)

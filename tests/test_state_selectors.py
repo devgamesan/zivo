@@ -1114,7 +1114,7 @@ def test_select_help_bar_state_for_go_to_path_palette_mentions_tab_completion() 
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type path | up/down select | tab complete | enter jump | esc cancel",
+        "type path | ↑↓ select | tab complete | enter jump | esc cancel",
     )
 
 
@@ -1128,7 +1128,7 @@ def test_select_help_bar_state_for_file_search_palette() -> None:
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type filename | up/down select | enter jump | Ctrl+E edit | esc cancel",
+        "type filename | ↑↓ select | enter jump | Ctrl+E edit | esc cancel",
     )
 
 
@@ -1142,7 +1142,7 @@ def test_select_help_bar_state_for_grep_search_palette() -> None:
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type text / re:pattern | up/down select | enter jump | Ctrl+E edit | esc cancel",
+        "type text / re:pattern | ↑↓ select | enter jump | Ctrl+E edit | esc cancel",
     )
 
 
