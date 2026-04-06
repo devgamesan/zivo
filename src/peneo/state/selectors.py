@@ -1044,7 +1044,9 @@ def _build_command_palette_items_view(
                 shortcut=item.shortcut,
                 enabled=item.enabled,
                 selected=(
-                    (selected_override if selected_override is not None else True) and index == cursor_index
+                    (
+                        selected_override if selected_override is not None else True
+                    ) and index == cursor_index
                 ),
             )
             for index, item in visible_items
