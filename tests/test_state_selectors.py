@@ -933,14 +933,16 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
     help_state = select_help_bar_state(state)
 
     assert help_state.lines == (
-        "enter open | e edit | i info | space select | y copy | x cut | p paste | c path",
-        "/ filter | s sort | . hidden | b bookmark | ctrl+f find | ctrl+g grep",
-        ": palette | ! shell | ctrl+t term | q quit",
+        "enter open | e edit | i info | space select | c copy | x cut | p paste | C path",
+        "/ filter | s sort | d dir-first | . hidden | a select-all | ~ home",
+        "f find | g grep | G go-to | H history | b bookmarks | B toggle-bookmark",
+        "n new-file | N new-dir | r rename | R reload | t term | : palette | q quit",
     )
     assert help_state.text == (
-        "enter open | e edit | i info | space select | y copy | x cut | p paste | c path\n"
-        "/ filter | s sort | . hidden | b bookmark | ctrl+f find | ctrl+g grep\n"
-        ": palette | ! shell | ctrl+t term | q quit"
+        "enter open | e edit | i info | space select | c copy | x cut | p paste | C path\n"
+        "/ filter | s sort | d dir-first | . hidden | a select-all | ~ home\n"
+        "f find | g grep | G go-to | H history | b bookmarks | B toggle-bookmark\n"
+        "n new-file | N new-dir | r rename | R reload | t term | : palette | q quit"
     )
 
 
@@ -965,7 +967,7 @@ def test_select_help_bar_for_split_terminal_focus() -> None:
 
     help_state = select_help_bar_state(state)
 
-    assert help_state.text == "type in terminal | ctrl+t close | ctrl+v paste"
+    assert help_state.text == "type in terminal | esc close | ctrl+v paste"
 
 
 def test_select_status_bar_shows_split_terminal_focus_when_idle() -> None:
@@ -1112,7 +1114,7 @@ def test_select_help_bar_state_for_go_to_path_palette_mentions_tab_completion() 
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type path | up/down select | tab complete | enter jump | esc cancel",
+        "type path | ↑↓ select | tab complete | enter jump | esc cancel",
     )
 
 
@@ -1126,7 +1128,7 @@ def test_select_help_bar_state_for_file_search_palette() -> None:
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type filename | up/down select | enter jump | Ctrl+E edit | esc cancel",
+        "type filename | ↑↓ select | enter jump | Ctrl+E edit | esc cancel",
     )
 
 
@@ -1140,7 +1142,7 @@ def test_select_help_bar_state_for_grep_search_palette() -> None:
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type text / re:pattern | up/down select | enter jump | Ctrl+E edit | esc cancel",
+        "type text / re:pattern | ↑↓ select | enter jump | Ctrl+E edit | esc cancel",
     )
 
 
@@ -1275,7 +1277,7 @@ def test_select_command_palette_state_enables_select_all_with_visible_entries() 
     assert state is not None
     assert [item.label for item in state.items] == ["Select all"]
     assert state.items[0].enabled is True
-    assert state.items[0].shortcut == "Ctrl+A"
+    assert state.items[0].shortcut == "a"
 
 
 def test_select_command_palette_state_shows_extract_archive_for_supported_file() -> None:

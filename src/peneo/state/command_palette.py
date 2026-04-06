@@ -132,49 +132,49 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
         CommandPaletteItem(
             id="file_search",
             label="Find files",
-            shortcut="Ctrl+F",
+            shortcut="f",
             enabled=True,
         ),
         CommandPaletteItem(
             id="grep_search",
             label="Grep search",
-            shortcut="Ctrl+G",
+            shortcut="g",
             enabled=True,
         ),
         CommandPaletteItem(
             id="history_search",
             label="History search",
-            shortcut="Ctrl+O",
+            shortcut="H",
             enabled=True,
         ),
         CommandPaletteItem(
             id="bookmark_search",
             label="Show bookmarks",
-            shortcut="Ctrl+B",
+            shortcut="b",
             enabled=True,
         ),
         CommandPaletteItem(
             id="go_back",
             label="Go back",
-            shortcut="Alt+Left",
+            shortcut="[",
             enabled=bool(state.history.back),
         ),
         CommandPaletteItem(
             id="go_forward",
             label="Go forward",
-            shortcut="Alt+Right",
+            shortcut="]",
             enabled=bool(state.history.forward),
         ),
         CommandPaletteItem(
             id="go_to_path",
             label="Go to path",
-            shortcut="Ctrl+J",
+            shortcut="G",
             enabled=True,
         ),
         CommandPaletteItem(
             id="go_to_home_directory",
             label="Go to home directory",
-            shortcut="Alt+Home",
+            shortcut="~",
             enabled=True,
         ),
         CommandPaletteItem(
@@ -186,13 +186,13 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
         CommandPaletteItem(
             id="toggle_split_terminal",
             label="Toggle split terminal",
-            shortcut="Ctrl+T",
+            shortcut="t",
             enabled=True,
         ),
         CommandPaletteItem(
             id="select_all",
             label="Select all",
-            shortcut="Ctrl+A",
+            shortcut="a",
             enabled=has_visible_entries,
         ),
     ]
@@ -210,7 +210,7 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             CommandPaletteItem(
                 id="rename",
                 label="Rename",
-                shortcut="F2",
+                shortcut="r",
                 enabled=True,
             )
         )
@@ -312,13 +312,13 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             CommandPaletteItem(
                 id="create_file",
                 label="Create file",
-                shortcut="Ctrl+N",
+                shortcut="n",
                 enabled=True,
             ),
             CommandPaletteItem(
                 id="create_dir",
                 label="Create directory",
-                shortcut="Ctrl+D",
+                shortcut="N",
                 enabled=True,
             )
         ]
