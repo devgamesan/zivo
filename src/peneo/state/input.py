@@ -186,38 +186,15 @@ def dispatch_key_input(
     key: str,
     character: str | None = None,
 ) -> DispatchedActions:
-    """Return reducer actions for the current mode and key press."""
-
+    """データドリブンなキーディスパッチ."""
     character = _normalize_input_character(state, key=key, character=character)
 
-    if _terminal_has_focus(state):
-        return _dispatch_split_terminal_input(key=key, character=character)
+    for condition, dispatcher in _MODE_DISPATCHERS:
+        if condition(state):
+            return dispatcher(state, key=key, character=character)
 
-    if state.ui_mode == "FILTER":
-        return _dispatch_filter_input(state, key=key, character=character)
-
-    if state.ui_mode == "CONFIRM":
-        return _dispatch_confirm_input(state, key)
-
-    if state.ui_mode == "DETAIL":
-        return _dispatch_detail_input(key)
-
-    if state.ui_mode == "CONFIG":
-        return _dispatch_config_input(state, key)
-
-    if state.ui_mode == "BUSY":
-        return _warn("Input ignored while processing")
-
-    if state.ui_mode == "PALETTE":
-        return _dispatch_command_palette_input(state, key=key, character=character)
-
-    if state.ui_mode in {"RENAME", "CREATE", "EXTRACT", "ZIP"}:
-        return _dispatch_pending_input(state, key=key, character=character)
-
-    if state.ui_mode == "SHELL":
-        return _dispatch_shell_command_input(state, key=key, character=character)
-
-    return _dispatch_browsing_input(state, key)
+    # ここには到達しない（デフォルト条件が必ずマッチする）
+    return ()
 
 
 def _normalize_input_character(
@@ -255,7 +232,9 @@ def _resolve_printable_character(*, key: str, character: str | None) -> str | No
     return None
 
 
-def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
+def _dispatch_browsing_input(
+    state: AppState, *, key: str, character: str | None
+) -> DispatchedActions:
     visible_paths = _visible_paths(state)
     cursor_entry = _current_entry(state)
     target_paths = select_target_paths(state)
@@ -437,6 +416,7 @@ def _dispatch_browsing_input(state: AppState, key: str) -> DispatchedActions:
 
 
 def _dispatch_split_terminal_input(
+    state: AppState,
     *,
     key: str,
     character: str | None,
@@ -612,7 +592,9 @@ def _dispatch_filter_input(
     return _warn("This key is unavailable while editing the filter")
 
 
-def _dispatch_confirm_input(state: AppState, key: str) -> DispatchedActions:
+def _dispatch_confirm_input(
+    state: AppState, *, key: str, character: str | None
+) -> DispatchedActions:
     if state.delete_confirmation is not None:
         if key == "escape":
             return _supported(CancelDeleteConfirmation())
@@ -700,14 +682,18 @@ def _dispatch_shell_command_input(
     return _warn("Use Enter to run or Esc to cancel")
 
 
-def _dispatch_detail_input(key: str) -> DispatchedActions:
+def _dispatch_detail_input(
+    state: AppState, *, key: str, character: str | None
+) -> DispatchedActions:
     if key in {"enter", "escape"}:
         return _supported(DismissAttributeDialog())
 
     return _warn("Use Enter or Esc to close the attributes dialog")
 
 
-def _dispatch_config_input(state: AppState, key: str) -> DispatchedActions:
+def _dispatch_config_input(
+    state: AppState, *, key: str, character: str | None
+) -> DispatchedActions:
     if key == "escape":
         return _supported(DismissConfigEditor())
 
@@ -782,3 +768,29 @@ def _next_sort_action(state: AppState) -> SetSort:
         field=next_field,
         descending=next_descending,
     )
+
+
+# モード判定条件とディスパッチャのタプルリスト
+# 各タプル: (条件述語関数, ディスパッチャ関数)
+# タプルの順序が優先順位を表す
+_MODE_DISPATCHERS = (
+    # ターミナルフォーカスは ui_mode より優先
+    (lambda state: _terminal_has_focus(state), _dispatch_split_terminal_input),
+    # ui_mode ベースのディスパッチ
+    (lambda state: state.ui_mode == "FILTER", _dispatch_filter_input),
+    (lambda state: state.ui_mode == "CONFIRM", _dispatch_confirm_input),
+    (lambda state: state.ui_mode == "DETAIL", _dispatch_detail_input),
+    (lambda state: state.ui_mode == "CONFIG", _dispatch_config_input),
+    (
+        lambda state: state.ui_mode == "BUSY",
+        lambda state, **_: _warn("Input ignored while processing"),
+    ),
+    (lambda state: state.ui_mode == "PALETTE", _dispatch_command_palette_input),
+    (
+        lambda state: state.ui_mode in {"RENAME", "CREATE", "EXTRACT", "ZIP"},
+        _dispatch_pending_input,
+    ),
+    (lambda state: state.ui_mode == "SHELL", _dispatch_shell_command_input),
+    # デフォルト（BROWSING）
+    (lambda state: True, _dispatch_browsing_input),
+)
