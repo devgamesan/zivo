@@ -374,7 +374,8 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
         )
     if state.command_palette.source == "history":
         items = get_command_palette_items(state)
-        visible_items, _palette_title = _select_command_palette_window(items, cursor_index)
+        visible_window = compute_search_visible_window(state.terminal_height)
+        visible_items, _palette_title = _select_command_palette_window(items, cursor_index, visible_window=visible_window)
         return CommandPaletteViewState(
             title="Directory History",
             query=state.command_palette.query,
@@ -392,7 +393,8 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
 
     if state.command_palette.source == "bookmarks":
         items = get_command_palette_items(state)
-        visible_items, _palette_title = _select_command_palette_window(items, cursor_index)
+        visible_window = compute_search_visible_window(state.terminal_height)
+        visible_items, _palette_title = _select_command_palette_window(items, cursor_index, visible_window=visible_window)
         return CommandPaletteViewState(
             title="Bookmarks",
             query=state.command_palette.query,
@@ -410,7 +412,8 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
 
     if state.command_palette.source == "go_to_path":
         items = get_command_palette_items(state)
-        visible_items, _palette_title = _select_command_palette_window(items, cursor_index)
+        visible_window = compute_search_visible_window(state.terminal_height)
+        visible_items, _palette_title = _select_command_palette_window(items, cursor_index, visible_window=visible_window)
         selection_active = state.command_palette.go_to_path_selection_active
         return CommandPaletteViewState(
             title="Go to path",
@@ -1094,20 +1097,21 @@ def _select_search_window(
 def _select_command_palette_window(
     items: tuple[CommandPaletteItem, ...],
     cursor_index: int,
+    visible_window: int = COMMAND_PALETTE_VISIBLE_WINDOW,
 ) -> tuple[tuple[tuple[int, CommandPaletteItem], ...], str]:
     total = len(items)
-    if total <= COMMAND_PALETTE_VISIBLE_WINDOW:
+    if total <= visible_window:
         return tuple(enumerate(items)), "Command Palette"
 
     # 3段階アルゴリズムでスクロール位置を決定
     # 1. 中央揃えの理想的な位置を計算
-    ideal_start = cursor_index - (COMMAND_PALETTE_VISIBLE_WINDOW // 2)
+    ideal_start = cursor_index - (visible_window // 2)
     # 2. 先頭境界を適用
     start = max(0, ideal_start)
     # 3. 末尾境界を適用（末尾が必ず見えるように）
-    max_start = max(0, total - COMMAND_PALETTE_VISIBLE_WINDOW)
+    max_start = max(0, total - visible_window)
     start = min(start, max_start)
-    end = min(total, start + COMMAND_PALETTE_VISIBLE_WINDOW)
+    end = min(total, start + visible_window)
     visible_items = tuple((index, items[index]) for index in range(start, end))
     return visible_items, f"Command Palette ({start + 1}-{end} / {total})"
 
