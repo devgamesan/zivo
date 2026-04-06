@@ -39,7 +39,6 @@ from peneo.state import (
     GoForward,
     GoToHomeDirectory,
     GoToParentDirectory,
-    JumpCursor,
     MoveCommandPaletteCursor,
     MoveConfigEditorCursor,
     MoveCursor,
