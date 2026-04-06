@@ -1277,7 +1277,7 @@ def test_select_command_palette_state_enables_select_all_with_visible_entries() 
     assert state is not None
     assert [item.label for item in state.items] == ["Select all"]
     assert state.items[0].enabled is True
-    assert state.items[0].shortcut == "Ctrl+A"
+    assert state.items[0].shortcut == "a"
 
 
 def test_select_command_palette_state_shows_extract_archive_for_supported_file() -> None:
