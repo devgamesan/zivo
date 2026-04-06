@@ -1946,3 +1946,87 @@ class TestSelectCommandPaletteWindow:
         assert 12 in visible_indices
         assert 13 in visible_indices
         assert result[-1][0] == 13  # 最後のアイテムが表示されている
+
+
+
+class TestCommandPaletteDynamicWindow:
+    """コマンドパレットの動的表示ウィンドウ計算のテスト."""
+
+    def test_go_to_path_uses_dynamic_window_size(self) -> None:
+        """Go to pathで48行端末の場合19件表示されること."""
+        # 48行端末の場合、visible_window = 48 // 2 - 5 = 19
+        state = replace(
+            _reduce_state(build_initial_app_state(), BeginCommandPalette()),
+            terminal_height=48,
+            command_palette=CommandPaletteState(
+                source="go_to_path",
+                query="",
+                cursor_index=0,
+                go_to_path_candidates=tuple(f"/path/{i}" for i in range(25)),
+            ),
+        )
+
+        palette_state = select_command_palette_state(state)
+
+        assert palette_state is not None
+        assert len(palette_state.items) == 19
+
+    def test_go_to_path_small_terminal_uses_minimum(self) -> None:
+        """Go to pathで小さな端末の場合最小3件表示されること."""
+        # 10行端末の場合、visible_window = max(3, 10 // 2 - 5) = 3
+        state = replace(
+            _reduce_state(build_initial_app_state(), BeginCommandPalette()),
+            terminal_height=10,
+            command_palette=CommandPaletteState(
+                source="go_to_path",
+                query="",
+                cursor_index=0,
+                go_to_path_candidates=tuple(f"/path/{i}" for i in range(10)),
+            ),
+        )
+
+        palette_state = select_command_palette_state(state)
+
+        assert palette_state is not None
+        assert len(palette_state.items) == 3
+
+    def test_directory_history_uses_dynamic_window_size(self) -> None:
+        """Directory Historyで48行端末の場合19件表示されること."""
+        # 48行端末の場合、visible_window = 48 // 2 - 5 = 19
+        state = replace(
+            build_initial_app_state(),
+            terminal_height=48,
+            history=HistoryState(
+                back=tuple(f"/history/{i}" for i in range(25)),
+                forward=(),
+            ),
+            ui_mode="PALETTE",
+            command_palette=CommandPaletteState(
+                source="history",
+                history_results=tuple(f"/history/{i}" for i in range(25)),
+            ),
+        )
+
+        palette_state = select_command_palette_state(state)
+
+        assert palette_state is not None
+        assert len(palette_state.items) == 19
+
+    def test_bookmarks_uses_dynamic_window_size(self) -> None:
+        """Bookmarksで48行端末の場合19件表示されること."""
+        # 48行端末の場合、visible_window = 48 // 2 - 5 = 19
+        state = replace(
+            build_initial_app_state(),
+            terminal_height=48,
+            config=replace(
+                build_initial_app_state().config,
+                bookmarks=BookmarkConfig(paths=tuple(f"/bookmark/{i}" for i in range(25))),
+            ),
+            ui_mode="PALETTE",
+            command_palette=CommandPaletteState(source="bookmarks"),
+        )
+
+        palette_state = select_command_palette_state(state)
+
+        assert palette_state is not None
+        assert len(palette_state.items) == 19
