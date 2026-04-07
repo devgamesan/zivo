@@ -1,6 +1,7 @@
 """Command palette definitions and filtering helpers."""
 
 import os
+import platform
 from dataclasses import dataclass
 
 from peneo.archive_utils import is_supported_archive_path
@@ -266,6 +267,14 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
                 enabled=True,
             )
         )
+        items.append(
+            CommandPaletteItem(
+                id="empty_trash",
+                label="Empty trash",
+                shortcut=None,
+                enabled=_is_empty_trash_supported(),
+            )
+        )
 
     items.extend(
         [
@@ -399,3 +408,8 @@ def _has_visible_current_entries(state: AppState) -> bool:
             continue
         return True
     return False
+
+
+def _is_empty_trash_supported() -> bool:
+    """Check if empty trash is supported on current platform."""
+    return platform.system() in ("Linux", "Darwin")

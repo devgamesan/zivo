@@ -127,6 +127,13 @@ class DeleteConfirmationState:
 
 
 @dataclass(frozen=True)
+class EmptyTrashConfirmationState:
+    """Pending confirmation dialog state for empty trash operation."""
+
+    platform: Literal["linux", "darwin"]
+
+
+@dataclass(frozen=True)
 class NameConflictState:
     """Pending dialog state for rename/create name collisions."""
 
@@ -345,6 +352,7 @@ class AppState:
     split_terminal: SplitTerminalState = SplitTerminalState()
     paste_conflict: PasteConflictState | None = None
     delete_confirmation: DeleteConfirmationState | None = None
+    empty_trash_confirmation: EmptyTrashConfirmationState | None = None
     name_conflict: NameConflictState | None = None
     archive_extract_confirmation: ArchiveExtractConfirmationState | None = None
     archive_extract_progress: ArchiveExtractProgressState | None = None

@@ -20,6 +20,7 @@ from .actions import (
     CancelArchiveExtractConfirmation,
     CancelCommandPalette,
     CancelDeleteConfirmation,
+    CancelEmptyTrashConfirmation,
     CancelFilterInput,
     CancelPasteConflict,
     CancelPendingInput,
@@ -28,6 +29,7 @@ from .actions import (
     ClearSelection,
     ConfirmArchiveExtract,
     ConfirmDeleteTargets,
+    ConfirmEmptyTrash,
     ConfirmFilterInput,
     ConfirmZipCompress,
     CopyPathsToClipboard,
@@ -589,6 +591,13 @@ def _dispatch_confirm_input(
         if key == "enter":
             return _supported(ConfirmDeleteTargets())
         return _warn("Use Enter to confirm delete or Esc to cancel")
+
+    if state.empty_trash_confirmation is not None:
+        if key == "escape":
+            return _supported(CancelEmptyTrashConfirmation())
+        if key == "enter":
+            return _supported(ConfirmEmptyTrash())
+        return _warn("Use Enter to confirm empty trash or Esc to cancel")
 
     if state.archive_extract_confirmation is not None:
         if key == "escape":
