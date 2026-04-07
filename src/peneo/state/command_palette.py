@@ -272,13 +272,13 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             CommandPaletteItem(
                 id="open_file_manager",
                 label="Open in file manager",
-                shortcut=None,
+                shortcut="m",
                 enabled=True,
             ),
             CommandPaletteItem(
                 id="open_terminal",
                 label="Open terminal here",
-                shortcut=None,
+                shortcut="T",
                 enabled=True,
             ),
             CommandPaletteItem(

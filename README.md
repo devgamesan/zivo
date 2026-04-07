@@ -96,6 +96,8 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 | `d` | Toggle directories-first |
 | `R` | Reload directory |
 | `t` | Toggle split terminal |
+| `T` | Open terminal at current directory |
+| `m` | Open current directory in file manager |
 | `:` | Open command palette |
 | `q` | Quit |
 | `[` | Go back in history |
@@ -387,8 +389,8 @@ Less frequent actions are grouped in the command palette opened with `:`.
 | `Open in editor` | Exactly one file is selected or focused | Opens the focused file in a terminal editor, using `editor.command` -> `$EDITOR` -> built-in defaults. |
 | `Copy path` | At least one target is selected or focused | Copies the selected path list, or the focused path when nothing is selected, to the system clipboard. Also available with `c`. |
 | `Move to trash` | At least one target is selected or focused | Moves the selected items, or the focused item, to trash (confirmation is enabled by default and can be configured). |
-| `Open in file manager` | Always | Opens the current directory in the OS file manager. |
-| `Open terminal` | Always | Launches an external terminal rooted at the current directory, using `config.toml` templates before built-in fallbacks. |
+| `Open in file manager` | Always | Opens the current directory in the OS file manager. Also available with `m`. |
+| `Open terminal` | Always | Launches an external terminal rooted at the current directory, using `config.toml` templates before built-in fallbacks. Also available with `T`. |
 | `Run shell command` | Always | Opens a one-line shell command dialog, runs the command in the current directory in the background, and returns the first output line or failure summary in the status bar. Also available with `!`. |
 | `Bookmark this directory` / `Remove bookmark` | Always | Saves or removes the current directory in `[bookmarks].paths`. The label reflects whether the current directory is already bookmarked. Also available with `b`. |
 | `Show hidden files` / `Hide hidden files` | Always | Toggles hidden-file visibility for the browser panes. The label reflects the current visibility state. Also available with `.`. |

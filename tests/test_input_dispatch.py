@@ -293,7 +293,7 @@ def test_browsing_q_dispatches_exit_current_path() -> None:
 def test_browsing_uppercase_printable_key_is_ignored() -> None:
     state = build_initial_app_state()
 
-    actions = dispatch_key_input(state, key="T", character="T")
+    actions = dispatch_key_input(state, key="X", character="X")
 
     assert actions == ()
 

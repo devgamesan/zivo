@@ -51,6 +51,7 @@ from .actions import (
     OpenGrepResultInEditor,
     OpenPathInEditor,
     OpenPathWithDefaultApp,
+    OpenTerminalAtPath,
     PasteClipboard,
     PasteFromClipboardToTerminal,
     ReloadDirectory,
@@ -130,6 +131,8 @@ BROWSING_KEYMAP = {
     "N": "create_dir",
     "[": "go_back",
     "]": "go_forward",
+    "m": "open_file_manager",
+    "T": "open_terminal",
 }
 
 CONFLICT_KEYMAP = {
@@ -396,6 +399,12 @@ def _dispatch_browsing_input(
         if cursor_entry is not None and cursor_entry.kind == "file":
             return _supported(OpenPathWithDefaultApp(cursor_entry.path))
         return ()
+
+    if command == "open_terminal":
+        return _supported(OpenTerminalAtPath(state.current_path))
+
+    if command == "open_file_manager":
+        return _supported(OpenPathWithDefaultApp(state.current_path))
 
     return ()
 
