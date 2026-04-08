@@ -8,7 +8,7 @@ from typing import Literal
 from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Vertical
+from textual.containers import Container, Vertical
 from textual.css.query import NoMatches
 from textual.message import Message
 from textual.timer import Timer
@@ -229,6 +229,23 @@ class PeneoApp(App[None]):
         text-style: bold;
     }
 
+    .overlay-layer {
+        display: none;
+        overlay: screen;
+        position: absolute;
+        offset: 0 0;
+        width: 1fr;
+        height: 1fr;
+    }
+
+    #command-palette-layer {
+        align-horizontal: center;
+    }
+
+    .dialog-layer {
+        align: center middle;
+    }
+
     #conflict-dialog {
         display: none;
         height: auto;
@@ -429,11 +446,31 @@ class PeneoApp(App[None]):
         shell = select_shell_data(self._app_state)
         yield CurrentPathBar(shell.current_path, id="current-path-bar")
         yield self._build_body(shell)
-        yield CommandPalette(shell.command_palette, id="command-palette")
-        yield ConflictDialog(shell.conflict_dialog, id="conflict-dialog")
-        yield AttributeDialog(shell.attribute_dialog, id="attribute-dialog")
-        yield ConfigDialog(shell.config_dialog, id="config-dialog")
-        yield ShellCommandDialog(shell.shell_command_dialog, id="shell-command-dialog")
+        yield Container(
+            CommandPalette(shell.command_palette, id="command-palette"),
+            id="command-palette-layer",
+            classes="overlay-layer",
+        )
+        yield Container(
+            ConflictDialog(shell.conflict_dialog, id="conflict-dialog"),
+            id="conflict-dialog-layer",
+            classes="overlay-layer dialog-layer",
+        )
+        yield Container(
+            AttributeDialog(shell.attribute_dialog, id="attribute-dialog"),
+            id="attribute-dialog-layer",
+            classes="overlay-layer dialog-layer",
+        )
+        yield Container(
+            ConfigDialog(shell.config_dialog, id="config-dialog"),
+            id="config-dialog-layer",
+            classes="overlay-layer dialog-layer",
+        )
+        yield Container(
+            ShellCommandDialog(shell.shell_command_dialog, id="shell-command-dialog"),
+            id="shell-command-dialog-layer",
+            classes="overlay-layer dialog-layer",
+        )
         yield HelpBar(shell.help, id="help-bar")
         yield StatusBar(shell.status, id="status-bar")
 
