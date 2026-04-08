@@ -153,6 +153,10 @@ class PeneoApp(App[None]):
         height: 1fr;
     }
 
+    .pane-table {
+        scrollbar-size: 0 0;
+    }
+
     .pane-entry {
         padding: 0 1;
     }
