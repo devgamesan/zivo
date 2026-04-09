@@ -951,6 +951,54 @@ async def test_app_renders_text_preview_in_child_pane_for_file_cursor() -> None:
 
 
 @pytest.mark.asyncio
+async def test_app_hides_text_preview_in_child_pane_when_preview_disabled() -> None:
+    path = "/tmp/peneo-preview-disabled"
+    readme = f"{path}/README.md"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: BrowserSnapshot(
+                current_path=path,
+                parent_pane=PaneState(
+                    directory_path="/tmp",
+                    entries=(
+                        DirectoryEntryState(path, "peneo-preview-disabled", "dir"),
+                        DirectoryEntryState("/tmp/sibling", "sibling", "dir"),
+                    ),
+                    cursor_path=path,
+                ),
+                current_pane=PaneState(
+                    directory_path=path,
+                    entries=(DirectoryEntryState(readme, "README.md", "file"),),
+                    cursor_path=readme,
+                ),
+                child_pane=PaneState(
+                    directory_path=path,
+                    entries=(),
+                    mode="preview",
+                    preview_path=readme,
+                    preview_content="# Title\npreview body\n",
+                ),
+            )
+        }
+    )
+    app = create_app(
+        snapshot_loader=loader,
+        initial_path=path,
+        app_config=AppConfig(display=DisplayConfig(show_preview=False)),
+    )
+
+    async with app.run_test():
+        await _wait_for_snapshot_loaded(app, path)
+        await _wait_for_row_count(app, 1)
+
+        child_list = app.query_one("#child-pane-list", Static)
+        child_preview = app.query_one("#child-pane-preview", Static)
+
+        assert child_list.display is True
+        assert child_preview.display is False
+
+
+@pytest.mark.asyncio
 async def test_app_truncates_long_labels_in_all_panes_when_narrow() -> None:
     path = "/tmp/peneo-narrow-truncate"
     current_entries = (

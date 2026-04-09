@@ -1384,7 +1384,7 @@ def test_move_config_editor_cursor_clamps_to_visible_settings() -> None:
     next_state = _reduce_state(state, MoveConfigEditorCursor(delta=99))
 
     assert next_state.config_editor is not None
-    assert next_state.config_editor.cursor_index == 10
+    assert next_state.config_editor.cursor_index == 11
 
 
 def test_cycle_config_editor_editor_command_updates_draft_and_dirty_state() -> None:
@@ -1456,6 +1456,24 @@ def test_cycle_config_editor_directory_size_visibility_updates_draft_and_dirty_s
 
     assert next_state.config_editor is not None
     assert next_state.config_editor.draft.display.show_directory_sizes is True
+    assert next_state.config_editor.dirty is True
+
+
+def test_cycle_config_editor_preview_visibility_updates_draft_and_dirty_state() -> None:
+    state = replace(
+        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        ui_mode="CONFIG",
+        config_editor=ConfigEditorState(
+            path="/tmp/peneo/config.toml",
+            draft=build_initial_app_state().config,
+            cursor_index=4,
+        ),
+    )
+
+    next_state = _reduce_state(state, CycleConfigEditorValue(delta=1))
+
+    assert next_state.config_editor is not None
+    assert next_state.config_editor.draft.display.show_preview is False
     assert next_state.config_editor.dirty is True
 
 
@@ -1570,6 +1588,95 @@ def test_config_save_completed_updates_runtime_state_and_clears_dirty_flag() -> 
     assert next_state.confirm_delete is False
     assert next_state.config_editor is not None
     assert next_state.config_editor.dirty is False
+
+
+def test_config_save_completed_clears_preview_when_disabled() -> None:
+    path = "/home/tadashi/develop/peneo/README.md"
+    state = replace(
+        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        ui_mode="CONFIG",
+        current_pane=replace(
+            build_initial_app_state().current_pane,
+            cursor_path=path,
+        ),
+        child_pane=PaneState(
+            directory_path="/home/tadashi/develop/peneo",
+            entries=(),
+            mode="preview",
+            preview_path=path,
+            preview_content="# Preview\n",
+        ),
+        config_editor=ConfigEditorState(
+            path="/tmp/peneo/config.toml",
+            draft=replace(
+                build_initial_app_state().config,
+                display=replace(build_initial_app_state().config.display, show_preview=False),
+            ),
+            dirty=True,
+        ),
+        pending_config_save_request_id=3,
+    )
+
+    saved_config = state.config_editor.draft
+    next_state = _reduce_state(
+        state,
+        ConfigSaveCompleted(
+            request_id=3,
+            path="/tmp/peneo/config.toml",
+            config=saved_config,
+        ),
+    )
+
+    assert next_state.config.display.show_preview is False
+    assert next_state.child_pane == PaneState(
+        directory_path="/home/tadashi/develop/peneo",
+        entries=(),
+    )
+    assert next_state.pending_child_pane_request_id is None
+
+
+def test_config_save_completed_requests_preview_when_enabled() -> None:
+    path = "/home/tadashi/develop/peneo/README.md"
+    base_state = build_initial_app_state(config_path="/tmp/peneo/config.toml")
+    state = replace(
+        base_state,
+        ui_mode="CONFIG",
+        config=replace(
+            base_state.config,
+            display=replace(base_state.config.display, show_preview=False),
+        ),
+        current_pane=replace(base_state.current_pane, cursor_path=path),
+        child_pane=PaneState(directory_path="/home/tadashi/develop/peneo", entries=()),
+        config_editor=ConfigEditorState(
+            path="/tmp/peneo/config.toml",
+            draft=replace(
+                base_state.config,
+                display=replace(base_state.config.display, show_preview=True),
+            ),
+            dirty=True,
+        ),
+        pending_config_save_request_id=3,
+    )
+
+    saved_config = state.config_editor.draft
+    result = reduce_app_state(
+        state,
+        ConfigSaveCompleted(
+            request_id=3,
+            path="/tmp/peneo/config.toml",
+            config=saved_config,
+        ),
+    )
+
+    assert result.state.config.display.show_preview is True
+    assert result.state.pending_child_pane_request_id == 1
+    assert result.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=1,
+            current_path="/home/tadashi/develop/peneo",
+            cursor_path=path,
+        ),
+    )
 
 
 def test_config_save_failed_sets_error_notification() -> None:
@@ -4331,6 +4438,32 @@ def test_set_cursor_path_to_file_requests_child_pane_preview() -> None:
     )
 
 
+def test_set_cursor_path_to_file_clears_child_pane_when_preview_disabled() -> None:
+    state = replace(
+        build_initial_app_state(),
+        config=replace(
+            build_initial_app_state().config,
+            display=replace(build_initial_app_state().config.display, show_preview=False),
+        ),
+        child_pane=PaneState(
+            directory_path="/home/tadashi/develop/peneo",
+            entries=(),
+            mode="preview",
+            preview_path="/home/tadashi/develop/peneo/pyproject.toml",
+            preview_content="[project]\n",
+        ),
+    )
+
+    result = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/peneo/README.md"))
+
+    assert result.state.child_pane == PaneState(
+        directory_path="/home/tadashi/develop/peneo",
+        entries=(),
+    )
+    assert result.state.pending_child_pane_request_id is None
+    assert result.effects == ()
+
+
 def test_child_pane_snapshot_loaded_ignores_stale_request() -> None:
     state = build_initial_app_state()
     requested = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/peneo/src")).state
@@ -4946,4 +5079,3 @@ def test_move_cursor_by_page_empty_paths() -> None:
 
     assert result.state is state
     assert result.effects == ()
-

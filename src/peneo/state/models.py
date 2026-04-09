@@ -50,6 +50,7 @@ ConfigFieldId = Literal[
     "editor.command",
     "display.show_hidden_files",
     "display.show_directory_sizes",
+    "display.show_preview",
     "display.theme",
     "display.default_sort_field",
     "display.default_sort_descending",

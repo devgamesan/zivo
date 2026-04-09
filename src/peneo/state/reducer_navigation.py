@@ -49,6 +49,7 @@ from .reducer_common import (
     done,
     maybe_request_directory_sizes,
     move_cursor,
+    normalize_child_pane_for_display,
     normalize_cursor_path,
     normalize_selected_paths,
     normalize_selection_anchor_path,
@@ -486,7 +487,11 @@ def handle_navigation_action(
                 selected_paths=selected_paths,
                 selection_anchor_path=selection_anchor_path,
             ),
-            child_pane=action.snapshot.child_pane,
+            child_pane=normalize_child_pane_for_display(
+                action.snapshot.current_path,
+                action.snapshot.child_pane,
+                show_preview=state.config.display.show_preview,
+            ),
             filter=filter_state,
             notification=state.post_reload_notification,
             post_reload_notification=None,
@@ -516,7 +521,11 @@ def handle_navigation_action(
             return done(state)
         next_state = replace(
             state,
-            child_pane=action.pane,
+            child_pane=normalize_child_pane_for_display(
+                state.current_path,
+                action.pane,
+                show_preview=state.config.display.show_preview,
+            ),
             notification=None,
             pending_child_pane_request_id=None,
         )
