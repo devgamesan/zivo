@@ -22,6 +22,7 @@ from .actions import (
     JumpCursor,
     MoveCursor,
     MoveCursorAndSelectRange,
+    MoveCursorByPage,
     ReloadDirectory,
     RequestBrowserSnapshot,
     RequestDirectorySizes,
@@ -48,6 +49,7 @@ from .reducer_common import (
     done,
     maybe_request_directory_sizes,
     move_cursor,
+    normalize_child_pane_for_display,
     normalize_cursor_path,
     normalize_selected_paths,
     normalize_selection_anchor_path,
@@ -65,6 +67,7 @@ def _can_promote_child_pane(
     return (
         not state.filter.active
         and state.pending_child_pane_request_id is None
+        and state.child_pane.mode == "entries"
         and state.child_pane.directory_path == entry_path
     )
 
@@ -216,6 +219,30 @@ def handle_navigation_action(
             if action.position == "start"
             else action.visible_paths[-1]
         )
+        next_state = replace(
+            state,
+            current_pane=replace(
+                state.current_pane,
+                cursor_path=cursor_path,
+                selection_anchor_path=None,
+            ),
+            notification=None,
+        )
+        return sync_child_pane(next_state, cursor_path, reduce_state)
+
+    if isinstance(action, MoveCursorByPage):
+        if not action.visible_paths:
+            return done(state)
+        current_index = (
+            action.visible_paths.index(state.current_pane.cursor_path)
+            if state.current_pane.cursor_path in action.visible_paths
+            else 0
+        )
+        if action.direction == "up":
+            new_index = max(0, current_index - action.page_size)
+        else:  # direction == "down"
+            new_index = min(len(action.visible_paths) - 1, current_index + action.page_size)
+        cursor_path = action.visible_paths[new_index]
         next_state = replace(
             state,
             current_pane=replace(
@@ -460,7 +487,11 @@ def handle_navigation_action(
                 selected_paths=selected_paths,
                 selection_anchor_path=selection_anchor_path,
             ),
-            child_pane=action.snapshot.child_pane,
+            child_pane=normalize_child_pane_for_display(
+                action.snapshot.current_path,
+                action.snapshot.child_pane,
+                show_preview=state.config.display.show_preview,
+            ),
             filter=filter_state,
             notification=state.post_reload_notification,
             post_reload_notification=None,
@@ -490,7 +521,11 @@ def handle_navigation_action(
             return done(state)
         next_state = replace(
             state,
-            child_pane=action.pane,
+            child_pane=normalize_child_pane_for_display(
+                state.current_path,
+                action.pane,
+                show_preview=state.config.display.show_preview,
+            ),
             notification=None,
             pending_child_pane_request_id=None,
         )

@@ -12,7 +12,7 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 
 - **No memorization needed**: Common actions are always visible in the help bar
 - **Never get lost**: All actions can be called from the command palette
-- **Clear 3-pane layout**: Parent, current, and child directories displayed side by side
+- **Clear 3-pane layout**: Parent, current, and right panes displayed side by side, with text preview for focused files
 - **Embedded terminal**: Seamlessly switch between browsing and shell with `t`
 - **Powerful search**: Jump directly to files with recursive file search and grep search
 - **Terminal editor integration**: Launch your preferred terminal editor in the current directory
@@ -20,13 +20,17 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 
 ## Features
 
-- Simple three-pane layout for parent / current / child directories. You can navigate directories, multi-select items, copy, cut, paste, move items to trash, delete files, copy paths, rename, create files or directories, extract archives, create zip archives, search for files, run grep searches, and execute one-line shell commands entirely from the keyboard. Common actions stay visible in the help bar at the bottom.
+- Simple three-pane layout for parent / current / right panes. When the cursor is on a directory, the right pane shows its children. When the cursor is on a common text file, the right pane switches to a syntax-highlighted text preview. You can navigate directories, multi-select items, copy, cut, paste, move items to trash, delete files, copy paths, rename, create files or directories, extract archives, create zip archives, search for files, run grep searches, and execute one-line shell commands entirely from the keyboard. Common actions stay visible in the help bar at the bottom.
 
   ![](docs/resources/screen-entire-screen.png)
 
 - Less frequent actions are grouped in the command palette, so you can discover and run them without memorizing every shortcut.
 
   ![](docs/resources/screen-command-palette.png)
+
+- The beginning of a text file can be previewed directly in the right pane, so you can quickly inspect the file without opening it.
+
+  ![](docs/resources/screen-text-preview.png)
 
 - An embedded terminal can be opened below the browser panes. `t` switches quickly between the browser and terminal, and the terminal starts in the current directory so you can move between browsing and shell work without changing directories manually.
 
@@ -65,7 +69,9 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 | Key | Action |
 | --- | ------ |
 | `j` / `↓` | Move down |
+| `PageUp` / `PageDown` | Move cursor by page |
 | `k` / `↑` | Move up |
+| `Home` / `End` | Jump to first/last visible entry |
 | `h` / `←` / `Backspace` | Go to parent directory |
 | `l` / `→` | Enter directory |
 | `Shift+↑` / `Shift+↓` | Extend selection |
@@ -226,6 +232,7 @@ peneo
 ```
 
 When a file is focused, press `e` to switch into a terminal editor in the current terminal session. Peneo prefers `config.toml` `editor.command` when set, then falls back to `$EDITOR`, then built-in defaults such as `nvim`, `vim`, or `nano`.
+When a common text file is focused, the right pane also shows a non-wrapping syntax-highlighted preview of the beginning of the file. You can disable this behavior with `display.show_preview`.
 
 ## Configuration File
 
@@ -246,6 +253,7 @@ The supported settings are:
 | `editor` | `command` | Shell-style string, for example `nvim -u NONE` | Optional terminal editor command used by `e`. Do not include the file path; Peneo appends it automatically. Unsupported GUI editors or invalid commands are ignored. |
 | `display` | `show_hidden_files` | `true` / `false` | Default hidden-file visibility when the app starts. |
 | `display` | `show_directory_sizes` | `true` / `false` | Shows recursive directory sizes in the panes. Defaults to `false` because large directories can be expensive to scan. Peneo also calculates sizes automatically while the main pane is sorted by `size`. |
+| `display` | `show_preview` | `true` / `false` | Shows the text-file preview in the right pane. Defaults to `true`. Directory and archive child panes are unaffected. |
 | `display` | `show_help_bar` | `true` / `false` | Shows the help bar at the bottom of the screen. Defaults to `true`. The help bar is always shown when the command palette or split terminal is open, regardless of this setting. |
 | `display` | `theme` | `textual-dark` / `textual-light` | Default UI theme applied on startup and after saving from the settings editor. |
 | `display` | `default_sort_field` | `name` / `modified` / `size` | Default sort field for the main pane. |
@@ -272,6 +280,7 @@ command = "nvim -u NONE"
 [display]
 show_hidden_files = false
 show_directory_sizes = false
+show_preview = true
 show_help_bar = true
 theme = "textual-dark"
 default_sort_field = "name"
@@ -384,7 +393,7 @@ Less frequent actions are grouped in the command palette opened with `:`.
 | `Run shell command` | Always | Opens a one-line shell command dialog, runs the command in the current directory in the background, and returns the first output line or failure summary in the status bar. Also available with `!`. |
 | `Bookmark this directory` / `Remove bookmark` | Always | Saves or removes the current directory in `[bookmarks].paths`. The label reflects whether the current directory is already bookmarked. Also available with `b`. |
 | `Show hidden files` / `Hide hidden files` | Always | Toggles hidden-file visibility for the browser panes. The label reflects the current visibility state. Also available with `.`. |
-| `Edit config` | Always | Opens the settings overlay for startup defaults. You can edit the preferred terminal editor, hidden-file visibility, directory-size visibility, theme, sorting, default paste-conflict behavior, and delete confirmation. Use `↑` / `↓` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
+| `Edit config` | Always | Opens the settings overlay for startup defaults. You can edit the preferred terminal editor, hidden-file visibility, directory-size visibility, text preview visibility, theme, sorting, default paste-conflict behavior, and delete confirmation. Use `↑` / `↓` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
 | `Create file` | Always | Starts the inline create-file flow in the current directory. |
 | `Create directory` | Always | Starts the inline create-directory flow in the current directory. |
 

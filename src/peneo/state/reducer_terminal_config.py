@@ -53,11 +53,11 @@ from .reducer_common import (
     apply_config_to_runtime_state,
     cycle_config_editor_value,
     done,
-    maybe_request_directory_sizes,
     normalize_config_editor_cursor,
     notification_for_external_launch,
     run_external_launch_request,
     split_terminal_exit_message,
+    sync_child_pane,
 )
 from .selectors import select_target_paths
 
@@ -492,7 +492,7 @@ def handle_terminal_config_action(
             ),
             action.config,
         )
-        return maybe_request_directory_sizes(next_state, reduce_state)
+        return sync_child_pane(next_state, next_state.current_pane.cursor_path, reduce_state)
 
     if isinstance(action, ConfigSaveFailed):
         if state.pending_config_save_request_id != action.request_id:

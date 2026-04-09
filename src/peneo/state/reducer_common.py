@@ -514,7 +514,7 @@ def sync_child_pane(
     reduce_state: ReducerFn,
 ) -> ReduceResult:
     entry = current_entry_for_path(state, cursor_path)
-    if entry is None or (entry.kind != "dir" and not is_supported_archive_path(entry.path)):
+    if entry is None:
         next_state = replace(
             state,
             child_pane=PaneState(directory_path=state.current_path, entries=()),
@@ -522,9 +522,24 @@ def sync_child_pane(
         )
         return maybe_request_directory_sizes(next_state, reduce_state)
 
-    if (
-        entry.path == state.child_pane.directory_path
-        and state.pending_child_pane_request_id is None
+    if entry.kind != "dir" and not is_supported_archive_path(entry.path):
+        if not state.config.display.show_preview:
+            next_child_pane = PaneState(directory_path=state.current_path, entries=())
+            if (
+                state.pending_child_pane_request_id is None
+                and state.child_pane == next_child_pane
+            ):
+                return maybe_request_directory_sizes(state, reduce_state)
+            next_state = replace(
+                state,
+                child_pane=next_child_pane,
+                pending_child_pane_request_id=None,
+            )
+            return maybe_request_directory_sizes(next_state, reduce_state)
+
+    if state.pending_child_pane_request_id is None and _child_pane_matches_entry(
+        state.child_pane,
+        entry,
     ):
         return maybe_request_directory_sizes(state, reduce_state)
 
@@ -543,6 +558,26 @@ def sync_child_pane(
             cursor_path=entry.path,
         ),
     )
+
+
+def _child_pane_matches_entry(
+    child_pane: PaneState,
+    entry: DirectoryEntryState,
+) -> bool:
+    if entry.kind == "dir" or is_supported_archive_path(entry.path):
+        return child_pane.mode == "entries" and child_pane.directory_path == entry.path
+    return child_pane.mode == "preview" and child_pane.preview_path == entry.path
+
+
+def normalize_child_pane_for_display(
+    current_path: str,
+    child_pane: PaneState,
+    *,
+    show_preview: bool,
+) -> PaneState:
+    if show_preview or child_pane.mode != "preview":
+        return child_pane
+    return PaneState(directory_path=current_path, entries=())
 
 
 def current_entry_for_path(
@@ -609,6 +644,14 @@ def cycle_config_editor_value(config: AppConfig, cursor_index: int, delta: int) 
             display=replace(
                 config.display,
                 show_directory_sizes=not config.display.show_directory_sizes,
+            ),
+        )
+    if field_id == "display.show_preview":
+        return replace(
+            config,
+            display=replace(
+                config.display,
+                show_preview=not config.display.show_preview,
             ),
         )
     if field_id == "display.show_help_bar":
@@ -711,6 +754,7 @@ def config_editor_field_ids() -> tuple[str, ...]:
         "display.show_hidden_files",
         "display.theme",
         "display.show_directory_sizes",
+        "display.show_preview",
         "display.show_help_bar",
         "display.default_sort_field",
         "display.default_sort_descending",
@@ -727,6 +771,7 @@ def config_editor_labels() -> tuple[str, ...]:
         "Show hidden files",
         "Theme",
         "Show directory sizes",
+        "Show preview",
         "Show help bar",
         "Default sort field",
         "Default sort descending",
@@ -967,21 +1012,43 @@ def build_history_after_snapshot_load(
 ) -> HistoryState:
     previous_path = state.current_path
     new_history = state.history
+
+    if not state.history.back and not state.history.forward:
+        if next_path != previous_path:
+            new_history = HistoryState(
+                back=(previous_path,),
+                forward=(),
+                visited_all=(previous_path, next_path),
+            )
+        return new_history
+
     if next_path != previous_path:
         history = state.history
         if history.forward and next_path == history.forward[0]:
             new_history = HistoryState(
                 back=(*history.back, previous_path),
                 forward=history.forward[1:],
+                visited_all=history.visited_all,
             )
         elif history.back and next_path == history.back[-1]:
             new_history = HistoryState(
                 back=history.back[:-1],
                 forward=(previous_path, *history.forward),
+                visited_all=history.visited_all,
             )
         else:
+            visited_all = history.visited_all
+            if not visited_all or visited_all[-1] != next_path:
+                visited_all = (*visited_all, next_path)
             new_history = HistoryState(
                 back=(*history.back, previous_path),
                 forward=(),
+                visited_all=visited_all,
             )
+    else:
+        new_history = HistoryState(
+            back=state.history.back,
+            forward=state.history.forward,
+            visited_all=state.history.visited_all,
+        )
     return new_history

@@ -50,6 +50,7 @@ ConfigFieldId = Literal[
     "editor.command",
     "display.show_hidden_files",
     "display.show_directory_sizes",
+    "display.show_preview",
     "display.theme",
     "display.default_sort_field",
     "display.default_sort_descending",
@@ -81,6 +82,10 @@ class PaneState:
     cursor_path: str | None = None
     selected_paths: frozenset[str] = frozenset()
     selection_anchor_path: str | None = None
+    mode: Literal["entries", "preview"] = "entries"
+    preview_path: str | None = None
+    preview_content: str | None = None
+    preview_truncated: bool = False
 
 
 @dataclass(frozen=True)
@@ -214,6 +219,7 @@ class HistoryState:
 
     back: tuple[str, ...] = ()
     forward: tuple[str, ...] = ()
+    visited_all: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

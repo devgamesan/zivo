@@ -101,6 +101,7 @@ from peneo.state import (
     MoveConfigEditorCursor,
     MoveCursor,
     MoveCursorAndSelectRange,
+    MoveCursorByPage,
     NameConflictState,
     NotificationState,
     OpenFindResultInEditor,
@@ -1096,6 +1097,7 @@ def test_begin_history_search_enters_history_mode() -> None:
         history=HistoryState(
             back=("/tmp/a", "/tmp/b"),
             forward=("/tmp/c",),
+            visited_all=("/home/tadashi/develop/peneo", "/tmp/a", "/tmp/b", "/tmp/c"),
         ),
     )
     next_state = _reduce_state(state, BeginHistorySearch())
@@ -1103,8 +1105,12 @@ def test_begin_history_search_enters_history_mode() -> None:
     assert next_state.ui_mode == "PALETTE"
     assert next_state.command_palette is not None
     assert next_state.command_palette.source == "history"
-    # back is reversed (most recent first) + forward in order
-    assert next_state.command_palette.history_results == ("/tmp/b", "/tmp/a", "/tmp/c")
+    assert next_state.command_palette.history_results == (
+        "/home/tadashi/develop/peneo",
+        "/tmp/a",
+        "/tmp/b",
+        "/tmp/c",
+    )
 
 
 def test_begin_history_search_with_empty_history() -> None:
@@ -1383,7 +1389,7 @@ def test_move_config_editor_cursor_clamps_to_visible_settings() -> None:
     next_state = _reduce_state(state, MoveConfigEditorCursor(delta=99))
 
     assert next_state.config_editor is not None
-    assert next_state.config_editor.cursor_index == 10
+    assert next_state.config_editor.cursor_index == 11
 
 
 def test_cycle_config_editor_editor_command_updates_draft_and_dirty_state() -> None:
@@ -1455,6 +1461,24 @@ def test_cycle_config_editor_directory_size_visibility_updates_draft_and_dirty_s
 
     assert next_state.config_editor is not None
     assert next_state.config_editor.draft.display.show_directory_sizes is True
+    assert next_state.config_editor.dirty is True
+
+
+def test_cycle_config_editor_preview_visibility_updates_draft_and_dirty_state() -> None:
+    state = replace(
+        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        ui_mode="CONFIG",
+        config_editor=ConfigEditorState(
+            path="/tmp/peneo/config.toml",
+            draft=build_initial_app_state().config,
+            cursor_index=4,
+        ),
+    )
+
+    next_state = _reduce_state(state, CycleConfigEditorValue(delta=1))
+
+    assert next_state.config_editor is not None
+    assert next_state.config_editor.draft.display.show_preview is False
     assert next_state.config_editor.dirty is True
 
 
@@ -1569,6 +1593,95 @@ def test_config_save_completed_updates_runtime_state_and_clears_dirty_flag() -> 
     assert next_state.confirm_delete is False
     assert next_state.config_editor is not None
     assert next_state.config_editor.dirty is False
+
+
+def test_config_save_completed_clears_preview_when_disabled() -> None:
+    path = "/home/tadashi/develop/peneo/README.md"
+    state = replace(
+        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        ui_mode="CONFIG",
+        current_pane=replace(
+            build_initial_app_state().current_pane,
+            cursor_path=path,
+        ),
+        child_pane=PaneState(
+            directory_path="/home/tadashi/develop/peneo",
+            entries=(),
+            mode="preview",
+            preview_path=path,
+            preview_content="# Preview\n",
+        ),
+        config_editor=ConfigEditorState(
+            path="/tmp/peneo/config.toml",
+            draft=replace(
+                build_initial_app_state().config,
+                display=replace(build_initial_app_state().config.display, show_preview=False),
+            ),
+            dirty=True,
+        ),
+        pending_config_save_request_id=3,
+    )
+
+    saved_config = state.config_editor.draft
+    next_state = _reduce_state(
+        state,
+        ConfigSaveCompleted(
+            request_id=3,
+            path="/tmp/peneo/config.toml",
+            config=saved_config,
+        ),
+    )
+
+    assert next_state.config.display.show_preview is False
+    assert next_state.child_pane == PaneState(
+        directory_path="/home/tadashi/develop/peneo",
+        entries=(),
+    )
+    assert next_state.pending_child_pane_request_id is None
+
+
+def test_config_save_completed_requests_preview_when_enabled() -> None:
+    path = "/home/tadashi/develop/peneo/README.md"
+    base_state = build_initial_app_state(config_path="/tmp/peneo/config.toml")
+    state = replace(
+        base_state,
+        ui_mode="CONFIG",
+        config=replace(
+            base_state.config,
+            display=replace(base_state.config.display, show_preview=False),
+        ),
+        current_pane=replace(base_state.current_pane, cursor_path=path),
+        child_pane=PaneState(directory_path="/home/tadashi/develop/peneo", entries=()),
+        config_editor=ConfigEditorState(
+            path="/tmp/peneo/config.toml",
+            draft=replace(
+                base_state.config,
+                display=replace(base_state.config.display, show_preview=True),
+            ),
+            dirty=True,
+        ),
+        pending_config_save_request_id=3,
+    )
+
+    saved_config = state.config_editor.draft
+    result = reduce_app_state(
+        state,
+        ConfigSaveCompleted(
+            request_id=3,
+            path="/tmp/peneo/config.toml",
+            config=saved_config,
+        ),
+    )
+
+    assert result.state.config.display.show_preview is True
+    assert result.state.pending_child_pane_request_id == 1
+    assert result.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=1,
+            current_path="/home/tadashi/develop/peneo",
+            cursor_path=path,
+        ),
+    )
 
 
 def test_config_save_failed_sets_error_notification() -> None:
@@ -4314,13 +4427,45 @@ def test_move_cursor_emits_child_snapshot_effect_only_when_target_changes() -> N
     )
 
 
-def test_set_cursor_path_to_file_clears_child_pane_without_effect() -> None:
+def test_set_cursor_path_to_file_requests_child_pane_preview() -> None:
     state = build_initial_app_state()
 
     result = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/peneo/README.md"))
 
-    assert result.state.child_pane.directory_path == "/home/tadashi/develop/peneo"
-    assert result.state.child_pane.entries == ()
+    assert result.state.child_pane == state.child_pane
+    assert result.state.pending_child_pane_request_id == 1
+    assert result.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=1,
+            current_path="/home/tadashi/develop/peneo",
+            cursor_path="/home/tadashi/develop/peneo/README.md",
+        ),
+    )
+
+
+def test_set_cursor_path_to_file_clears_child_pane_when_preview_disabled() -> None:
+    state = replace(
+        build_initial_app_state(),
+        config=replace(
+            build_initial_app_state().config,
+            display=replace(build_initial_app_state().config.display, show_preview=False),
+        ),
+        child_pane=PaneState(
+            directory_path="/home/tadashi/develop/peneo",
+            entries=(),
+            mode="preview",
+            preview_path="/home/tadashi/develop/peneo/pyproject.toml",
+            preview_content="[project]\n",
+        ),
+    )
+
+    result = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/peneo/README.md"))
+
+    assert result.state.child_pane == PaneState(
+        directory_path="/home/tadashi/develop/peneo",
+        entries=(),
+    )
+    assert result.state.pending_child_pane_request_id is None
     assert result.effects == ()
 
 
@@ -4653,6 +4798,7 @@ def test_browser_snapshot_loaded_records_history_on_path_change() -> None:
     assert next_state.current_path == "/tmp/example"
     assert next_state.history.back == (initial_path,)
     assert next_state.history.forward == ()
+    assert next_state.history.visited_all == (initial_path, "/tmp/example")
 
 
 def test_browser_snapshot_loaded_clears_forward_on_new_navigation() -> None:
@@ -4717,7 +4863,11 @@ def test_go_back_then_snapshot_loaded_updates_history_correctly() -> None:
     state = replace(
         build_initial_app_state(),
         current_path=second_path,
-        history=HistoryState(back=(initial_path,), forward=()),
+        history=HistoryState(
+            back=(initial_path,),
+            forward=(),
+            visited_all=(initial_path, second_path),
+        ),
     )
 
     result = reduce_app_state(state, GoBack())
@@ -4750,7 +4900,11 @@ def test_go_forward_then_snapshot_loaded_updates_history_correctly() -> None:
     state = replace(
         build_initial_app_state(),
         current_path=initial_path,
-        history=HistoryState(back=(), forward=(forward_path,)),
+        history=HistoryState(
+            back=(),
+            forward=(forward_path,),
+            visited_all=(initial_path, forward_path),
+        ),
     )
 
     result = reduce_app_state(state, GoForward())
@@ -4774,6 +4928,116 @@ def test_go_forward_then_snapshot_loaded_updates_history_correctly() -> None:
     assert loaded_result.current_path == forward_path
     assert loaded_result.history.back == (initial_path,)
     assert loaded_result.history.forward == ()
+
+
+def test_all_visited_directories_enumerable() -> None:
+    state = build_initial_app_state()
+    initial_path = state.current_path
+
+    state = _reduce_state(state, RequestBrowserSnapshot("/tmp/first"))
+    snapshot1 = BrowserSnapshot(
+        current_path="/tmp/first",
+        parent_pane=state.parent_pane,
+        current_pane=state.current_pane,
+        child_pane=state.child_pane,
+    )
+    state = _reduce_state(
+        state,
+        BrowserSnapshotLoaded(
+            request_id=state.pending_browser_snapshot_request_id,
+            snapshot=snapshot1,
+            blocking=True,
+        ),
+    )
+
+    state = _reduce_state(state, RequestBrowserSnapshot("/tmp/second"))
+    snapshot2 = BrowserSnapshot(
+        current_path="/tmp/second",
+        parent_pane=state.parent_pane,
+        current_pane=state.current_pane,
+        child_pane=state.child_pane,
+    )
+    state = _reduce_state(
+        state,
+        BrowserSnapshotLoaded(
+            request_id=state.pending_browser_snapshot_request_id,
+            snapshot=snapshot2,
+            blocking=True,
+        ),
+    )
+
+    next_state = _reduce_state(state, BeginHistorySearch())
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.source == "history"
+    assert next_state.command_palette.history_results == (
+        initial_path,
+        "/tmp/first",
+        "/tmp/second",
+    )
+
+
+def test_history_search_deduplicates_duplicates() -> None:
+    state = build_initial_app_state()
+    initial_path = state.current_path
+
+    state = _reduce_state(state, RequestBrowserSnapshot("/tmp/first"))
+    snapshot1 = BrowserSnapshot(
+        current_path="/tmp/first",
+        parent_pane=state.parent_pane,
+        current_pane=state.current_pane,
+        child_pane=state.child_pane,
+    )
+    state = _reduce_state(
+        state,
+        BrowserSnapshotLoaded(
+            request_id=state.pending_browser_snapshot_request_id,
+            snapshot=snapshot1,
+            blocking=True,
+        ),
+    )
+
+    state = _reduce_state(state, RequestBrowserSnapshot(initial_path))
+    snapshot2 = BrowserSnapshot(
+        current_path=initial_path,
+        parent_pane=state.parent_pane,
+        current_pane=state.current_pane,
+        child_pane=state.child_pane,
+    )
+    state = _reduce_state(
+        state,
+        BrowserSnapshotLoaded(
+            request_id=state.pending_browser_snapshot_request_id,
+            snapshot=snapshot2,
+            blocking=True,
+        ),
+    )
+
+    state = _reduce_state(state, RequestBrowserSnapshot("/tmp/second"))
+    snapshot3 = BrowserSnapshot(
+        current_path="/tmp/second",
+        parent_pane=state.parent_pane,
+        current_pane=state.current_pane,
+        child_pane=state.child_pane,
+    )
+    state = _reduce_state(
+        state,
+        BrowserSnapshotLoaded(
+            request_id=state.pending_browser_snapshot_request_id,
+            snapshot=snapshot3,
+            blocking=True,
+        ),
+    )
+
+    next_state = _reduce_state(state, BeginHistorySearch())
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.source == "history"
+    assert next_state.command_palette.history_results == (
+        initial_path,
+        "/tmp/first",
+        "/tmp/second",
+    )
 
 
 def test_browser_snapshot_loaded_clears_filter_when_directory_changes() -> None:
@@ -4846,3 +5110,96 @@ def test_browser_snapshot_loaded_exits_filter_mode_on_directory_change() -> None
     assert next_state.ui_mode == "BROWSING"
     assert next_state.filter.query == ""
     assert next_state.filter.active is False
+
+
+def test_move_cursor_by_page_down() -> None:
+    state = build_initial_app_state()
+    visible_paths = (
+        "/home/tadashi/develop/peneo/docs",
+        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/peneo/tests",
+        "/home/tadashi/develop/peneo/README.md",
+        "/home/tadashi/develop/peneo/pyproject.toml",
+    )
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/docs"))
+
+    result = reduce_app_state(
+        state, MoveCursorByPage(direction="down", page_size=3, visible_paths=visible_paths)
+    )
+
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/README.md"
+    assert result.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=1,
+            current_path="/home/tadashi/develop/peneo",
+            cursor_path="/home/tadashi/develop/peneo/README.md",
+        ),
+    )
+
+
+def test_move_cursor_by_page_up() -> None:
+    state = build_initial_app_state()
+    visible_paths = (
+        "/home/tadashi/develop/peneo/docs",
+        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/peneo/tests",
+        "/home/tadashi/develop/peneo/README.md",
+        "/home/tadashi/develop/peneo/pyproject.toml",
+    )
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/pyproject.toml"))
+
+    result = reduce_app_state(
+        state, MoveCursorByPage(direction="up", page_size=3, visible_paths=visible_paths)
+    )
+
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/src"
+    assert result.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=2,
+            current_path="/home/tadashi/develop/peneo",
+            cursor_path="/home/tadashi/develop/peneo/src",
+        ),
+    )
+
+
+def test_move_cursor_by_page_down_clamps_to_last_entry() -> None:
+    state = build_initial_app_state()
+    visible_paths = (
+        "/home/tadashi/develop/peneo/docs",
+        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/peneo/tests",
+    )
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/src"))
+
+    result = reduce_app_state(
+        state, MoveCursorByPage(direction="down", page_size=10, visible_paths=visible_paths)
+    )
+
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/tests"
+
+
+def test_move_cursor_by_page_up_clamps_to_first_entry() -> None:
+    state = build_initial_app_state()
+    visible_paths = (
+        "/home/tadashi/develop/peneo/docs",
+        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/peneo/tests",
+    )
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/src"))
+
+    result = reduce_app_state(
+        state, MoveCursorByPage(direction="up", page_size=10, visible_paths=visible_paths)
+    )
+
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/docs"
+
+
+def test_move_cursor_by_page_empty_paths() -> None:
+    state = build_initial_app_state()
+
+    result = reduce_app_state(
+        state, MoveCursorByPage(direction="down", page_size=3, visible_paths=())
+    )
+
+    assert result.state is state
+    assert result.effects == ()
