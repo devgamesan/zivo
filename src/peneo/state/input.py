@@ -45,10 +45,12 @@ from .actions import (
     GoForward,
     GoToHomeDirectory,
     GoToParentDirectory,
+    JumpCursor,
     MoveCommandPaletteCursor,
     MoveConfigEditorCursor,
     MoveCursor,
     MoveCursorAndSelectRange,
+    MoveCursorByPage,
     OpenFindResultInEditor,
     OpenGrepResultInEditor,
     OpenPathInEditor,
@@ -81,6 +83,7 @@ from .command_palette import normalize_command_palette_cursor
 from .models import AppState, DirectoryEntryState, NotificationState
 from .reducer_common import format_go_to_path_completion
 from .selectors import (
+    compute_current_pane_visible_window,
     compute_search_visible_window,
     select_target_paths,
     select_visible_current_entry_states,
@@ -135,6 +138,10 @@ BROWSING_KEYMAP = {
     "]": "go_forward",
     "m": "open_file_manager",
     "T": "open_terminal",
+    "home": "jump_cursor_start",
+    "end": "jump_cursor_end",
+    "pageup": "cursor_pageup",
+    "pagedown": "cursor_pagedown",
 }
 
 CONFLICT_KEYMAP = {
@@ -262,6 +269,26 @@ def _dispatch_browsing_input(
 
     if command == "cursor_down_selecting":
         return _supported(MoveCursorAndSelectRange(delta=1, visible_paths=visible_paths))
+
+    if command == "jump_cursor_start":
+        return _supported(JumpCursor(position="start", visible_paths=visible_paths))
+
+    if command == "jump_cursor_end":
+        return _supported(JumpCursor(position="end", visible_paths=visible_paths))
+
+    if command == "cursor_pageup":
+        page_size = compute_current_pane_visible_window(state.terminal_height)
+        return _supported(
+            MoveCursorByPage(direction="up", page_size=page_size, visible_paths=visible_paths)
+        )
+
+    if command == "cursor_pagedown":
+        page_size = compute_current_pane_visible_window(state.terminal_height)
+        return _supported(
+            MoveCursorByPage(
+                direction="down", page_size=page_size, visible_paths=visible_paths
+            )
+        )
 
     if command == "toggle_selection" and state.current_pane.cursor_path is not None:
         return _supported(

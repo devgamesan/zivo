@@ -275,6 +275,15 @@ class JumpCursor:
 
 
 @dataclass(frozen=True)
+class MoveCursorByPage:
+    """Move cursor by page (page up or page down)."""
+
+    direction: Literal["up", "down"]
+    page_size: int
+    visible_paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class MoveCursorAndSelectRange:
     """Move the cursor and replace the current selection with an anchored range."""
 

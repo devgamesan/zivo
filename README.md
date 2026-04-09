@@ -69,7 +69,9 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 | Key | Action |
 | --- | ------ |
 | `j` / `↓` | Move down |
+| `PageUp` / `PageDown` | Move cursor by page |
 | `k` / `↑` | Move up |
+| `Home` / `End` | Jump to first/last visible entry |
 | `h` / `←` / `Backspace` | Go to parent directory |
 | `l` / `→` | Enter directory |
 | `Shift+↑` / `Shift+↓` | Extend selection |

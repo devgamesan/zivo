@@ -101,6 +101,7 @@ from peneo.state import (
     MoveConfigEditorCursor,
     MoveCursor,
     MoveCursorAndSelectRange,
+    MoveCursorByPage,
     NameConflictState,
     NotificationState,
     OpenFindResultInEditor,
@@ -4852,3 +4853,97 @@ def test_browser_snapshot_loaded_exits_filter_mode_on_directory_change() -> None
     assert next_state.ui_mode == "BROWSING"
     assert next_state.filter.query == ""
     assert next_state.filter.active is False
+
+
+def test_move_cursor_by_page_down() -> None:
+    state = build_initial_app_state()
+    visible_paths = (
+        "/home/tadashi/develop/peneo/docs",
+        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/peneo/tests",
+        "/home/tadashi/develop/peneo/README.md",
+        "/home/tadashi/develop/peneo/pyproject.toml",
+    )
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/docs"))
+
+    result = reduce_app_state(
+        state, MoveCursorByPage(direction="down", page_size=3, visible_paths=visible_paths)
+    )
+
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/README.md"
+    assert result.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=1,
+            current_path="/home/tadashi/develop/peneo",
+            cursor_path="/home/tadashi/develop/peneo/README.md",
+        ),
+    )
+
+
+def test_move_cursor_by_page_up() -> None:
+    state = build_initial_app_state()
+    visible_paths = (
+        "/home/tadashi/develop/peneo/docs",
+        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/peneo/tests",
+        "/home/tadashi/develop/peneo/README.md",
+        "/home/tadashi/develop/peneo/pyproject.toml",
+    )
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/pyproject.toml"))
+
+    result = reduce_app_state(
+        state, MoveCursorByPage(direction="up", page_size=3, visible_paths=visible_paths)
+    )
+
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/src"
+    assert result.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=2,
+            current_path="/home/tadashi/develop/peneo",
+            cursor_path="/home/tadashi/develop/peneo/src",
+        ),
+    )
+
+
+def test_move_cursor_by_page_down_clamps_to_last_entry() -> None:
+    state = build_initial_app_state()
+    visible_paths = (
+        "/home/tadashi/develop/peneo/docs",
+        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/peneo/tests",
+    )
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/src"))
+
+    result = reduce_app_state(
+        state, MoveCursorByPage(direction="down", page_size=10, visible_paths=visible_paths)
+    )
+
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/tests"
+
+
+def test_move_cursor_by_page_up_clamps_to_first_entry() -> None:
+    state = build_initial_app_state()
+    visible_paths = (
+        "/home/tadashi/develop/peneo/docs",
+        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/peneo/tests",
+    )
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/src"))
+
+    result = reduce_app_state(
+        state, MoveCursorByPage(direction="up", page_size=10, visible_paths=visible_paths)
+    )
+
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/docs"
+
+
+def test_move_cursor_by_page_empty_paths() -> None:
+    state = build_initial_app_state()
+
+    result = reduce_app_state(
+        state, MoveCursorByPage(direction="down", page_size=3, visible_paths=())
+    )
+
+    assert result.state is state
+    assert result.effects == ()
+
