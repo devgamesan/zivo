@@ -15,10 +15,12 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 - **Clear 3-pane layout**: Parent, current, and child directories displayed side by side
 - **Embedded terminal**: Seamlessly switch between browsing and shell with `t`
 - **Powerful search**: Jump directly to files with recursive file search and grep search
+- **Terminal editor integration**: Launch your preferred terminal editor in the current directory
+- **External app integration**: Open files directly with their default applications
 
 ## Features
 
-- Simple three-pane layout for parent / current / child directories. You can navigate directories, multi-select items, copy, cut, paste, move items to trash, permanently delete items with `Shift+Delete`, copy paths, rename, create files or directories, extract archives, create zip archives, search for files, run grep searches, and execute one-line shell commands entirely from the keyboard. Common actions stay visible in the help bar at the bottom.
+- Simple three-pane layout for parent / current / child directories. You can navigate directories, multi-select items, copy, cut, paste, move items to trash, delete files, copy paths, rename, create files or directories, extract archives, create zip archives, search for files, run grep searches, and execute one-line shell commands entirely from the keyboard. Common actions stay visible in the help bar at the bottom.
 
   ![](docs/resources/screen-entire-screen.png)
 
@@ -34,7 +36,7 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 
   ![](docs/resources/screen-find-command.png)
 
-- Recursive grep search is available under the current directory. You can jump from search results directly to the matching file.
+- Recursive grep search is available under the current directory. You can jump from search results directly to the matching file. You can also open the matching location directly in a terminal editor.
 
   ![](docs/resources/screen-grep-command.png)
 
