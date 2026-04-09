@@ -1012,6 +1012,15 @@ def build_history_after_snapshot_load(
 ) -> HistoryState:
     previous_path = state.current_path
     new_history = state.history
+
+    if not state.history.back and not state.history.forward:
+        if next_path != previous_path:
+            new_history = HistoryState(
+                back=(previous_path,),
+                forward=(),
+            )
+        return new_history
+
     if next_path != previous_path:
         history = state.history
         if history.forward and next_path == history.forward[0]:

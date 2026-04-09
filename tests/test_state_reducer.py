@@ -1104,8 +1104,9 @@ def test_begin_history_search_enters_history_mode() -> None:
     assert next_state.ui_mode == "PALETTE"
     assert next_state.command_palette is not None
     assert next_state.command_palette.source == "history"
-    # back is reversed (most recent first) + forward in order
-    assert next_state.command_palette.history_results == ("/tmp/b", "/tmp/a", "/tmp/c")
+    # current_path + back reversed (most recent first) + forward in order
+    expected_results = ("/home/tadashi/develop/peneo", "/tmp/b", "/tmp/a", "/tmp/c")
+    assert next_state.command_palette.history_results == expected_results
 
 
 def test_begin_history_search_with_empty_history() -> None:
@@ -1114,7 +1115,7 @@ def test_begin_history_search_with_empty_history() -> None:
     assert next_state.ui_mode == "PALETTE"
     assert next_state.command_palette is not None
     assert next_state.command_palette.source == "history"
-    assert next_state.command_palette.history_results == ()
+    assert next_state.command_palette.history_results == ("/home/tadashi/develop/peneo",)
 
 
 def test_begin_bookmark_search_enters_bookmarks_mode() -> None:
@@ -4914,6 +4915,53 @@ def test_go_forward_then_snapshot_loaded_updates_history_correctly() -> None:
     assert loaded_result.current_path == forward_path
     assert loaded_result.history.back == (initial_path,)
     assert loaded_result.history.forward == ()
+
+
+def test_all_visited_directories_enumerable() -> None:
+    state = build_initial_app_state()
+    initial_path = state.current_path
+
+    state = _reduce_state(state, RequestBrowserSnapshot("/tmp/first"))
+    snapshot1 = BrowserSnapshot(
+        current_path="/tmp/first",
+        parent_pane=state.parent_pane,
+        current_pane=state.current_pane,
+        child_pane=state.child_pane,
+    )
+    state = _reduce_state(
+        state,
+        BrowserSnapshotLoaded(
+            request_id=state.pending_browser_snapshot_request_id,
+            snapshot=snapshot1,
+            blocking=True,
+        ),
+    )
+
+    state = _reduce_state(state, RequestBrowserSnapshot("/tmp/second"))
+    snapshot2 = BrowserSnapshot(
+        current_path="/tmp/second",
+        parent_pane=state.parent_pane,
+        current_pane=state.current_pane,
+        child_pane=state.child_pane,
+    )
+    state = _reduce_state(
+        state,
+        BrowserSnapshotLoaded(
+            request_id=state.pending_browser_snapshot_request_id,
+            snapshot=snapshot2,
+            blocking=True,
+        ),
+    )
+
+    next_state = _reduce_state(state, BeginHistorySearch())
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.source == "history"
+    assert next_state.command_palette.history_results == (
+        "/tmp/second",
+        "/tmp/first",
+        initial_path,
+    )
 
 
 def test_browser_snapshot_loaded_clears_filter_when_directory_changes() -> None:
