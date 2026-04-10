@@ -1345,15 +1345,15 @@ def _build_entry_index(entries: tuple[DirectoryEntryState, ...]) -> dict[str, in
 def _format_size_label(size_bytes: int | None) -> str:
     if size_bytes is None:
         return "-"
-    if size_bytes < 1_000:
+    if size_bytes < 1024:
         return f"{size_bytes} B"
-    units = ("KB", "MB", "GB", "TB")
+    units = ("KiB", "MiB", "GiB", "TiB")
     size = float(size_bytes)
     for unit in units:
-        size /= 1_000
-        if size < 1_000 or unit == units[-1]:
-            return f"{size:.1f} {unit}"
-    return f"{size:.1f} TB"
+        size /= 1024
+        if size < 1024 or unit == units[-1]:
+            return f"{size:.1f}{unit}"
+    return f"{size:.1f}TiB"
 
 
 def _format_modified_label(entry: DirectoryEntryState) -> str:

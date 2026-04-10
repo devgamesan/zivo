@@ -239,7 +239,7 @@ def build_dummy_shell_data() -> ThreePaneShellData:
         PaneEntry(
             "README.md",
             "file",
-            "2.1 KB",
+            "2.1KiB",
             "2026-03-21 08:55",
             path="/home/tadashi/develop/peneo/README.md",
         ),
