@@ -1210,6 +1210,47 @@ async def test_app_child_pane_updates_immediately_on_rapid_cursor_moves() -> Non
 
 
 @pytest.mark.asyncio
+async def test_app_hides_stale_child_entries_while_new_child_snapshot_is_pending() -> None:
+    path = "/tmp/peneo-child-pane-pending"
+    current_entries = (
+        DirectoryEntryState(f"{path}/docs", "docs", "dir"),
+        DirectoryEntryState(f"{path}/src", "src", "dir"),
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                current_entries,
+                child_path=f"{path}/docs",
+                child_entries=(DirectoryEntryState(f"{path}/docs/spec.md", "spec.md", "file"),),
+            )
+        },
+        child_panes={
+            (path, f"{path}/src"): PaneState(
+                directory_path=f"{path}/src",
+                entries=(DirectoryEntryState(f"{path}/src/main.py", "main.py", "file"),),
+            ),
+        },
+        child_delay_seconds={
+            (path, f"{path}/src"): 0.2,
+        },
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test(size=(120, 20)) as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await _wait_for_row_count(app, 2)
+        await _wait_for_child_entries(app, ["spec.md"])
+
+        await pilot.press("down")
+        await _wait_for_cursor_path(app, f"{path}/src")
+        await _wait_for_child_pane_request_count(loader, 1, timeout=1.0)
+        await _wait_for_child_entries(app, [], timeout=1.0)
+        await _wait_for_child_entries(app, ["main.py"], timeout=1.0)
+        await _wait_for_child_pane_runtime_idle(app, timeout=1.0)
+
+
+@pytest.mark.asyncio
 async def test_app_shift_down_selects_range_and_down_clears_it() -> None:
     path = "/tmp/peneo-range-selection"
     current_entries = (
@@ -4428,7 +4469,9 @@ async def test_app_large_directory_smoke_with_1000_entries(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_app_cursor_move_updates_large_child_pane_without_clearing(monkeypatch) -> None:
+async def test_app_cursor_move_refreshes_large_child_pane_without_remount(
+    monkeypatch,
+) -> None:
     path = "/tmp/peneo-large-child-pane"
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
@@ -4490,7 +4533,7 @@ async def test_app_cursor_move_updates_large_child_pane_without_clearing(monkeyp
 
         assert app.query_one("#child-pane-list", Static) is child_list
         assert len(_side_pane_lines(child_list)) == 1000
-        assert update_calls == 1
+        assert update_calls == 2
 
 
 # --- Pane visibility on narrow terminals (Issue #390) ---
