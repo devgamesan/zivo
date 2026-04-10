@@ -301,7 +301,7 @@ def test_select_parent_entries_marks_current_directory_selected() -> None:
     assert entries[1].selected is True
 
 
-def test_select_child_entries_keeps_previous_snapshot_visible_while_request_is_pending() -> None:
+def test_select_child_entries_clears_stale_snapshot_while_request_is_pending() -> None:
     state = replace(
         build_initial_app_state(),
         current_pane=PaneState(
@@ -325,7 +325,37 @@ def test_select_child_entries_keeps_previous_snapshot_visible_while_request_is_p
         pending_child_pane_request_id=7,
     )
 
-    assert [entry.name for entry in select_child_entries(state)] == ["spec.md"]
+    assert select_child_entries(state) == ()
+
+
+def test_select_shell_data_hides_stale_preview_while_request_is_pending() -> None:
+    current_path = "/home/tadashi/develop/peneo"
+    previous_preview_path = f"{current_path}/README.md"
+    requested_preview_path = f"{current_path}/pyproject.toml"
+    state = replace(
+        build_initial_app_state(),
+        current_pane=PaneState(
+            directory_path=current_path,
+            entries=(
+                DirectoryEntryState(previous_preview_path, "README.md", "file"),
+                DirectoryEntryState(requested_preview_path, "pyproject.toml", "file"),
+            ),
+            cursor_path=requested_preview_path,
+        ),
+        child_pane=PaneState(
+            directory_path=current_path,
+            entries=(),
+            mode="preview",
+            preview_path=previous_preview_path,
+            preview_content="# Preview\n",
+        ),
+        pending_child_pane_request_id=7,
+    )
+
+    shell = select_shell_data(state)
+
+    assert shell.child_pane.is_preview is False
+    assert shell.child_pane.entries == ()
 
 
 def test_select_pane_entries_show_directory_sizes_from_cache() -> None:
@@ -752,7 +782,7 @@ def test_select_shell_data_reuses_current_entries_when_only_cursor_changes() -> 
 
     assert moved_shell.current_entries is initial_shell.current_entries
     assert moved_shell.current_cursor_index == 2
-    assert moved_shell.child_pane.entries == initial_shell.child_pane.entries
+    assert moved_shell.child_pane.entries == ()
 
 
 def test_select_shell_data_viewport_projection_limits_rendered_entries() -> None:

@@ -272,6 +272,7 @@ class ChildPane(Vertical):
         preview_widget.display = state.is_preview
         self._last_render_width = 0
         self._refresh_rendered_content()
+        self.call_after_refresh(self._refresh_rendered_content)
 
     def _refresh_rendered_content(self) -> None:
         if self._state.is_preview:

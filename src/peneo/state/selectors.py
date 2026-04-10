@@ -162,18 +162,17 @@ def _select_child_pane_for_cursor(
         return _build_child_entries_view((), syntax_theme)
 
     is_archive = cursor_entry.kind == "file" and is_supported_archive_path(cursor_entry.path)
-    if state.pending_child_pane_request_id is None:
-        if cursor_entry.kind == "dir" or is_archive:
-            if (
-                state.child_pane.mode != "entries"
-                or cursor_entry.path != state.child_pane.directory_path
-            ):
-                return _build_child_entries_view((), syntax_theme)
-        elif (
-            state.child_pane.mode != "preview"
-            or cursor_entry.path != state.child_pane.preview_path
+    if cursor_entry.kind == "dir" or is_archive:
+        if (
+            state.child_pane.mode != "entries"
+            or cursor_entry.path != state.child_pane.directory_path
         ):
             return _build_child_entries_view((), syntax_theme)
+    elif (
+        state.child_pane.mode != "preview"
+        or cursor_entry.path != state.child_pane.preview_path
+    ):
+        return _build_child_entries_view((), syntax_theme)
 
     if state.child_pane.mode == "preview" and state.child_pane.preview_content is not None:
         preview_path = state.child_pane.preview_path or cursor_entry.path
