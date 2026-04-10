@@ -23,12 +23,12 @@ def test_truncate_middle_handles_extremely_narrow_widths() -> None:
 
 
 def test_build_entry_label_truncates_full_name_detail_string() -> None:
-    entry = PaneEntry("archive.tar.gz", "file", name_detail="2.1 KB")
+    entry = PaneEntry("archive.tar.gz", "file", name_detail="2.1KiB")
 
     rendered = truncate_middle(build_entry_label(entry), 15)
 
     assert "~" in rendered
-    assert rendered.endswith("1 KB)")
+    assert rendered.endswith("1KiB)")
 
 
 def test_pane_entry_supports_executable_field() -> None:

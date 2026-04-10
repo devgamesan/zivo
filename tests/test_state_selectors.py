@@ -580,7 +580,7 @@ def test_select_shell_data_emits_size_delta_updates_for_directory_size_changes()
         (update.path, update.size_label)
         for update in shell.current_pane_update.size_updates
     ] == [
-        ("/home/tadashi/develop/peneo/docs", "4.2 KB")
+        ("/home/tadashi/develop/peneo/docs", "4.1KiB")
     ]
 
 
@@ -1609,7 +1609,7 @@ def test_select_attribute_dialog_state_formats_selected_entry() -> None:
     assert "Name: README.md" in dialog.lines
     assert "Type: File" in dialog.lines
     assert "Path: /home/tadashi/develop/peneo/README.md" in dialog.lines
-    assert "Size: 2.1 KB" in dialog.lines
+    assert "Size: 2.1KiB" in dialog.lines
     assert "Hidden: No" in dialog.lines
     assert "Permissions: -rw-r--r-- (644)" in dialog.lines
     assert dialog.options == ("enter close", "esc close")

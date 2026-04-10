@@ -652,11 +652,11 @@ async def test_app_loads_directory_sizes_when_enabled() -> None:
     async with app.run_test(size=(120, 20)):
         await _wait_for_snapshot_loaded(app, path)
         await _wait_for_row_count(app, 2)
-        await _wait_for_table_cell(app, "4.2 KB", 0, 2)
+        await _wait_for_table_cell(app, "4.1KiB", 0, 2)
 
         table = app.query_one("#current-pane-table", DataTable)
 
-        assert str(table.get_cell_at((0, 2))) == "4.2 KB"
+        assert str(table.get_cell_at((0, 2))) == "4.1KiB"
 
 
 @pytest.mark.asyncio
@@ -720,7 +720,7 @@ async def test_app_applies_directory_size_updates_without_full_current_pane_refr
         await _wait_for_row_count(app, 2)
         await _wait_for_table_cell(app, "-", 0, 2)
         full_refresh_calls_before_ready = set_entries_calls
-        await _wait_for_table_cell(app, "4.2 KB", 0, 2)
+        await _wait_for_table_cell(app, "4.1KiB", 0, 2)
 
         assert set_entries_calls == full_refresh_calls_before_ready
         assert apply_size_updates_calls == 1
@@ -767,11 +767,11 @@ async def test_app_keeps_successful_directory_sizes_when_some_paths_fail() -> No
     async with app.run_test():
         await _wait_for_snapshot_loaded(app, path)
         await _wait_for_row_count(app, 3)
-        await _wait_for_table_cell(app, "4.2 KB", 0, 2)
+        await _wait_for_table_cell(app, "4.1KiB", 0, 2)
 
         table = app.query_one("#current-pane-table", DataTable)
 
-        assert str(table.get_cell_at((0, 2))) == "4.2 KB"
+        assert str(table.get_cell_at((0, 2))) == "4.1KiB"
 
 
 @pytest.mark.asyncio
@@ -2104,7 +2104,7 @@ async def test_app_directory_size_update_avoids_rebuilding_large_current_pane(mo
 
         directory_size_service.release()
         await _wait_for_directory_sizes(app, timeout=2.0)
-        await _wait_for_table_cell(app, "1.0 KB", 0, 2, timeout=2.0)
+        await _wait_for_table_cell(app, "1000 B", 0, 2, timeout=2.0)
 
         assert clear_calls == 0
         assert add_row_calls == 0
