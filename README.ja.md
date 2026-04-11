@@ -266,6 +266,21 @@ brew install ripgrep
 peneo
 ```
 
+`peneo` 単体では親シェルのカレントディレクトリを変更できません。終了時に最後に見ていたディレクトリへ親シェルも追従させたい場合は、先に shell integration を読み込みます。
+
+```bash
+eval "$(peneo init bash)"  # bash 用
+eval "$(peneo init zsh)"   # zsh 用
+```
+
+これにより `peneo-cd` というシェル関数が定義されます。終了後に親シェルを最後のディレクトリへ `cd` させたいときは、`peneo` ではなく `peneo-cd` で起動します。
+
+```bash
+peneo-cd
+```
+
+ディレクトリ追従が不要な場合は、従来どおり `peneo` を使ってください。
+
 ファイルにカーソルを合わせた状態で `e` を押すと、現在のターミナル上でターミナルエディタへ切り替えられます。`config.toml` の `editor.command` が設定されていればそれを優先し、未設定なら `$EDITOR`、さらに `nvim`、`vim`、`nano` などの組み込み候補へフォールバックします。
 
 ## 設定ファイル

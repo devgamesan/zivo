@@ -5,6 +5,7 @@ import platform
 import shlex
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -426,6 +427,9 @@ def _run_foreground_command(command: Sequence[str], cwd: str | None) -> None:
             list(command),
             cwd=cwd,
             check=True,
+            stdin=sys.stdin,
+            stdout=sys.stdout,
+            stderr=sys.stderr,
         )
     except subprocess.CalledProcessError as error:
         raise OSError(str(error) or f"{command[0]} failed") from error
