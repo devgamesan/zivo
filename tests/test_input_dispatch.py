@@ -1380,7 +1380,7 @@ def test_config_unbound_key_shows_guidance() -> None:
             NotificationState(
                 level="warning",
                 message=(
-                    "Use ↑↓ or Ctrl+N/P to choose, ←→ or Enter to change, "
+                    "Use ↑↓ or Ctrl+n/p to choose, ←→ or Enter to change, "
                     "s to save, e to edit the file, r to reset help, or Esc to close"
                 ),
             )

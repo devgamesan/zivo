@@ -627,8 +627,8 @@ def _dispatch_command_palette_input(
 
     if search_palette:
         if state.command_palette is not None and state.command_palette.source == "grep_search":
-            return _warn("Use Tab/Shift+Tab, type, arrows, Enter, Ctrl+E, or Esc")
-        return _warn("Use arrows, type to filter, Enter, Ctrl+E for editor, or Esc")
+            return _warn("Use Tab/Shift+Tab, type, arrows, Enter, Ctrl+e, or Esc")
+        return _warn("Use arrows, type to filter, Enter, Ctrl+e for editor, or Esc")
 
     return _warn("Use arrows, type to filter, Enter to run, or Esc to cancel")
 
@@ -789,7 +789,7 @@ def _dispatch_config_input(
         return _supported(ResetHelpBarConfig())
 
     return _warn(
-        "Use ↑↓ or Ctrl+N/P to choose, ←→ or Enter to change, "
+        "Use ↑↓ or Ctrl+n/p to choose, ←→ or Enter to change, "
         "s to save, e to edit the file, r to reset help, or Esc to close"
     )
 

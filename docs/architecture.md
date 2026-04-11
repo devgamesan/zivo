@@ -167,7 +167,7 @@ sequenceDiagram
 - モード別にキー入力を `Action` へ正規化する
 - 現在サポートしている主なモードは `BROWSING` / `FILTER` / `RENAME` / `CREATE` / `EXTRACT` / `PALETTE` / `DETAIL` / `CONFIRM` / `CONFIG` / `BUSY`
 - split terminal が入力を持つ間は browser 用キーバインドではなく terminal 入力を優先する
-- `Ctrl+F` / `Ctrl+G` / `Ctrl+O` / `Ctrl+B` / `Ctrl+J` / `Alt+←` / `Alt+→` / `Alt+Home` などの複合キーもここで吸収する
+- `Ctrl+f` / `Ctrl+g` / `Ctrl+o` / `Ctrl+b` / `Ctrl+j` / `Alt+←` / `Alt+→` / `Alt+Home` などの複合キーもここで吸収する
 
 ### `src/peneo/state/reducer.py`
 
@@ -269,7 +269,7 @@ sequenceDiagram
 stateDiagram-v2
     [*] --> BROWSING
     BROWSING --> FILTER: /
-    BROWSING --> PALETTE: : / Ctrl+F / Ctrl+G / Ctrl+O / Ctrl+B / Ctrl+J
+    BROWSING --> PALETTE: : / Ctrl+f / Ctrl+g / Ctrl+o / Ctrl+b / Ctrl+j
     BROWSING --> RENAME: F2 / Rename
     BROWSING --> EXTRACT: Extract archive
     BROWSING --> DETAIL: Show attributes
@@ -299,7 +299,7 @@ stateDiagram-v2
   - `Esc` は active filter が残っている場合、選択解除より先に filter 解除を優先する
 - `PALETTE`
   - 通常コマンドだけでなく、file search / grep search / history / bookmarks / go-to-path preview の各 source を同一 UI で扱う
-  - grep search では複数入力欄を持ちつつ、結果選択の `↑↓` と `Ctrl+N/P` は既存どおり維持する
+  - grep search では複数入力欄を持ちつつ、結果選択の `↑↓` と `Ctrl+n/p` は既存どおり維持する
 - `DETAIL`
   - read-only 属性ダイアログを閉じるだけのモード
 - `EXTRACT`
@@ -307,7 +307,7 @@ stateDiagram-v2
 - `CONFIG`
   - config overlay 上で起動時設定を編集し、`s` で保存し、`e` で生の `config.toml` を terminal editor で開く
 - split terminal 可視時
-  - 通常の browse 用キーバインドではなく terminal 入力が優先され、`Ctrl+T` または `Esc` で閉じる
+  - 通常の browse 用キーバインドではなく terminal 入力が優先され、`Ctrl+t` または `Esc` で閉じる
 
 ## 6. 現在できること
 

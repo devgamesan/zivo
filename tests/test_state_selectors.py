@@ -1356,7 +1356,7 @@ def test_select_help_bar_state_for_go_to_path_palette_mentions_tab_completion() 
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type path | ↑↓ or Ctrl+N/P select | tab complete | enter jump | esc cancel",
+        "type path | ↑↓ or Ctrl+n/p select | tab complete | enter jump | esc cancel",
     )
 
 
@@ -1370,7 +1370,7 @@ def test_select_help_bar_state_for_history_palette() -> None:
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type path | ↑↓ or Ctrl+N/P select | enter jump | esc cancel",
+        "type path | ↑↓ or Ctrl+n/p select | enter jump | esc cancel",
     )
 
 
@@ -1384,7 +1384,7 @@ def test_select_help_bar_state_for_bookmarks_palette() -> None:
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type path | ↑↓ or Ctrl+N/P select | enter jump | esc cancel",
+        "type path | ↑↓ or Ctrl+n/p select | enter jump | esc cancel",
     )
 
 
@@ -1398,7 +1398,7 @@ def test_select_help_bar_state_for_file_search_palette() -> None:
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type filename | ↑↓ or Ctrl+N/P select | enter jump | Ctrl+E edit | esc cancel",
+        "type filename | ↑↓ or Ctrl+n/p select | enter jump | Ctrl+e edit | esc cancel",
     )
 
 
@@ -1412,8 +1412,8 @@ def test_select_help_bar_state_for_grep_search_palette() -> None:
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type text / tab fields / ↑↓ or Ctrl+N/P select | "
-        "enter jump | Ctrl+E edit | esc cancel",
+        "type text / tab fields / ↑↓ or Ctrl+n/p select | "
+        "enter jump | Ctrl+e edit | esc cancel",
     )
 
 
@@ -1427,7 +1427,7 @@ def test_select_help_bar_state_for_command_palette() -> None:
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type command | ↑↓ or Ctrl+N/P select | enter run | esc cancel",
+        "type command | ↑↓ or Ctrl+n/p select | enter run | esc cancel",
     )
 
 
@@ -1444,7 +1444,7 @@ def test_select_help_bar_state_for_config_editor() -> None:
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "↑↓ or Ctrl+N/P choose | ←→ or Enter change | s save | e edit file | r reset help",
+        "↑↓ or Ctrl+n/p choose | ←→ or Enter change | s save | e edit file | r reset help",
         "esc close",
     )
 
@@ -1771,7 +1771,7 @@ def test_select_config_dialog_state_formats_editor_lines() -> None:
     assert "Editor presets: system default, nvim, vim, nano, hx, micro, emacs -nw" in dialog.lines
     assert "Terminal launch templates: edit config.toml with e" in dialog.lines
     assert dialog.options == (
-        "↑↓/Ctrl+N/P choose",
+        "↑↓/Ctrl+n/p choose",
         "←→/enter change",
         "s save",
         "e edit file",

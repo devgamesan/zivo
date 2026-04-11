@@ -361,7 +361,7 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             return HelpBarState(state.config.help_bar.config)
         return HelpBarState(
             (
-                "↑↓ or Ctrl+N/P choose | ←→ or Enter change | s save | e edit file | r reset help",
+                "↑↓ or Ctrl+n/p choose | ←→ or Enter change | s save | e edit file | r reset help",
                 "esc close",
             )
         )
@@ -394,34 +394,34 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             if state.config.help_bar.palette_file_search:
                 return HelpBarState(state.config.help_bar.palette_file_search)
             return HelpBarState(
-                ("type filename | ↑↓ or Ctrl+N/P select | enter jump | Ctrl+E edit | esc cancel",)
+                ("type filename | ↑↓ or Ctrl+n/p select | enter jump | Ctrl+e edit | esc cancel",)
             )
         if state.command_palette is not None and state.command_palette.source == "grep_search":
             if state.config.help_bar.palette_grep_search:
                 return HelpBarState(state.config.help_bar.palette_grep_search)
             return HelpBarState(
                 (
-                    "type text / tab fields / ↑↓ or Ctrl+N/P select | "
-                    "enter jump | Ctrl+E edit | esc cancel",
+                    "type text / tab fields / ↑↓ or Ctrl+n/p select | "
+                    "enter jump | Ctrl+e edit | esc cancel",
                 )
             )
         if state.command_palette is not None and state.command_palette.source == "history":
             if state.config.help_bar.palette_history:
                 return HelpBarState(state.config.help_bar.palette_history)
-            return HelpBarState(("type path | ↑↓ or Ctrl+N/P select | enter jump | esc cancel",))
+            return HelpBarState(("type path | ↑↓ or Ctrl+n/p select | enter jump | esc cancel",))
         if state.command_palette is not None and state.command_palette.source == "bookmarks":
             if state.config.help_bar.palette_bookmarks:
                 return HelpBarState(state.config.help_bar.palette_bookmarks)
-            return HelpBarState(("type path | ↑↓ or Ctrl+N/P select | enter jump | esc cancel",))
+            return HelpBarState(("type path | ↑↓ or Ctrl+n/p select | enter jump | esc cancel",))
         if state.command_palette is not None and state.command_palette.source == "go_to_path":
             if state.config.help_bar.palette_go_to_path:
                 return HelpBarState(state.config.help_bar.palette_go_to_path)
             return HelpBarState(
-                ("type path | ↑↓ or Ctrl+N/P select | tab complete | enter jump | esc cancel",)
+                ("type path | ↑↓ or Ctrl+n/p select | tab complete | enter jump | esc cancel",)
             )
         if state.config.help_bar.palette:
             return HelpBarState(state.config.help_bar.palette)
-        return HelpBarState(("type command | ↑↓ or Ctrl+N/P select | enter run | esc cancel",))
+        return HelpBarState(("type command | ↑↓ or Ctrl+n/p select | enter run | esc cancel",))
     if state.ui_mode == "BUSY":
         if state.config.help_bar.busy:
             return HelpBarState(state.config.help_bar.busy)
@@ -845,7 +845,7 @@ def select_config_dialog_state(state: AppState) -> ConfigDialogState | None:
         title=title,
         lines=lines,
         options=(
-            "↑↓/Ctrl+N/P choose",
+            "↑↓/Ctrl+n/p choose",
             "←→/enter change",
             "s save",
             "e edit file",

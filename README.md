@@ -116,7 +116,7 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 | Key | Action |
 | --- | ------ |
 | Any printable character | Send to terminal |
-| `Ctrl+V` | Paste from clipboard |
+| `Ctrl+v` | Paste from clipboard |
 | `Esc` | Close split terminal |
 
 ### Input Dialogs
@@ -126,18 +126,18 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 | `Enter` | Confirm |
 | `Esc` | Cancel |
 | `Tab` | Complete (where supported) |
-| `Ctrl+V` | Paste from clipboard |
+| `Ctrl+v` | Paste from clipboard |
 
 ### Search Results Mode (File Search / Grep Search)
 
 | Key | Action |
 | --- | ------ |
 | `↑` / `↓` | Move cursor through results |
-| `Ctrl+N` / `Ctrl+P` | Move cursor down/up through results |
+| `Ctrl+n` / `Ctrl+p` | Move cursor down/up through results |
 | `PageUp` / `PageDown` | Move cursor by page |
 | `Home` / `End` | Jump to first/last result |
 | `Enter` | Open selected result |
-| `Ctrl+E` | Open selected result in editor |
+| `Ctrl+e` | Open selected result in editor |
 | `Esc` | Close search |
 
 **Note**: In search results mode, use arrow keys to navigate. `j`/`k` keys are used for typing the search query.
@@ -155,13 +155,13 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 
 | Key | Action |
 | --- | ------ |
-| Text input / `↑` / `↓` / `Ctrl+N` / `Ctrl+P` / `k` / `j` / `Enter` / `Esc` | Filter, select, run, or cancel commands. In `Find files` and `Grep search`, `j` / `k` are treated as text input and result navigation uses `↑` / `↓` or `Ctrl+N` / `Ctrl+P`. |
+| Text input / `↑` / `↓` / `Ctrl+n` / `Ctrl+p` / `k` / `j` / `Enter` / `Esc` | Filter, select, run, or cancel commands. In `Find files` and `Grep search`, `j` / `k` are treated as text input and result navigation uses `↑` / `↓` or `Ctrl+n` / `Ctrl+p`. |
 
 ### Config Editor Mode
 
 | Key | Action |
 | --- | ------ |
-| `↑` / `↓` / `Ctrl+N` / `Ctrl+P` | Move between settings |
+| `↑` / `↓` / `Ctrl+n` / `Ctrl+p` | Move between settings |
 | `←` / `→` / `Enter` | Change the selected value |
 | `s` | Save `config.toml` |
 | `e` | Open the raw config file in a terminal editor |
@@ -387,7 +387,7 @@ Less frequent actions are grouped in the command palette opened with `:`.
 | `Run shell command` | Always | Opens a one-line shell command dialog, runs the command in the current directory in the background, and returns the first output line or failure summary in the status bar. Also available with `!`. |
 | `Bookmark this directory` / `Remove bookmark` | Always | Saves or removes the current directory in `[bookmarks].paths`. The label reflects whether the current directory is already bookmarked. Also available with `B`. |
 | `Show hidden files` / `Hide hidden files` | Always | Toggles hidden-file visibility for the browser panes. The label reflects the current visibility state. Also available with `.`. |
-| `Edit config` | Always | Opens the settings overlay for startup defaults. You can edit the preferred terminal editor, hidden-file visibility, directory-size visibility, text preview visibility, theme, sorting, default paste-conflict behavior, and delete confirmation. Use `↑` / `↓` or `Ctrl+N` / `Ctrl+P` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
+| `Edit config` | Always | Opens the settings overlay for startup defaults. You can edit the preferred terminal editor, hidden-file visibility, directory-size visibility, text preview visibility, theme, sorting, default paste-conflict behavior, and delete confirmation. Use `↑` / `↓` or `Ctrl+n` / `Ctrl+p` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
 | `Create file` | Always | Starts the inline create-file flow in the current directory. |
 | `Create directory` | Always | Starts the inline create-directory flow in the current directory. |
 
