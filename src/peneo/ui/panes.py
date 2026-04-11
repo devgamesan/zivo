@@ -246,6 +246,10 @@ class ChildPane(Vertical):
     def preview_id(self) -> str | None:
         return f"{self.id}-preview" if self.id else None
 
+    @property
+    def permissions_id(self) -> str | None:
+        return f"{self.id}-permissions" if self.id else None
+
     def compose(self) -> ComposeResult:
         yield Label(self._state.title, classes="pane-title")
         list_content = Static(
@@ -264,6 +268,13 @@ class ChildPane(Vertical):
         list_content.display = not self._state.is_preview
         yield list_content
         yield preview_content
+        permissions = Static(
+            self._state.permissions_label,
+            id=self.permissions_id,
+            classes="pane-permissions",
+        )
+        permissions.can_focus = False
+        yield permissions
 
     def on_mount(self) -> None:
         self.call_after_refresh(self._refresh_rendered_content)
@@ -281,6 +292,7 @@ class ChildPane(Vertical):
         preview_widget = self._preview_widget()
         list_widget.display = not state.is_preview
         preview_widget.display = state.is_preview
+        self._permissions_widget().update(state.permissions_label)
         self._last_render_width = 0
         self._refresh_rendered_content()
         self.call_after_refresh(self._refresh_rendered_content)
@@ -307,6 +319,9 @@ class ChildPane(Vertical):
 
     def _preview_widget(self) -> Static:
         return self.query_one(f"#{self.preview_id}", Static)
+
+    def _permissions_widget(self) -> Static:
+        return self.query_one(f"#{self.permissions_id}", Static)
 
     @staticmethod
     def _render_preview(state: ChildPaneViewState, render_width: int):

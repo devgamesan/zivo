@@ -160,12 +160,17 @@ def _select_child_pane_for_cursor(
     cursor_entry: DirectoryEntryState | None,
 ) -> ChildPaneViewState:
     syntax_theme = _select_child_syntax_theme(state.config.display.theme)
+    permissions_label = (
+        _format_permissions_label(cursor_entry.permissions_mode)
+        if cursor_entry
+        else ""
+    )
     palette_preview = _select_command_palette_preview_pane(state, syntax_theme)
     if palette_preview is not None:
         return palette_preview
 
     if cursor_entry is None:
-        return _build_child_entries_view((), syntax_theme)
+        return _build_child_entries_view((), syntax_theme, permissions_label)
 
     is_archive = cursor_entry.kind == "file" and is_supported_archive_path(cursor_entry.path)
     if cursor_entry.kind == "dir" or is_archive:
@@ -173,12 +178,12 @@ def _select_child_pane_for_cursor(
             state.child_pane.mode != "entries"
             or cursor_entry.path != state.child_pane.directory_path
         ):
-            return _build_child_entries_view((), syntax_theme)
+            return _build_child_entries_view((), syntax_theme, permissions_label)
     elif (
         state.child_pane.mode != "preview"
         or cursor_entry.path != state.child_pane.preview_path
     ):
-        return _build_child_entries_view((), syntax_theme)
+        return _build_child_entries_view((), syntax_theme, permissions_label)
 
     if state.child_pane.mode == "preview" and state.child_pane.preview_content is not None:
         preview_path = state.child_pane.preview_path or cursor_entry.path
@@ -191,6 +196,7 @@ def _select_child_pane_for_cursor(
             state.child_pane.preview_start_line,
             state.child_pane.preview_highlight_line,
             syntax_theme,
+            permissions_label,
         )
     if state.child_pane.mode == "preview" and state.child_pane.preview_message is not None:
         preview_path = state.child_pane.preview_path or cursor_entry.path
@@ -203,6 +209,7 @@ def _select_child_pane_for_cursor(
             state.child_pane.preview_start_line,
             state.child_pane.preview_highlight_line,
             syntax_theme,
+            permissions_label,
         )
 
     visible_entries = _select_side_pane_entry_states(state.child_pane.entries, state.show_hidden)
@@ -215,6 +222,7 @@ def _select_child_pane_for_cursor(
             cut_paths=_select_visible_cut_paths(visible_entries, _select_cut_paths(state)),
         ),
         syntax_theme,
+        permissions_label,
     )
 
 
@@ -1103,11 +1111,13 @@ def _select_side_pane_entries(
 def _build_child_entries_view(
     entries: tuple[PaneEntry, ...],
     syntax_theme: str,
+    permissions_label: str = "",
 ) -> ChildPaneViewState:
     return ChildPaneViewState(
         title="Child Directory",
         entries=entries,
         syntax_theme=syntax_theme,
+        permissions_label=permissions_label,
     )
 
 
@@ -1121,6 +1131,7 @@ def _build_child_preview_view(
     preview_start_line: int | None,
     preview_highlight_line: int | None,
     syntax_theme: str,
+    permissions_label: str = "",
 ) -> ChildPaneViewState:
     return ChildPaneViewState(
         title=preview_title or _format_child_preview_title(preview_path, preview_truncated),
@@ -1132,6 +1143,7 @@ def _build_child_preview_view(
         preview_start_line=preview_start_line,
         preview_highlight_line=preview_highlight_line,
         syntax_theme=syntax_theme,
+        permissions_label=permissions_label,
     )
 
 
