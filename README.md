@@ -260,6 +260,21 @@ To update, pull the latest changes and run the same install command again.
 peneo
 ```
 
+`peneo` itself cannot change the current directory of the parent shell. If you want your shell to follow the last directory you visited after quitting Peneo, add shell integration first:
+
+```bash
+eval "$(peneo init bash)"  # for bash
+eval "$(peneo init zsh)"   # for zsh
+```
+
+This defines a shell function named `peneo-cd`. Start Peneo with `peneo-cd` when you want the parent shell to `cd` into the last directory on exit:
+
+```bash
+peneo-cd
+```
+
+Use plain `peneo` when you only want to browse without changing the shell's working directory.
+
 When a file is focused, press `e` to switch into a terminal editor in the current terminal session. Peneo prefers `config.toml` `editor.command` when set, then falls back to `$EDITOR`, then built-in defaults such as `nvim`, `vim`, or `nano`.
 When a supported text file is focused, the right pane also shows a non-wrapping syntax-highlighted preview of the beginning of the file. Supported targets include common source, config, markup, and log file extensions as well as extensionless text files such as `Dockerfile` or `.env`. You can disable this behavior with `display.show_preview`.
 

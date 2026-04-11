@@ -6,10 +6,20 @@ import argparse
 import logging
 import sys
 from collections.abc import Sequence
+from contextlib import contextmanager
+from dataclasses import dataclass
+from typing import IO, Iterator
 
 from .app import create_app
 from .services import configure_file_logging, load_app_config
 from .state import NotificationState
+
+
+@dataclass(frozen=True)
+class _StandardStreams:
+    stdin: IO[str]
+    stdout: IO[str]
+    stderr: IO[str]
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -67,12 +77,13 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     logger = _app_logger()
     try:
-        app = create_app(
-            app_config=config_result.config,
-            config_path=config_result.path,
-            startup_notification=startup_notification,
-        )
-        app.run(mouse=False)
+        with _shell_integration_stdio(args.print_last_dir):
+            app = create_app(
+                app_config=config_result.config,
+                config_path=config_result.path,
+                startup_notification=startup_notification,
+            )
+            app.run(mouse=False)
     except Exception:
         logger.exception("Peneo crashed during startup or runtime")
         raise
@@ -98,6 +109,61 @@ def _startup_notification(
 
 def _app_logger() -> logging.Logger:
     return logging.getLogger("peneo")
+
+
+def _capture_standard_streams() -> _StandardStreams:
+    return _StandardStreams(
+        stdin=sys.stdin,
+        stdout=sys.stdout,
+        stderr=sys.stderr,
+    )
+
+
+def _install_standard_streams(streams: _StandardStreams) -> None:
+    sys.stdin = streams.stdin
+    sys.stdout = streams.stdout
+    sys.stderr = streams.stderr
+    sys.__stdin__ = streams.stdin
+    sys.__stdout__ = streams.stdout
+    sys.__stderr__ = streams.stderr
+
+
+def _should_use_tty_streams(print_last_dir: bool) -> bool:
+    return print_last_dir and not sys.stdout.isatty() and sys.stderr.isatty()
+
+
+def _open_tty_streams() -> _StandardStreams:
+    return _StandardStreams(
+        stdin=open("/dev/tty", encoding="utf-8"),
+        stdout=open("/dev/tty", "w", encoding="utf-8", buffering=1),
+        stderr=open("/dev/tty", "w", encoding="utf-8", buffering=1),
+    )
+
+
+def _close_standard_streams(streams: _StandardStreams) -> None:
+    for stream in (streams.stdin, streams.stdout, streams.stderr):
+        stream.close()
+
+
+@contextmanager
+def _shell_integration_stdio(print_last_dir: bool) -> Iterator[None]:
+    if not _should_use_tty_streams(print_last_dir):
+        yield
+        return
+
+    try:
+        tty_streams = _open_tty_streams()
+    except OSError:
+        yield
+        return
+
+    original_streams = _capture_standard_streams()
+    try:
+        _install_standard_streams(tty_streams)
+        yield
+    finally:
+        _install_standard_streams(original_streams)
+        _close_standard_streams(tty_streams)
 
 
 if __name__ == "__main__":

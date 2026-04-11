@@ -1,8 +1,12 @@
+import io
+import sys
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
 import pytest
 
 from peneo.adapters import LocalExternalLaunchAdapter
+from peneo.adapters.external_launcher import _run_foreground_command
 from peneo.models import EditorConfig, ExternalLaunchRequest, TerminalConfig
 from peneo.services import LiveExternalLaunchService
 
@@ -592,6 +596,34 @@ def test_live_external_launch_service_opens_editor_with_line_number(tmp_path) ->
     assert runner.executed == [
         (("vim", "+42", str(readme.resolve())), str(tmp_path.resolve()))
     ]
+
+
+def test_run_foreground_command_uses_current_standard_streams(monkeypatch) -> None:
+    stdin = io.StringIO()
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    captured: dict[str, object] = {}
+
+    def fake_run(*args, **kwargs):
+        captured["args"] = args
+        captured["kwargs"] = kwargs
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(sys, "stdin", stdin)
+    monkeypatch.setattr(sys, "stdout", stdout)
+    monkeypatch.setattr(sys, "stderr", stderr)
+    monkeypatch.setattr("peneo.adapters.external_launcher.subprocess.run", fake_run)
+
+    _run_foreground_command(("nvim", "README.md"), "/tmp/project")
+
+    assert captured["args"] == (["nvim", "README.md"],)
+    assert captured["kwargs"] == {
+        "cwd": "/tmp/project",
+        "check": True,
+        "stdin": stdin,
+        "stdout": stdout,
+        "stderr": stderr,
+    }
 
 
 def runner_not_expected(
