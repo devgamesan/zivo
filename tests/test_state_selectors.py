@@ -495,6 +495,10 @@ def test_directory_size_target_paths_respects_current_hidden_visibility() -> Non
 def test_directory_size_target_paths_returns_empty_when_directory_sizes_are_disabled() -> None:
     state = replace(
         build_initial_app_state(),
+        config=replace(
+            build_initial_app_state().config,
+            display=replace(build_initial_app_state().config.display, show_directory_sizes=False),
+        ),
         current_pane=PaneState(
             directory_path="/home/tadashi/develop/peneo",
             entries=(DirectoryEntryState("/home/tadashi/develop/peneo/docs", "docs", "dir"),),
@@ -804,6 +808,44 @@ def test_select_shell_data_builds_child_preview_message_for_unavailable_file() -
     assert shell.child_pane.preview_message == "Preview unavailable for this file type"
 
 
+def test_select_shell_data_builds_grep_preview_for_palette_selection() -> None:
+    initial_state = build_initial_app_state()
+    path = "/home/tadashi/develop/peneo/README.md"
+    grep_result = GrepSearchResultState(
+        path=path,
+        display_path="README.md",
+        line_number=5,
+        line_text="TODO: update docs",
+    )
+    state = replace(
+        initial_state,
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="grep_search",
+            query="todo",
+            grep_search_results=(grep_result,),
+        ),
+        child_pane=PaneState(
+            directory_path="/home/tadashi/develop/peneo",
+            entries=(),
+            mode="preview",
+            preview_path=path,
+            preview_title="Preview: README.md:5",
+            preview_content="line3\nline4\nTODO: update docs\nline6\n",
+            preview_start_line=2,
+            preview_highlight_line=5,
+        ),
+    )
+
+    shell = select_shell_data(state)
+
+    assert shell.child_pane.is_preview is True
+    assert shell.child_pane.title == "Preview: README.md:5"
+    assert shell.child_pane.preview_path == path
+    assert shell.child_pane.preview_start_line == 2
+    assert shell.child_pane.preview_highlight_line == 5
+
+
 def test_select_parent_and_child_entries_keep_fixed_name_sort() -> None:
     state = build_initial_app_state()
     state = replace(
@@ -913,7 +955,12 @@ def test_select_shell_data_reuses_pane_entries_when_only_notification_changes() 
 
 
 def test_select_shell_data_reuses_current_entries_when_only_cursor_changes() -> None:
-    state = build_initial_app_state()
+    state = build_initial_app_state(
+        config=replace(
+            build_initial_app_state().config,
+            display=replace(build_initial_app_state().config.display, show_directory_sizes=False),
+        ),
+    )
 
     initial_shell = select_shell_data(state)
     moved_shell = select_shell_data(
@@ -1309,7 +1356,35 @@ def test_select_help_bar_state_for_go_to_path_palette_mentions_tab_completion() 
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type path | ↑↓ select | tab complete | enter jump | esc cancel",
+        "type path | ↑↓ or Ctrl+n/p select | tab complete | enter jump | esc cancel",
+    )
+
+
+def test_select_help_bar_state_for_history_palette() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(source="history"),
+    )
+
+    help_bar = select_help_bar_state(state)
+
+    assert help_bar.lines == (
+        "type path | ↑↓ or Ctrl+n/p select | enter jump | esc cancel",
+    )
+
+
+def test_select_help_bar_state_for_bookmarks_palette() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(source="bookmarks"),
+    )
+
+    help_bar = select_help_bar_state(state)
+
+    assert help_bar.lines == (
+        "type path | ↑↓ or Ctrl+n/p select | enter jump | esc cancel",
     )
 
 
@@ -1323,7 +1398,7 @@ def test_select_help_bar_state_for_file_search_palette() -> None:
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type filename | ↑↓ select | enter jump | Ctrl+E edit | esc cancel",
+        "type filename | ↑↓ or Ctrl+n/p select | enter jump | Ctrl+e edit | esc cancel",
     )
 
 
@@ -1337,8 +1412,67 @@ def test_select_help_bar_state_for_grep_search_palette() -> None:
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type text / re:pattern | ↑↓ select | enter jump | Ctrl+E edit | esc cancel",
+        "type text / tab fields / ↑↓ or Ctrl+n/p select | "
+        "enter jump | Ctrl+e edit | esc cancel",
     )
+
+
+def test_select_help_bar_state_for_command_palette() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(),
+    )
+
+    help_bar = select_help_bar_state(state)
+
+    assert help_bar.lines == (
+        "type command | ↑↓ or Ctrl+n/p select | enter run | esc cancel",
+    )
+
+
+def test_select_help_bar_state_for_config_editor() -> None:
+    state = replace(
+        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        ui_mode="CONFIG",
+        config_editor=ConfigEditorState(
+            path="/tmp/peneo/config.toml",
+            draft=build_initial_app_state().config,
+        ),
+    )
+
+    help_bar = select_help_bar_state(state)
+
+    assert help_bar.lines == (
+        "↑↓ or Ctrl+n/p choose | ←→ or Enter change | s save | e edit file | r reset help",
+        "esc close",
+    )
+
+
+def test_select_command_palette_state_for_grep_search_includes_input_fields() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="grep_search",
+            query="todo",
+            grep_search_keyword="todo",
+            grep_search_include_extensions="py,ts",
+            grep_search_exclude_extensions="log",
+            grep_search_active_field="exclude",
+        ),
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert [field.label for field in palette_state.input_fields] == [
+        "Keyword",
+        "Include",
+        "Exclude",
+    ]
+    assert [field.value for field in palette_state.input_fields] == ["todo", "py,ts", "log"]
+    assert [field.active for field in palette_state.input_fields] == [False, False, True]
 
 
 def test_select_command_palette_state_go_to_path_can_show_candidates_without_selection() -> None:
@@ -1636,7 +1770,14 @@ def test_select_config_dialog_state_formats_editor_lines() -> None:
     assert "  Default sort field: name" in dialog.lines
     assert "Editor presets: system default, nvim, vim, nano, hx, micro, emacs -nw" in dialog.lines
     assert "Terminal launch templates: edit config.toml with e" in dialog.lines
-    assert dialog.options == ("left/right/enter change", "s save", "e edit file", "esc close")
+    assert dialog.options == (
+        "↑↓/Ctrl+n/p choose",
+        "←→/enter change",
+        "s save",
+        "e edit file",
+        "r reset help",
+        "esc close",
+    )
 
 
 def test_select_config_dialog_state_shows_custom_editor_command_hint() -> None:
@@ -1742,9 +1883,8 @@ def test_select_command_palette_state_windows_large_file_search_results() -> Non
     palette_state = select_command_palette_state(state)
 
     assert palette_state is not None
-    assert palette_state.title == "Find File (3-18 / 20)"
+    assert palette_state.title == "Find File (4-18 / 20)"
     assert [item.label for item in palette_state.items] == [
-        "src/module_2.py",
         "src/module_3.py",
         "src/module_4.py",
         "src/module_5.py",
@@ -1761,7 +1901,7 @@ def test_select_command_palette_state_windows_large_file_search_results() -> Non
         "src/module_16.py",
         "src/module_17.py",
     ]
-    assert palette_state.items[8].selected is True
+    assert palette_state.items[7].selected is True
     assert palette_state.has_more_items is True
 
 
@@ -1790,6 +1930,36 @@ def test_select_command_palette_state_for_grep_search_results() -> None:
     assert [item.label for item in palette_state.items] == [
         "src/peneo/app.py:42: TODO: update palette"
     ]
+
+
+def test_select_command_palette_state_windows_large_grep_search_results() -> None:
+    results = tuple(
+        GrepSearchResultState(
+            path=f"/home/tadashi/develop/peneo/src/module_{index}.py",
+            display_path=f"src/module_{index}.py",
+            line_number=index + 1,
+            line_text="TODO: update palette",
+        )
+        for index in range(20)
+    )
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = replace(
+        state,
+        command_palette=CommandPaletteState(
+            source="grep_search",
+            query="todo",
+            cursor_index=10,
+            grep_search_results=results,
+        ),
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert palette_state.title == "Grep (5-17 / 20)"
+    assert len(palette_state.items) == 13
+    assert palette_state.items[6].selected is True
+    assert palette_state.has_more_items is True
 
 
 def test_select_command_palette_state_shows_grep_searching_message() -> None:
@@ -2068,19 +2238,22 @@ class TestComputeSearchVisibleWindow:
     """Tests for dynamic search window size calculation."""
 
     def test_default_terminal_height(self) -> None:
-        assert selectors_module.compute_search_visible_window(24) == 16
+        assert selectors_module.compute_search_visible_window(24) == 15
 
     def test_large_terminal(self) -> None:
-        assert selectors_module.compute_search_visible_window(48) == 40
+        assert selectors_module.compute_search_visible_window(48) == 39
 
     def test_very_large_terminal(self) -> None:
-        assert selectors_module.compute_search_visible_window(80) == 72
+        assert selectors_module.compute_search_visible_window(80) == 71
 
     def test_small_terminal_uses_minimum(self) -> None:
         assert selectors_module.compute_search_visible_window(10) == 3
 
     def test_tiny_terminal_uses_minimum(self) -> None:
         assert selectors_module.compute_search_visible_window(1) == 3
+
+    def test_extra_rows_reduce_visible_window(self) -> None:
+        assert selectors_module.compute_search_visible_window(24, extra_rows=2) == 13
 
 
 class TestSelectSearchWindowWithDynamicSize:
@@ -2316,5 +2489,5 @@ class TestCommandPaletteDynamicWindow:
         palette_state = select_command_palette_state(state)
 
         assert palette_state is not None
-        assert len(palette_state.items) == 16
+        assert len(palette_state.items) == 15
         assert palette_state.has_more_items is True

@@ -19,12 +19,15 @@ class PaneEntry:
     selected: bool = False
     cut: bool = False
     executable: bool = False
+    symlink: bool = False
     path: str = ""
 
     @property
     def kind_label(self) -> str:
         """Return the short label shown in the center table."""
 
+        if self.symlink:
+            return "LINK"
         return "DIR" if self.kind == "dir" else "FILE"
 
     @property
@@ -76,10 +79,14 @@ class ChildPaneViewState:
     title: str
     entries: tuple[PaneEntry, ...] = ()
     preview_path: str | None = None
+    preview_title: str | None = None
     preview_content: str | None = None
     preview_message: str | None = None
     preview_truncated: bool = False
+    preview_start_line: int | None = None
+    preview_highlight_line: int | None = None
     syntax_theme: str = "monokai"
+    permissions_label: str = ""
 
     @property
     def is_preview(self) -> bool:
@@ -140,6 +147,16 @@ class CommandPaletteItemViewState:
 
 
 @dataclass(frozen=True)
+class CommandPaletteInputFieldViewState:
+    """Single input row rendered above command palette results."""
+
+    label: str
+    value: str
+    placeholder: str
+    active: bool = False
+
+
+@dataclass(frozen=True)
 class CommandPaletteViewState:
     """Display data for the command palette."""
 
@@ -147,6 +164,7 @@ class CommandPaletteViewState:
     query: str
     items: tuple[CommandPaletteItemViewState, ...]
     empty_message: str
+    input_fields: tuple[CommandPaletteInputFieldViewState, ...] = ()
     has_more_items: bool = False
 
 

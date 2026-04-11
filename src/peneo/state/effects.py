@@ -13,7 +13,7 @@ from peneo.models import (
     RenameRequest,
 )
 
-from .models import AppState
+from .models import AppState, GrepSearchResultState
 
 
 @dataclass(frozen=True)
@@ -34,6 +34,8 @@ class LoadChildPaneSnapshotEffect:
     request_id: int
     current_path: str
     cursor_path: str
+    grep_result: GrepSearchResultState | None = None
+    grep_context_lines: int = 3
 
 
 @dataclass(frozen=True)
@@ -118,6 +120,8 @@ class RunGrepSearchEffect:
     root_path: str
     query: str
     show_hidden: bool
+    include_globs: tuple[str, ...] = ()
+    exclude_globs: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)

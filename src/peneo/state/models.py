@@ -42,6 +42,7 @@ CommandPaletteSource = Literal[
     "bookmarks",
     "go_to_path",
 ]
+GrepSearchFieldId = Literal["keyword", "include", "exclude"]
 SplitTerminalStatus = Literal["closed", "starting", "running"]
 SplitTerminalFocusTarget = Literal["browser", "terminal"]
 DirectorySizeStatus = Literal["pending", "ready", "failed"]
@@ -71,6 +72,9 @@ class DirectoryEntryState:
     modified_at: datetime | None = None
     hidden: bool = False
     permissions_mode: int | None = None
+    owner: str | None = None
+    group: str | None = None
+    symlink: bool = False
 
 
 @dataclass(frozen=True)
@@ -84,9 +88,12 @@ class PaneState:
     selection_anchor_path: str | None = None
     mode: Literal["entries", "preview"] = "entries"
     preview_path: str | None = None
+    preview_title: str | None = None
     preview_content: str | None = None
     preview_message: str | None = None
     preview_truncated: bool = False
+    preview_start_line: int | None = None
+    preview_highlight_line: int | None = None
 
 
 @dataclass(frozen=True)
@@ -299,6 +306,10 @@ class CommandPaletteState:
 
     source: CommandPaletteSource = "commands"
     query: str = ""
+    grep_search_keyword: str = ""
+    grep_search_include_extensions: str = ""
+    grep_search_exclude_extensions: str = ""
+    grep_search_active_field: GrepSearchFieldId = "keyword"
     cursor_index: int = 0
     file_search_results: tuple[FileSearchResultState, ...] = ()
     file_search_error_message: str | None = None

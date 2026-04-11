@@ -29,6 +29,7 @@ from peneo.state import (
     CopyTargets,
     CutTargets,
     CycleConfigEditorValue,
+    CycleGrepSearchField,
     DeleteConfirmationState,
     DismissAttributeDialog,
     DismissConfigEditor,
@@ -59,6 +60,7 @@ from peneo.state import (
     SendSplitTerminalInput,
     SetCommandPaletteQuery,
     SetFilterQuery,
+    SetGrepSearchField,
     SetNotification,
     SetPendingInputValue,
     SetSort,
@@ -652,12 +654,62 @@ def test_search_palette_k_key_updates_query() -> None:
     state = replace(
         build_initial_app_state(),
         ui_mode="PALETTE",
-        command_palette=CommandPaletteState(source="grep_search", query="ab"),
+        command_palette=CommandPaletteState(
+            source="grep_search",
+            query="ab",
+            grep_search_keyword="ab",
+        ),
     )
 
     actions = dispatch_key_input(state, key="k", character="k")
 
-    assert actions == (SetNotification(None), SetCommandPaletteQuery("abk"))
+    assert actions == (
+        SetNotification(None),
+        SetGrepSearchField(field="keyword", value="abk"),
+    )
+
+
+def test_grep_palette_tab_cycles_active_field() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(source="grep_search"),
+    )
+
+    actions = dispatch_key_input(state, key="tab")
+
+    assert actions == (SetNotification(None), CycleGrepSearchField(delta=1))
+
+
+def test_grep_palette_shift_tab_cycles_active_field_backwards() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(source="grep_search"),
+    )
+
+    actions = dispatch_key_input(state, key="shift+tab")
+
+    assert actions == (SetNotification(None), CycleGrepSearchField(delta=-1))
+
+
+def test_grep_palette_printable_key_updates_include_field() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="grep_search",
+            grep_search_active_field="include",
+            grep_search_include_extensions="p",
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="y", character="y")
+
+    assert actions == (
+        SetNotification(None),
+        SetGrepSearchField(field="include", value="py"),
+    )
 
 
 def test_commands_palette_j_key_moves_cursor() -> None:
@@ -733,6 +785,70 @@ def test_palette_e_key_does_not_open_editor_for_other_sources() -> None:
     assert actions == (SetNotification(None), SetCommandPaletteQuery("teste"))
 
 
+def test_palette_ctrl_n_moves_cursor_down_in_grep_palette() -> None:
+    from peneo.state.models import CommandPaletteState
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="grep_search",
+            query="test",
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="ctrl+n")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=1))
+
+
+def test_palette_ctrl_p_moves_cursor_up_in_grep_palette() -> None:
+    from peneo.state.models import CommandPaletteState
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="grep_search",
+            query="test",
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="ctrl+p")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=-1))
+
+
+def test_palette_ctrl_n_moves_cursor_down_in_file_search_palette() -> None:
+    from peneo.state.models import CommandPaletteState
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="file_search",
+            query="test",
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="ctrl+n")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=1))
+
+
+def test_palette_ctrl_p_moves_cursor_up_in_file_search_palette() -> None:
+    from peneo.state.models import CommandPaletteState
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="file_search",
+            query="test",
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="ctrl+p")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=-1))
+
+
 def test_palette_printable_key_updates_query() -> None:
     state = replace(build_initial_app_state(), ui_mode="PALETTE")
 
@@ -806,7 +922,7 @@ def test_palette_pageup_moves_cursor_by_page() -> None:
 
     actions = dispatch_key_input(state, key="pageup")
 
-    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=-16))
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=-15))
 
 
 def test_palette_pagedown_moves_cursor_by_page() -> None:
@@ -814,7 +930,31 @@ def test_palette_pagedown_moves_cursor_by_page() -> None:
 
     actions = dispatch_key_input(state, key="pagedown")
 
-    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=16))
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=15))
+
+
+def test_grep_palette_pageup_accounts_for_extra_input_rows() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(source="grep_search"),
+    )
+
+    actions = dispatch_key_input(state, key="pageup")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=-13))
+
+
+def test_grep_palette_pagedown_accounts_for_extra_input_rows() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(source="grep_search"),
+    )
+
+    actions = dispatch_key_input(state, key="pagedown")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=13))
 
 
 def test_palette_unbound_key_shows_guidance() -> None:
@@ -1133,6 +1273,36 @@ def test_config_down_moves_cursor() -> None:
     assert actions == (SetNotification(None), MoveConfigEditorCursor(delta=1))
 
 
+def test_config_ctrl_n_moves_cursor() -> None:
+    state = replace(
+        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        ui_mode="CONFIG",
+        config_editor=ConfigEditorState(
+            path="/tmp/peneo/config.toml",
+            draft=build_initial_app_state().config,
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="ctrl+n")
+
+    assert actions == (SetNotification(None), MoveConfigEditorCursor(delta=1))
+
+
+def test_config_ctrl_p_moves_cursor() -> None:
+    state = replace(
+        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        ui_mode="CONFIG",
+        config_editor=ConfigEditorState(
+            path="/tmp/peneo/config.toml",
+            draft=build_initial_app_state().config,
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="ctrl+p")
+
+    assert actions == (SetNotification(None), MoveConfigEditorCursor(delta=-1))
+
+
 def test_config_enter_cycles_selected_value() -> None:
     state = replace(
         build_initial_app_state(config_path="/tmp/peneo/config.toml"),
@@ -1210,8 +1380,8 @@ def test_config_unbound_key_shows_guidance() -> None:
             NotificationState(
                 level="warning",
                 message=(
-                    "Use arrows to change values, s to save, e to edit the file, "
-                    "r to reset help, or Esc to close"
+                    "Use ↑↓ or Ctrl+n/p to choose, ←→ or Enter to change, "
+                    "s to save, e to edit the file, r to reset help, or Esc to close"
                 ),
             )
         ),

@@ -10,6 +10,7 @@ from peneo.archive_utils import is_supported_archive_path
 from peneo.models import (
     AttributeDialogState,
     ChildPaneViewState,
+    CommandPaletteInputFieldViewState,
     CommandPaletteItemViewState,
     CommandPaletteViewState,
     ConfigDialogState,
@@ -34,6 +35,7 @@ from .command_palette import (
 )
 from .models import (
     AppState,
+    CommandPaletteState,
     DirectoryEntryState,
     DirectorySizeCacheEntry,
     FileSearchResultState,
@@ -44,7 +46,8 @@ from .models import (
 SIDE_PANE_SORT = SortState(field="name", descending=False, directories_first=True)
 COMMAND_PALETTE_VISIBLE_WINDOW = 8
 MIN_SEARCH_VISIBLE_WINDOW = 3
-_SEARCH_OVERHEAD_ROWS = 8
+_SEARCH_OVERHEAD_ROWS = 9
+_GREP_SEARCH_EXTRA_INPUT_ROWS = 2
 MIN_CURRENT_PANE_VISIBLE_WINDOW = 5
 _CURRENT_PANE_OVERHEAD_ROWS = 8
 
@@ -158,8 +161,17 @@ def _select_child_pane_for_cursor(
     cursor_entry: DirectoryEntryState | None,
 ) -> ChildPaneViewState:
     syntax_theme = _select_child_syntax_theme(state.config.display.theme)
+    permissions_label = (
+        _format_permissions_detail_label(cursor_entry)
+        if cursor_entry
+        else ""
+    )
+    palette_preview = _select_command_palette_preview_pane(state, syntax_theme)
+    if palette_preview is not None:
+        return palette_preview
+
     if cursor_entry is None:
-        return _build_child_entries_view((), syntax_theme)
+        return _build_child_entries_view((), syntax_theme, permissions_label)
 
     is_archive = cursor_entry.kind == "file" and is_supported_archive_path(cursor_entry.path)
     if cursor_entry.kind == "dir" or is_archive:
@@ -167,30 +179,38 @@ def _select_child_pane_for_cursor(
             state.child_pane.mode != "entries"
             or cursor_entry.path != state.child_pane.directory_path
         ):
-            return _build_child_entries_view((), syntax_theme)
+            return _build_child_entries_view((), syntax_theme, permissions_label)
     elif (
         state.child_pane.mode != "preview"
         or cursor_entry.path != state.child_pane.preview_path
     ):
-        return _build_child_entries_view((), syntax_theme)
+        return _build_child_entries_view((), syntax_theme, permissions_label)
 
     if state.child_pane.mode == "preview" and state.child_pane.preview_content is not None:
         preview_path = state.child_pane.preview_path or cursor_entry.path
         return _build_child_preview_view(
+            state.child_pane.preview_title,
             preview_path,
             state.child_pane.preview_content,
             state.child_pane.preview_message,
             state.child_pane.preview_truncated,
+            state.child_pane.preview_start_line,
+            state.child_pane.preview_highlight_line,
             syntax_theme,
+            permissions_label,
         )
     if state.child_pane.mode == "preview" and state.child_pane.preview_message is not None:
         preview_path = state.child_pane.preview_path or cursor_entry.path
         return _build_child_preview_view(
+            state.child_pane.preview_title,
             preview_path,
             state.child_pane.preview_content,
             state.child_pane.preview_message,
             state.child_pane.preview_truncated,
+            state.child_pane.preview_start_line,
+            state.child_pane.preview_highlight_line,
             syntax_theme,
+            permissions_label,
         )
 
     visible_entries = _select_side_pane_entry_states(state.child_pane.entries, state.show_hidden)
@@ -202,6 +222,88 @@ def _select_child_pane_for_cursor(
             selected_path=None,
             cut_paths=_select_visible_cut_paths(visible_entries, _select_cut_paths(state)),
         ),
+        syntax_theme,
+        permissions_label,
+    )
+
+
+def _select_command_palette_preview_pane(
+    state: AppState,
+    syntax_theme: str,
+) -> ChildPaneViewState | None:
+    if state.ui_mode != "PALETTE" or state.command_palette is None:
+        return None
+    if state.command_palette.source == "file_search":
+        return _select_file_search_preview_pane(state, syntax_theme)
+    if state.command_palette.source == "grep_search":
+        return _select_grep_preview_pane(state, syntax_theme)
+    return None
+
+
+def _select_file_search_preview_pane(
+    state: AppState,
+    syntax_theme: str,
+) -> ChildPaneViewState:
+    if not state.config.display.show_preview:
+        return _build_child_entries_view((), syntax_theme)
+
+    results = state.command_palette.file_search_results
+    if not results:
+        return _build_child_entries_view((), syntax_theme)
+
+    selected_result = results[
+        normalize_command_palette_cursor(state, state.command_palette.cursor_index)
+    ]
+    if (
+        state.child_pane.mode != "preview"
+        or state.child_pane.preview_path != selected_result.path
+        or state.child_pane.preview_title is not None
+        or state.child_pane.preview_start_line is not None
+        or state.child_pane.preview_highlight_line is not None
+    ):
+        return _build_child_entries_view((), syntax_theme)
+
+    return _build_child_preview_view(
+        state.child_pane.preview_title,
+        state.child_pane.preview_path or selected_result.path,
+        state.child_pane.preview_content,
+        state.child_pane.preview_message,
+        state.child_pane.preview_truncated,
+        state.child_pane.preview_start_line,
+        state.child_pane.preview_highlight_line,
+        syntax_theme,
+    )
+
+
+def _select_grep_preview_pane(
+    state: AppState,
+    syntax_theme: str,
+) -> ChildPaneViewState:
+    if not state.config.display.show_preview:
+        return _build_child_entries_view((), syntax_theme)
+
+    results = state.command_palette.grep_search_results
+    if not results:
+        return _build_child_entries_view((), syntax_theme)
+
+    selected_result = results[
+        normalize_command_palette_cursor(state, state.command_palette.cursor_index)
+    ]
+    if (
+        state.child_pane.mode != "preview"
+        or state.child_pane.preview_path != selected_result.path
+        or state.child_pane.preview_highlight_line != selected_result.line_number
+    ):
+        return _build_child_entries_view((), syntax_theme)
+
+    return _build_child_preview_view(
+        state.child_pane.preview_title,
+        state.child_pane.preview_path or selected_result.path,
+        state.child_pane.preview_content,
+        state.child_pane.preview_message,
+        state.child_pane.preview_truncated,
+        state.child_pane.preview_start_line,
+        state.child_pane.preview_highlight_line,
         syntax_theme,
     )
 
@@ -259,7 +361,7 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             return HelpBarState(state.config.help_bar.config)
         return HelpBarState(
             (
-                "up/down choose | left/right/enter change | s save | e edit file | r reset help",
+                "↑↓ or Ctrl+n/p choose | ←→ or Enter change | s save | e edit file | r reset help",
                 "esc close",
             )
         )
@@ -292,34 +394,34 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             if state.config.help_bar.palette_file_search:
                 return HelpBarState(state.config.help_bar.palette_file_search)
             return HelpBarState(
-                ("type filename | ↑↓ select | enter jump | Ctrl+E edit | esc cancel",)
+                ("type filename | ↑↓ or Ctrl+n/p select | enter jump | Ctrl+e edit | esc cancel",)
             )
         if state.command_palette is not None and state.command_palette.source == "grep_search":
             if state.config.help_bar.palette_grep_search:
                 return HelpBarState(state.config.help_bar.palette_grep_search)
             return HelpBarState(
                 (
-                    "type text / re:pattern | ↑↓ select | "
-                    "enter jump | Ctrl+E edit | esc cancel",
+                    "type text / tab fields / ↑↓ or Ctrl+n/p select | "
+                    "enter jump | Ctrl+e edit | esc cancel",
                 )
             )
         if state.command_palette is not None and state.command_palette.source == "history":
             if state.config.help_bar.palette_history:
                 return HelpBarState(state.config.help_bar.palette_history)
-            return HelpBarState(("type path | enter jump | esc cancel",))
+            return HelpBarState(("type path | ↑↓ or Ctrl+n/p select | enter jump | esc cancel",))
         if state.command_palette is not None and state.command_palette.source == "bookmarks":
             if state.config.help_bar.palette_bookmarks:
                 return HelpBarState(state.config.help_bar.palette_bookmarks)
-            return HelpBarState(("type path | enter jump | esc cancel",))
+            return HelpBarState(("type path | ↑↓ or Ctrl+n/p select | enter jump | esc cancel",))
         if state.command_palette is not None and state.command_palette.source == "go_to_path":
             if state.config.help_bar.palette_go_to_path:
                 return HelpBarState(state.config.help_bar.palette_go_to_path)
             return HelpBarState(
-                ("type path | ↑↓ select | tab complete | enter jump | esc cancel",)
+                ("type path | ↑↓ or Ctrl+n/p select | tab complete | enter jump | esc cancel",)
             )
         if state.config.help_bar.palette:
             return HelpBarState(state.config.help_bar.palette)
-        return HelpBarState(("type command | ↑↓ select | enter run | esc cancel",))
+        return HelpBarState(("type command | ↑↓ or Ctrl+n/p select | enter run | esc cancel",))
     if state.ui_mode == "BUSY":
         if state.config.help_bar.busy:
             return HelpBarState(state.config.help_bar.busy)
@@ -410,7 +512,7 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
         )
         return CommandPaletteViewState(
             title=title,
-            query=state.command_palette.query,
+            query=state.command_palette.grep_search_keyword,
             items=tuple(
                 CommandPaletteItemViewState(
                     label=result.display_label,
@@ -421,6 +523,7 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
                 for index, result in visible_results
             ),
             empty_message=_grep_search_empty_message(state),
+            input_fields=_build_grep_search_input_fields(state.command_palette),
             has_more_items=len(state.command_palette.grep_search_results) > len(visible_results),
         )
     if state.command_palette.source == "history":
@@ -499,6 +602,31 @@ def select_split_terminal_state(state: AppState) -> SplitTerminalViewState:
         status=split_terminal.status,
         body=body,
         focused=split_terminal.focus_target == "terminal",
+    )
+
+
+def _build_grep_search_input_fields(
+    palette: CommandPaletteState,
+) -> tuple[CommandPaletteInputFieldViewState, ...]:
+    return (
+        CommandPaletteInputFieldViewState(
+            label="Keyword",
+            value=palette.grep_search_keyword or palette.query,
+            placeholder="text or re:pattern",
+            active=palette.grep_search_active_field == "keyword",
+        ),
+        CommandPaletteInputFieldViewState(
+            label="Include",
+            value=palette.grep_search_include_extensions,
+            placeholder="all extensions",
+            active=palette.grep_search_active_field == "include",
+        ),
+        CommandPaletteInputFieldViewState(
+            label="Exclude",
+            value=palette.grep_search_exclude_extensions,
+            placeholder="none",
+            active=palette.grep_search_active_field == "exclude",
+        ),
     )
 
 
@@ -716,7 +844,14 @@ def select_config_dialog_state(state: AppState) -> ConfigDialogState | None:
     return ConfigDialogState(
         title=title,
         lines=lines,
-        options=("left/right/enter change", "s save", "e edit file", "esc close"),
+        options=(
+            "↑↓/Ctrl+n/p choose",
+            "←→/enter change",
+            "s save",
+            "e edit file",
+            "r reset help",
+            "esc close",
+        ),
     )
 
 
@@ -984,29 +1119,39 @@ def _select_side_pane_entries(
 def _build_child_entries_view(
     entries: tuple[PaneEntry, ...],
     syntax_theme: str,
+    permissions_label: str = "",
 ) -> ChildPaneViewState:
     return ChildPaneViewState(
         title="Child Directory",
         entries=entries,
         syntax_theme=syntax_theme,
+        permissions_label=permissions_label,
     )
 
 
 @lru_cache(maxsize=256)
 def _build_child_preview_view(
+    preview_title: str | None,
     preview_path: str,
     preview_content: str | None,
     preview_message: str | None,
     preview_truncated: bool,
+    preview_start_line: int | None,
+    preview_highlight_line: int | None,
     syntax_theme: str,
+    permissions_label: str = "",
 ) -> ChildPaneViewState:
     return ChildPaneViewState(
-        title=_format_child_preview_title(preview_path, preview_truncated),
+        title=preview_title or _format_child_preview_title(preview_path, preview_truncated),
         preview_path=preview_path,
+        preview_title=preview_title,
         preview_content=preview_content,
         preview_message=preview_message,
         preview_truncated=preview_truncated,
+        preview_start_line=preview_start_line,
+        preview_highlight_line=preview_highlight_line,
         syntax_theme=syntax_theme,
+        permissions_label=permissions_label,
     )
 
 
@@ -1142,10 +1287,13 @@ def _format_sort_label(sort: SortState) -> str:
     return f"{sort.field} {direction} dirs:{directories}"
 
 
-def compute_search_visible_window(terminal_height: int) -> int:
+def compute_search_visible_window(terminal_height: int, *, extra_rows: int = 0) -> int:
     """Calculate visible command-palette items based on terminal height."""
 
-    return max(MIN_SEARCH_VISIBLE_WINDOW, terminal_height - _SEARCH_OVERHEAD_ROWS)
+    return max(
+        MIN_SEARCH_VISIBLE_WINDOW,
+        terminal_height - _SEARCH_OVERHEAD_ROWS - extra_rows,
+    )
 
 
 def _build_command_palette_items_view(
@@ -1217,7 +1365,10 @@ def _select_grep_search_window(
     results: tuple[GrepSearchResultState, ...],
     cursor_index: int,
 ) -> tuple[tuple[tuple[int, GrepSearchResultState], ...], str]:
-    visible_window = compute_search_visible_window(state.terminal_height)
+    visible_window = compute_search_visible_window(
+        state.terminal_height,
+        extra_rows=_GREP_SEARCH_EXTRA_INPUT_ROWS,
+    )
     return _select_search_window(
         results, cursor_index, title="Grep", visible_window=visible_window,
     )
@@ -1323,6 +1474,7 @@ def _to_pane_entry(
         selected=selected,
         cut=cut,
         executable=_has_execute_permission(entry),
+        symlink=entry.symlink,
         path=entry.path,
     )
 
@@ -1372,6 +1524,17 @@ def _format_permissions_label(mode: int | None) -> str:
         return "-"
     normalized_mode = S_IMODE(mode)
     return f"{filemode(mode)} ({normalized_mode:03o})"
+
+
+def _format_permissions_detail_label(entry: DirectoryEntryState) -> str:
+    if entry.permissions_mode is None:
+        return ""
+    permission_str = _format_permissions_label(entry.permissions_mode)
+    if entry.owner and entry.group:
+        return f"{permission_str} {entry.owner} {entry.group}"
+    if entry.owner:
+        return f"{permission_str} {entry.owner}"
+    return permission_str
 
 
 def _format_editor_command_value(command: str | None) -> str:

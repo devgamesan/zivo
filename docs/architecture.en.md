@@ -167,7 +167,7 @@ sequenceDiagram
 - Normalizes key input into `Action` values by mode
 - The main supported modes are `BROWSING`, `FILTER`, `RENAME`, `CREATE`, `EXTRACT`, `PALETTE`, `DETAIL`, `CONFIRM`, `CONFIG`, and `BUSY`
 - When the split terminal owns input, browser shortcuts are bypassed in favor of terminal input
-- Also absorbs compound shortcuts such as `Ctrl+F`, `Ctrl+G`, `Ctrl+O`, `Ctrl+B`, `Ctrl+J`, `Alt+Left`, `Alt+Right`, and `Alt+Home`
+- Also absorbs compound shortcuts such as `Ctrl+f`, `Ctrl+g`, `Ctrl+o`, `Ctrl+b`, `Ctrl+j`, `Alt+Left`, `Alt+Right`, and `Alt+Home`
 
 ### `src/peneo/state/reducer.py`
 
@@ -231,6 +231,7 @@ sequenceDiagram
   - `Create directory`
 - Palette sources are `commands`, `file_search`, `grep_search`, `history`, `bookmarks`, and `go_to_path`
 - `go_to_path` shows matching directory candidates while the user types and lets `Tab` complete the selected one
+- `grep_search` uses separate keyword / include-extensions / exclude-extensions fields and moves focus with `Tab` / `Shift+Tab`
 
 ### `src/peneo/services/`
 
@@ -268,7 +269,7 @@ sequenceDiagram
 stateDiagram-v2
     [*] --> BROWSING
     BROWSING --> FILTER: /
-    BROWSING --> PALETTE: : / Ctrl+F / Ctrl+G / Ctrl+O / Ctrl+B / Ctrl+J
+    BROWSING --> PALETTE: : / Ctrl+f / Ctrl+g / Ctrl+o / Ctrl+b / Ctrl+j
     BROWSING --> RENAME: F2 / Rename
     BROWSING --> EXTRACT: Extract archive
     BROWSING --> DETAIL: Show attributes
@@ -298,6 +299,7 @@ Notes:
   - If an active filter exists, `Esc` clears the filter before clearing selection
 - `PALETTE`
   - Reuses one UI surface for normal commands plus file search, grep search, history, bookmarks, and go-to-path preview
+  - Keeps grep result selection on `↑↓` and `Ctrl+n/p` even though grep search now has multiple input fields
 - `DETAIL`
   - Read-only mode for the attribute dialog
 - `EXTRACT`
@@ -305,7 +307,7 @@ Notes:
 - `CONFIG`
   - Edits startup settings in the config overlay, saves with `s`, and opens raw `config.toml` in a terminal editor with `e`
 - While the split terminal is visible
-  - Terminal input takes precedence over browser shortcuts, and `Ctrl+T` or `Esc` closes it
+  - Terminal input takes precedence over browser shortcuts, and `Ctrl+t` or `Esc` closes it
 
 ## 6. What Works Today
 

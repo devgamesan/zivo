@@ -50,7 +50,7 @@ from peneo.state import (
     PaneState,
     SetTerminalHeight,
 )
-from peneo.state.selectors import compute_current_pane_visible_window
+from peneo.state.selectors import compute_current_pane_visible_window, select_command_palette_state
 from peneo.ui import (
     AttributeDialog,
     CommandPalette,
@@ -370,13 +370,19 @@ class BlockingGrepSearchService:
         self,
         *,
         results_by_query: (
-            dict[tuple[str, str, bool], tuple[GrepSearchResultState, ...]] | None
+            dict[
+                tuple[str, str, tuple[str, ...], tuple[str, ...], bool],
+                tuple[GrepSearchResultState, ...],
+            ]
+            | None
         ) = None,
         blocked_queries: tuple[str, ...] = (),
     ) -> None:
         self.results_by_query = results_by_query or {}
         self.blocked_queries = set(blocked_queries)
-        self.executed_requests: list[tuple[str, str, bool]] = []
+        self.executed_requests: list[
+            tuple[str, str, tuple[str, ...], tuple[str, ...], bool]
+        ] = []
         self.cancelled_queries: list[str] = []
         self.release_event = threading.Event()
 
@@ -386,9 +392,11 @@ class BlockingGrepSearchService:
         query: str,
         *,
         show_hidden: bool,
+        include_globs: tuple[str, ...] = (),
+        exclude_globs: tuple[str, ...] = (),
         is_cancelled=None,
     ) -> tuple[GrepSearchResultState, ...]:
-        key = (root_path, query, show_hidden)
+        key = (root_path, query, include_globs, exclude_globs, show_hidden)
         self.executed_requests.append(key)
         if query in self.blocked_queries:
             while not self.release_event.is_set():
@@ -822,7 +830,7 @@ async def test_app_live_snapshot_highlights_current_directory_in_parent_pane(tmp
         assert app.app_state.parent_pane.cursor_path == str(tmp_path)
         assert isinstance(parent_renderable, Text)
         assert tmp_path.name in parent_renderable.plain.splitlines()
-        assert any(span.style == "bold white on blue" for span in parent_renderable.spans)
+        assert any(span.style == "bold white on #5555FF" for span in parent_renderable.spans)
 
 
 @pytest.mark.asyncio
@@ -870,7 +878,7 @@ async def test_app_renders_loaded_three_pane_shell() -> None:
         assert parent_entries == ["peneo-app", "sibling"]
         parent_renderable = parent_list.renderable
         assert isinstance(parent_renderable, Text)
-        assert any(span.style == "bold white on blue" for span in parent_renderable.spans)
+        assert any(span.style == "bold white on #5555FF" for span in parent_renderable.spans)
         assert headers == ["Sel", "Name", "Size", "Modified"]
         assert current_table.row_count == 2
         assert child_entries == ["spec.md"]
@@ -1306,7 +1314,7 @@ async def test_app_keyboard_input_updates_selection_and_child_pane() -> None:
 
         assert isinstance(first_row[0], Text)
         assert first_row[0].plain == "*"
-        assert first_row[0].style == "bold blue"
+        assert first_row[0].style == "bold #5555FF"
         assert first_row[1].plain == "docs"
         await _wait_for_child_pane_runtime_idle(app, timeout=1.0)
 
@@ -1479,7 +1487,7 @@ async def test_app_cut_marks_row_with_dimmed_style() -> None:
         assert app.app_state.clipboard.paths == (f"{path}/docs",)
         assert isinstance(first_row[1], Text)
         assert first_row[1].plain == "docs"
-        assert first_row[1].style == "blue dim"
+        assert first_row[1].style == "bold #5555FF dim"
 
 
 @pytest.mark.asyncio
@@ -2694,6 +2702,139 @@ async def test_app_command_palette_find_file_jumps_to_matching_parent_directory(
 
 
 @pytest.mark.asyncio
+async def test_app_file_search_renders_preview_within_current_pane(tmp_path) -> None:
+    path = str(tmp_path)
+    notes = tmp_path / "notes.txt"
+    notes.write_text("alpha\nbeta\nTODO: update docs\ndelta\n", encoding="utf-8")
+    file_search_service = FakeFileSearchService(
+        results_by_query={
+            (path, "note", False): (
+                FileSearchResultState(
+                    path=str(notes),
+                    display_path="notes.txt",
+                ),
+            )
+        }
+    )
+    app = create_app(
+        file_search_service=file_search_service,
+        initial_path=path,
+    )
+
+    async with app.run_test(size=(240, 40)) as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("f")
+        await pilot.press("n", "o", "t", "e")
+        await _wait_for_request_count(file_search_service, 1)
+        await _wait_for_child_preview(app, "Preview: notes.txt", "TODO: update docs")
+
+        command_palette = app.query_one("#command-palette")
+        child_pane = app.query_one("#child-pane")
+
+        assert command_palette.region.x + command_palette.region.width <= child_pane.region.x
+
+
+@pytest.mark.asyncio
+async def test_app_file_search_long_results_stay_single_line_in_palette(tmp_path) -> None:
+    path = str(tmp_path)
+    (tmp_path / "seed.txt").write_text("seed\n", encoding="utf-8")
+    file_search_service = FakeFileSearchService(
+        results_by_query={
+            (path, "deep", False): tuple(
+                FileSearchResultState(
+                    path=f"{path}/deeply/nested/location_{index}/README.md",
+                    display_path=(
+                        f"deeply/nested/location_{index}/"
+                        "subdirectory/with/an-excessively-long-file-name-that-should-not-wrap/"
+                        "README.md"
+                    ),
+                )
+                for index in range(18)
+            )
+        }
+    )
+    app = create_app(file_search_service=file_search_service, initial_path=path)
+
+    async with app.run_test(size=(72, 24)) as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("f")
+        await pilot.press("d", "e", "e", "p")
+        await _wait_for_request_count(file_search_service, 1)
+        await asyncio.sleep(0.05)
+
+        palette = await _wait_for_command_palette(app)
+        items = palette.query_one("#command-palette-items", Static)
+        palette_state = select_command_palette_state(app.app_state)
+
+        assert palette_state is not None
+        assert items.visual.get_height(items.region.width) == len(palette_state.items)
+        assert items.visual.get_height(items.region.width) <= items.region.height
+
+
+@pytest.mark.asyncio
+async def test_app_file_search_cancel_restores_child_pane_snapshot() -> None:
+    path = "/tmp/peneo-file-search-preview-cancel"
+    docs_path = f"{path}/docs"
+    notes_path = f"{path}/notes.txt"
+    child_entries = (
+        DirectoryEntryState(f"{docs_path}/README.md", "README.md", "file"),
+        DirectoryEntryState(f"{docs_path}/guide.md", "guide.md", "file"),
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (
+                    DirectoryEntryState(docs_path, "docs", "dir"),
+                    DirectoryEntryState(notes_path, "notes.txt", "file"),
+                ),
+                child_path=docs_path,
+                child_entries=child_entries,
+            ),
+        },
+        child_panes={
+            (path, docs_path): PaneState(directory_path=docs_path, entries=child_entries),
+            (
+                path,
+                notes_path,
+            ): PaneState(
+                directory_path=path,
+                entries=(),
+                mode="preview",
+                preview_path=notes_path,
+                preview_content="alpha\nbeta\n",
+            ),
+        },
+    )
+    file_search_service = FakeFileSearchService(
+        results_by_query={
+            (path, "note", False): (
+                FileSearchResultState(
+                    path=notes_path,
+                    display_path="notes.txt",
+                ),
+            )
+        }
+    )
+    app = create_app(
+        snapshot_loader=loader,
+        file_search_service=file_search_service,
+        initial_path=path,
+    )
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await _wait_for_child_entries(app, ["guide.md", "README.md"])
+        await pilot.press("f")
+        await pilot.press("n", "o", "t", "e")
+        await _wait_for_request_count(file_search_service, 1)
+        await _wait_for_child_preview(app, "Preview: notes.txt", "alpha")
+
+        await pilot.press("escape")
+        await _wait_for_child_entries(app, ["guide.md", "README.md"])
+
+
+@pytest.mark.asyncio
 async def test_app_file_search_debounces_rapid_query_updates(tmp_path) -> None:
     path = str(tmp_path)
     (tmp_path / "README.md").write_text("readme\n", encoding="utf-8")
@@ -2894,7 +3035,7 @@ async def test_app_command_palette_grep_jumps_to_matching_parent_directory() -> 
     )
     grep_search_service = FakeGrepSearchService(
         results_by_query={
-            (path, "todo", False): (
+            (path, "todo", (), (), False): (
                 GrepSearchResultState(
                     path=f"{docs_path}/README.md",
                     display_path="docs/README.md",
@@ -2923,12 +3064,88 @@ async def test_app_command_palette_grep_jumps_to_matching_parent_directory() -> 
 
 
 @pytest.mark.asyncio
+async def test_app_grep_search_renders_context_preview_within_current_pane(tmp_path) -> None:
+    path = str(tmp_path)
+    notes = tmp_path / "notes.txt"
+    notes.write_text("alpha\nbeta\nTODO: update docs\ndelta\nepsilon\n", encoding="utf-8")
+    grep_search_service = FakeGrepSearchService(
+        results_by_query={
+            (path, "todo", (), (), False): (
+                GrepSearchResultState(
+                    path=str(notes),
+                    display_path="notes.txt",
+                    line_number=3,
+                    line_text="TODO: update docs",
+                ),
+            )
+        }
+    )
+    app = create_app(
+        grep_search_service=grep_search_service,
+        initial_path=path,
+    )
+
+    async with app.run_test(size=(240, 40)) as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("g")
+        await pilot.press("t", "o", "d", "o")
+        await _wait_for_request_count(grep_search_service, 1)
+        await _wait_for_child_preview(app, "Preview: notes.txt:3", "TODO: update docs")
+
+        command_palette = app.query_one("#command-palette")
+        child_pane = app.query_one("#child-pane")
+
+        assert command_palette.region.x + command_palette.region.width <= child_pane.region.x
+
+
+@pytest.mark.asyncio
+async def test_app_grep_search_long_results_stay_single_line_in_palette(tmp_path) -> None:
+    path = str(tmp_path)
+    (tmp_path / "seed.txt").write_text("seed\n", encoding="utf-8")
+    grep_search_service = FakeGrepSearchService(
+        results_by_query={
+            (path, "todo", (), (), False): tuple(
+                GrepSearchResultState(
+                    path=f"{path}/src/module_{index}.py",
+                    display_path=(
+                        f"src/features/search/module_{index}/"
+                        "very/deeply/nested/package/file_with_a_name_that_should_not_wrap.py"
+                    ),
+                    line_number=index + 1,
+                    line_text=(
+                        "TODO: keep this grep result on a single visual line even when the "
+                        "matched content is far longer than the available palette width"
+                    ),
+                )
+                for index in range(18)
+            )
+        }
+    )
+    app = create_app(grep_search_service=grep_search_service, initial_path=path)
+
+    async with app.run_test(size=(72, 24)) as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("g")
+        await pilot.press("t", "o", "d", "o")
+        await _wait_for_request_count(grep_search_service, 1)
+        await asyncio.sleep(0.05)
+
+        palette = await _wait_for_command_palette(app)
+        items = palette.query_one("#command-palette-items", Static)
+        palette_state = select_command_palette_state(app.app_state)
+
+        assert palette_state is not None
+        assert items.visual.get_height(items.region.width) == len(palette_state.items)
+        assert items.visual.get_height(items.region.width) <= items.region.height
+
+
+@pytest.mark.asyncio
 async def test_app_grep_search_debounces_rapid_query_updates(tmp_path) -> None:
     path = str(tmp_path)
     (tmp_path / "README.md").write_text("TODO: readme\n", encoding="utf-8")
     grep_search_service = FakeGrepSearchService(
         results_by_query={
-            (path, "todo", False): (
+            (path, "todo", (), (), False): (
                 GrepSearchResultState(
                     path=f"{path}/README.md",
                     display_path="README.md",
@@ -2946,7 +3163,46 @@ async def test_app_grep_search_debounces_rapid_query_updates(tmp_path) -> None:
         await pilot.press("t", "o", "d", "o")
 
         await _wait_for_request_count(grep_search_service, 1, timeout=0.5)
-        assert grep_search_service.executed_requests == [(path, "todo", False)]
+        assert grep_search_service.executed_requests == [(path, "todo", (), (), False)]
+
+
+@pytest.mark.asyncio
+async def test_app_grep_search_passes_include_and_exclude_extensions(tmp_path) -> None:
+    path = str(tmp_path)
+    (tmp_path / "README.md").write_text("TODO: readme\n", encoding="utf-8")
+    grep_search_service = FakeGrepSearchService(
+        results_by_query={
+            (path, "todo", ("*.md",), ("*.log",), False): (
+                GrepSearchResultState(
+                    path=f"{path}/README.md",
+                    display_path="README.md",
+                    line_number=1,
+                    line_text="TODO: readme",
+                ),
+            )
+        }
+    )
+    app = create_app(grep_search_service=grep_search_service, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("g")
+        await pilot.press("t", "o", "d", "o")
+        await pilot.press("tab", "m", "d")
+        await pilot.press("tab", "l", "o", "g")
+
+        await _wait_for_request_count(grep_search_service, 1, timeout=1.0)
+        assert grep_search_service.executed_requests[-1] == (
+            path,
+            "todo",
+            ("*.md",),
+            ("*.log",),
+            False,
+        )
+        assert app.app_state.command_palette is not None
+        assert [
+            result.display_label for result in app.app_state.command_palette.grep_search_results
+        ] == ["README.md:1: TODO: readme"]
 
 
 @pytest.mark.asyncio
@@ -2956,7 +3212,7 @@ async def test_app_grep_search_cancels_superseded_request_without_notification(t
     (tmp_path / "guide.md").write_text("guide\n", encoding="utf-8")
     grep_search_service = BlockingGrepSearchService(
         results_by_query={
-            (path, "todo", False): (
+            (path, "todo", (), (), False): (
                 GrepSearchResultState(
                     path=f"{path}/README.md",
                     display_path="README.md",
@@ -2964,7 +3220,7 @@ async def test_app_grep_search_cancels_superseded_request_without_notification(t
                     line_text="TODO: readme",
                 ),
             ),
-            (path, "guide", False): (
+            (path, "guide", (), (), False): (
                 GrepSearchResultState(
                     path=f"{path}/guide.md",
                     display_path="guide.md",
@@ -3007,7 +3263,7 @@ async def test_app_grep_search_shows_invalid_regex_message_in_palette(tmp_path) 
     (tmp_path / "README.md").write_text("TODO: readme\n", encoding="utf-8")
     grep_search_service = FakeGrepSearchService(
         invalid_query_messages={
-            (path, "re:[", False): "regex parse error",
+            (path, "re:[", (), (), False): "regex parse error",
         }
     )
     app = create_app(grep_search_service=grep_search_service, initial_path=path)

@@ -135,6 +135,7 @@ from peneo.state import (
     SetCommandPaletteQuery,
     SetCursorPath,
     SetFilterQuery,
+    SetGrepSearchField,
     SetNotification,
     SetPendingInputValue,
     SetSort,
@@ -566,10 +567,12 @@ def test_enter_cursor_directory_promotes_matching_child_pane() -> None:
         directory_path="/tmp/project/docs",
         entries=(),
     )
-    assert result.state.directory_size_cache == ()
+    assert result.state.directory_size_cache == (
+        DirectorySizeCacheEntry("/tmp/project/docs/api", "pending"),
+    )
     assert result.state.pending_browser_snapshot_request_id is None
     assert result.state.pending_child_pane_request_id == 1
-    assert result.state.pending_directory_size_request_id is None
+    assert result.state.pending_directory_size_request_id == 2
     assert result.state.history.back == ("/tmp/project",)
     assert result.state.history.forward == ()
     assert result.effects == (
@@ -577,6 +580,10 @@ def test_enter_cursor_directory_promotes_matching_child_pane() -> None:
             request_id=1,
             current_path="/tmp/project/docs",
             cursor_path="/tmp/project/docs/api",
+        ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=("/tmp/project/docs/api",),
         ),
     )
 
@@ -708,7 +715,7 @@ def test_reload_directory_requests_snapshot_with_current_cursor() -> None:
 
     result = reduce_app_state(state, ReloadDirectory())
 
-    assert result.state.pending_browser_snapshot_request_id == 2
+    assert result.state.pending_browser_snapshot_request_id == 3
     assert result.state.ui_mode == "BUSY"
     assert len(result.effects) == 1
     assert result.effects[0].path == "/home/tadashi/develop/peneo"
@@ -1460,7 +1467,7 @@ def test_cycle_config_editor_directory_size_visibility_updates_draft_and_dirty_s
     next_state = _reduce_state(state, CycleConfigEditorValue(delta=1))
 
     assert next_state.config_editor is not None
-    assert next_state.config_editor.draft.display.show_directory_sizes is True
+    assert next_state.config_editor.draft.display.show_directory_sizes is False
     assert next_state.config_editor.dirty is True
 
 
@@ -1680,6 +1687,14 @@ def test_config_save_completed_requests_preview_when_enabled() -> None:
             request_id=1,
             current_path="/home/tadashi/develop/peneo",
             cursor_path=path,
+        ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
         ),
     )
 
@@ -2371,8 +2386,94 @@ def test_set_command_palette_query_starts_grep_search_effect() -> None:
             root_path="/home/tadashi/develop/peneo",
             query="todo",
             show_hidden=False,
+            include_globs=(),
+            exclude_globs=(),
         ),
     )
+
+
+def test_set_grep_search_field_builds_include_and_exclude_globs() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = _reduce_state(state, SetCommandPaletteQuery("todo"))
+
+    result = reduce_app_state(state, SetGrepSearchField(field="include", value="py, ts"))
+    result = reduce_app_state(result.state, SetGrepSearchField(field="exclude", value=".log"))
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.grep_search_include_extensions == "py, ts"
+    assert result.state.command_palette.grep_search_exclude_extensions == ".log"
+    assert result.effects == (
+        RunGrepSearchEffect(
+            request_id=3,
+            root_path="/home/tadashi/develop/peneo",
+            query="todo",
+            show_hidden=False,
+            include_globs=("*.py", "*.ts"),
+            exclude_globs=("*.log",),
+        ),
+    )
+
+
+def test_set_grep_search_field_rejects_conflicting_extensions() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = _reduce_state(state, SetCommandPaletteQuery("todo"))
+    state = _reduce_state(state, SetGrepSearchField(field="include", value="py"))
+
+    result = reduce_app_state(state, SetGrepSearchField(field="exclude", value=".py"))
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.grep_search_results == ()
+    assert (
+        result.state.command_palette.grep_search_error_message
+        == "Extensions cannot be included and excluded at the same time: py"
+    )
+    assert result.state.pending_grep_search_request_id is None
+    assert result.effects == ()
+
+
+def test_set_grep_search_field_rejects_invalid_extension_input() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = _reduce_state(state, SetCommandPaletteQuery("todo"))
+
+    result = reduce_app_state(state, SetGrepSearchField(field="include", value="*.py"))
+
+    assert result.state.command_palette is not None
+    assert (
+        result.state.command_palette.grep_search_error_message
+        == "Invalid include extension: *.py"
+    )
+    assert result.effects == ()
+
+
+def test_set_grep_search_field_clears_results_when_keyword_becomes_empty() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            query="todo",
+            grep_search_keyword="todo",
+            grep_search_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/peneo/README.md",
+                    display_path="README.md",
+                    line_number=1,
+                    line_text="TODO",
+                ),
+            ),
+        ),
+        pending_grep_search_request_id=4,
+        pending_child_pane_request_id=7,
+    )
+
+    result = reduce_app_state(state, SetGrepSearchField(field="keyword", value=""))
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.grep_search_results == ()
+    assert result.state.command_palette.grep_search_error_message is None
+    assert result.state.pending_grep_search_request_id is None
+    assert result.state.pending_child_pane_request_id is None
+    assert result.effects == ()
 
 
 def test_set_command_palette_query_reuses_completed_file_search_results_for_prefix_extension(
@@ -2413,8 +2514,15 @@ def test_set_command_palette_query_reuses_completed_file_search_results_for_pref
 
     result = reduce_app_state(state, SetCommandPaletteQuery("readm"))
 
-    assert result.effects == ()
+    assert result.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=5,
+            current_path="/home/tadashi/develop/peneo",
+            cursor_path="/home/tadashi/develop/peneo/README.md",
+        ),
+    )
     assert result.state.pending_file_search_request_id is None
+    assert result.state.pending_child_pane_request_id == 5
     assert result.state.command_palette is not None
     assert result.state.command_palette.file_search_results == (
         FileSearchResultState(
@@ -2422,7 +2530,7 @@ def test_set_command_palette_query_reuses_completed_file_search_results_for_pref
             display_path="README.md",
         ),
     )
-    assert result.state.next_request_id == 5
+    assert result.state.next_request_id == 6
 
 
 def test_set_command_palette_query_runs_new_search_when_query_is_not_prefix_extension() -> None:
@@ -2688,6 +2796,75 @@ def test_grep_search_completed_updates_palette_results() -> None:
     assert next_state.pending_grep_search_request_id is None
 
 
+def test_grep_search_completed_requests_context_preview() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    search_state = replace(
+        state,
+        command_palette=replace(state.command_palette, query="todo"),
+        pending_grep_search_request_id=4,
+    )
+    grep_result = GrepSearchResultState(
+        path="/home/tadashi/develop/peneo/src/peneo/app.py",
+        display_path="src/peneo/app.py",
+        line_number=42,
+        line_text="TODO: update palette",
+    )
+
+    result = reduce_app_state(
+        search_state,
+        GrepSearchCompleted(
+            request_id=4,
+            query="todo",
+            results=(grep_result,),
+        ),
+    )
+
+    assert result.state.pending_child_pane_request_id == 1
+    assert result.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=1,
+            current_path="/home/tadashi/develop/peneo",
+            cursor_path="/home/tadashi/develop/peneo/src/peneo/app.py",
+            grep_result=grep_result,
+            grep_context_lines=3,
+        ),
+    )
+
+
+def test_grep_search_completed_skips_context_preview_when_preview_disabled() -> None:
+    grep_result = GrepSearchResultState(
+        path="/home/tadashi/develop/peneo/src/peneo/app.py",
+        display_path="src/peneo/app.py",
+        line_number=42,
+        line_text="TODO: update palette",
+    )
+    search_state = replace(
+        _reduce_state(build_initial_app_state(), BeginGrepSearch()),
+        config=replace(
+            build_initial_app_state().config,
+            display=replace(build_initial_app_state().config.display, show_preview=False),
+        ),
+        command_palette=replace(
+            _reduce_state(build_initial_app_state(), BeginGrepSearch()).command_palette,
+            query="todo",
+        ),
+        pending_grep_search_request_id=4,
+    )
+
+    result = reduce_app_state(
+        search_state,
+        GrepSearchCompleted(
+            request_id=4,
+            query="todo",
+            results=(grep_result,),
+        ),
+    )
+
+    assert result.state.config.display.show_preview is False
+    assert result.state.pending_child_pane_request_id is None
+    assert result.effects == ()
+
+
 def test_grep_search_failed_sets_inline_error_for_invalid_regex() -> None:
     state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
     search_state = replace(
@@ -2792,6 +2969,55 @@ def test_cancel_command_palette_returns_to_browsing() -> None:
 
     assert next_state.ui_mode == "BROWSING"
     assert next_state.command_palette is None
+
+
+def test_cancel_grep_command_palette_restores_current_cursor_preview() -> None:
+    path = "/home/tadashi/develop/peneo/README.md"
+    grep_result = GrepSearchResultState(
+        path=path,
+        display_path="README.md",
+        line_number=3,
+        line_text="TODO: update docs",
+    )
+    state = replace(
+        _reduce_state(build_initial_app_state(), BeginGrepSearch()),
+        current_pane=replace(build_initial_app_state().current_pane, cursor_path=path),
+        command_palette=CommandPaletteState(
+            source="grep_search",
+            query="todo",
+            grep_search_results=(grep_result,),
+        ),
+        child_pane=PaneState(
+            directory_path="/home/tadashi/develop/peneo",
+            entries=(),
+            mode="preview",
+            preview_path=path,
+            preview_title="Preview: README.md:3",
+            preview_content="TODO: update docs\n",
+            preview_start_line=3,
+            preview_highlight_line=3,
+        ),
+    )
+
+    result = reduce_app_state(state, CancelCommandPalette())
+
+    assert result.state.ui_mode == "BROWSING"
+    assert result.state.pending_child_pane_request_id == 1
+    assert result.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=1,
+            current_path="/home/tadashi/develop/peneo",
+            cursor_path=path,
+        ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
+        ),
+    )
 
 
 def test_begin_delete_targets_single_runs_file_mutation() -> None:
@@ -4129,6 +4355,14 @@ def test_toggle_selection_and_advance_moves_cursor_to_next_visible_entry() -> No
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/src",
         ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
+        ),
     )
 
 
@@ -4160,6 +4394,14 @@ def test_move_cursor_and_select_range_sets_anchor_and_selects_contiguous_entries
             request_id=1,
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/src",
+        ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
         ),
     )
 
@@ -4401,7 +4643,16 @@ def test_move_cursor_emits_child_snapshot_effect_only_when_target_changes() -> N
     )
 
     result = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/peneo/docs"))
-    assert result.effects == ()
+    assert result.effects == (
+        RunDirectorySizeEffect(
+            request_id=1,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
+        ),
+    )
 
     moved = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/peneo/src"))
 
@@ -4413,6 +4664,14 @@ def test_move_cursor_emits_child_snapshot_effect_only_when_target_changes() -> N
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/src",
         ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
+        ),
     )
 
     down = reduce_app_state(state, MoveCursor(delta=1, visible_paths=visible_paths))
@@ -4423,6 +4682,14 @@ def test_move_cursor_emits_child_snapshot_effect_only_when_target_changes() -> N
             request_id=1,
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/src",
+        ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
         ),
     )
 
@@ -4439,6 +4706,14 @@ def test_set_cursor_path_to_file_requests_child_pane_preview() -> None:
             request_id=1,
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/README.md",
+        ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
         ),
     )
 
@@ -4466,7 +4741,16 @@ def test_set_cursor_path_to_file_clears_child_pane_when_preview_disabled() -> No
         entries=(),
     )
     assert result.state.pending_child_pane_request_id is None
-    assert result.effects == ()
+    assert result.effects == (
+        RunDirectorySizeEffect(
+            request_id=1,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
+        ),
+    )
 
 
 def test_child_pane_snapshot_loaded_ignores_stale_request() -> None:
@@ -4482,6 +4766,41 @@ def test_child_pane_snapshot_loaded_ignores_stale_request() -> None:
     )
 
     assert next_state == requested
+
+
+def test_child_pane_snapshot_loaded_clears_grep_preview_when_file_preview_disabled() -> None:
+    path = "/home/tadashi/develop/peneo/README.md"
+    state = replace(
+        build_initial_app_state(),
+        config=replace(
+            build_initial_app_state().config,
+            display=replace(build_initial_app_state().config.display, show_preview=False),
+        ),
+        pending_child_pane_request_id=7,
+    )
+
+    next_state = _reduce_state(
+        state,
+        ChildPaneSnapshotLoaded(
+            request_id=7,
+            pane=PaneState(
+                directory_path="/home/tadashi/develop/peneo",
+                entries=(),
+                mode="preview",
+                preview_path=path,
+                preview_title="Preview: README.md:3",
+                preview_content="one\ntwo\nTODO: update docs\n",
+                preview_start_line=1,
+                preview_highlight_line=3,
+            ),
+        ),
+    )
+
+    assert next_state.child_pane == PaneState(
+        directory_path="/home/tadashi/develop/peneo",
+        entries=(),
+    )
+    assert next_state.pending_child_pane_request_id is None
 
 
 def test_child_pane_snapshot_failed_ignores_stale_request() -> None:
@@ -4563,7 +4882,7 @@ def test_jump_cursor_start() -> None:
     assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/docs"
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
-            request_id=2,
+            request_id=3,
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/docs",
         ),
@@ -4586,6 +4905,14 @@ def test_jump_cursor_end() -> None:
             request_id=1,
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/tests",
+        ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
         ),
     )
 
@@ -5130,7 +5457,7 @@ def test_move_cursor_by_page_down() -> None:
     assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/README.md"
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
-            request_id=1,
+            request_id=2,
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/README.md",
         ),
@@ -5155,7 +5482,7 @@ def test_move_cursor_by_page_up() -> None:
     assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/src"
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
-            request_id=2,
+            request_id=3,
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/src",
         ),

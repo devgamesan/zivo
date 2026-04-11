@@ -286,14 +286,22 @@ def start_child_pane_snapshot(app: Any, effect: LoadChildPaneSnapshotEffect) -> 
         return
     cancel_event = threading.Event()
     _set_active_tracking(app, _CHILD_PANE_TRACKING, effect.request_id, cancel_event)
+    loader = partial(
+        app._snapshot_loader.load_child_pane_snapshot,
+        effect.current_path,
+        effect.cursor_path,
+    )
+    if effect.grep_result is not None:
+        loader = partial(
+            app._snapshot_loader.load_grep_preview,
+            effect.current_path,
+            effect.grep_result,
+            context_lines=effect.grep_context_lines,
+        )
     _run_worker(
         app,
         effect,
-        partial(
-            app._snapshot_loader.load_child_pane_snapshot,
-            effect.current_path,
-            effect.cursor_path,
-        ),
+        loader,
         _WorkerSpec(
             name=f"child-pane-snapshot:{effect.request_id}",
             group="child-pane-snapshot",
@@ -505,6 +513,13 @@ def _start_search_worker(
     cancel_event = threading.Event()
     _set_active_tracking(app, config.tracking, effect.request_id, cancel_event)
     service = getattr(app, config.service_attr)
+    search_kwargs = {
+        "show_hidden": effect.show_hidden,
+        "is_cancelled": cancel_event.is_set,
+    }
+    if isinstance(effect, RunGrepSearchEffect):
+        search_kwargs["include_globs"] = effect.include_globs
+        search_kwargs["exclude_globs"] = effect.exclude_globs
     _run_worker(
         app,
         effect,
@@ -512,16 +527,26 @@ def _start_search_worker(
             service.search,
             effect.root_path,
             effect.query,
-            show_hidden=effect.show_hidden,
-            is_cancelled=cancel_event.is_set,
+            **search_kwargs,
         ),
         _WorkerSpec(
             name=f"{config.worker_key}:{effect.request_id}",
             group=config.worker_key,
-            description=effect.query,
+            description=_describe_search_effect(effect),
             exclusive=True,
         ),
     )
+
+
+def _describe_search_effect(effect: RunFileSearchEffect | RunGrepSearchEffect) -> str:
+    if isinstance(effect, RunFileSearchEffect):
+        return effect.query
+    parts = [effect.query]
+    if effect.include_globs:
+        parts.append(f"include={','.join(effect.include_globs)}")
+    if effect.exclude_globs:
+        parts.append(f"exclude={','.join(effect.exclude_globs)}")
+    return " | ".join(part for part in parts if part)
 
 
 def cancel_pending_file_search(app: Any) -> None:

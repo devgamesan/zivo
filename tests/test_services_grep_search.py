@@ -58,6 +58,44 @@ def test_live_grep_search_service_supports_regex_queries_with_re_prefix(tmp_path
 
 
 @skip_if_no_rg
+def test_live_grep_search_service_filters_matches_by_included_extensions(tmp_path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "README.md").write_text("TODO: readme\n", encoding="utf-8")
+    (root / "notes.txt").write_text("TODO: notes\n", encoding="utf-8")
+
+    service = LiveGrepSearchService()
+
+    results = service.search(
+        str(root),
+        "todo",
+        show_hidden=False,
+        include_globs=("*.md",),
+    )
+
+    assert [result.display_path for result in results] == ["README.md"]
+
+
+@skip_if_no_rg
+def test_live_grep_search_service_filters_matches_by_excluded_extensions(tmp_path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "README.md").write_text("TODO: readme\n", encoding="utf-8")
+    (root / "notes.log").write_text("TODO: log\n", encoding="utf-8")
+
+    service = LiveGrepSearchService()
+
+    results = service.search(
+        str(root),
+        "todo",
+        show_hidden=False,
+        exclude_globs=("*.log",),
+    )
+
+    assert [result.display_path for result in results] == ["README.md"]
+
+
+@skip_if_no_rg
 def test_live_grep_search_service_raises_invalid_query_for_bad_regex(tmp_path) -> None:
     root = tmp_path / "project"
     root.mkdir()

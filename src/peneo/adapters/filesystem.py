@@ -1,6 +1,8 @@
 """Filesystem adapter for reading local directory entries."""
 
+import grp
 import os
+import pwd
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
@@ -57,12 +59,22 @@ class LocalFilesystemAdapter:
 
 
 def _build_directory_entry(entry: os.DirEntry[str]) -> DirectoryEntryState | None:
+    is_symlink = entry.is_symlink()
     try:
         stat_result = entry.stat()
     except FileNotFoundError:
-        # Skip broken symlinks or entries removed during iteration.
+        if is_symlink:
+            return DirectoryEntryState(
+                path=entry.path,
+                name=entry.name,
+                kind="file",
+                hidden=entry.name.startswith("."),
+                symlink=True,
+            )
         return None
     kind = "dir" if entry.is_dir() else "file"
+    owner = _resolve_user_name(stat_result.st_uid)
+    group = _resolve_group_name(stat_result.st_gid)
     return DirectoryEntryState(
         path=entry.path,
         name=entry.name,
@@ -71,6 +83,9 @@ def _build_directory_entry(entry: os.DirEntry[str]) -> DirectoryEntryState | Non
         modified_at=datetime.fromtimestamp(stat_result.st_mtime),
         hidden=entry.name.startswith("."),
         permissions_mode=stat_result.st_mode,
+        owner=owner,
+        group=group,
+        symlink=is_symlink,
     )
 
 
@@ -107,3 +122,17 @@ def _calculate_directory_size(
 
 class DirectorySizeCancelled(RuntimeError):
     """Raised internally to abort a recursive size walk."""
+
+
+def _resolve_user_name(uid: int) -> str | None:
+    try:
+        return pwd.getpwuid(uid).pw_name
+    except (KeyError, OSError):
+        return None
+
+
+def _resolve_group_name(gid: int) -> str | None:
+    try:
+        return grp.getgrgid(gid).gr_name
+    except (KeyError, OSError):
+        return None

@@ -1,3 +1,5 @@
+import io
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -22,6 +24,15 @@ class DummyApp:
 
     def run(self, *, mouse: bool = True) -> None:
         self.run_calls += 1
+
+
+class DummyTextStream(io.StringIO):
+    def __init__(self, *, isatty: bool) -> None:
+        super().__init__()
+        self._isatty = isatty
+
+    def isatty(self) -> bool:
+        return self._isatty
 
 
 def test_render_shell_init_outputs_peneo_cd_function() -> None:
@@ -64,6 +75,123 @@ def test_main_print_last_dir_falls_back_to_current_path(capsys, monkeypatch) -> 
     assert return_code == 0
     assert app.run_calls == 1
     assert capsys.readouterr().out == "/tmp/peneo-fallback\n"
+
+
+def test_shell_integration_stdio_redirects_standard_streams_to_tty(monkeypatch) -> None:
+    original_stdin = DummyTextStream(isatty=True)
+    original_stdout = DummyTextStream(isatty=False)
+    original_stderr = DummyTextStream(isatty=True)
+    tty_stdin = DummyTextStream(isatty=True)
+    tty_stdout = DummyTextStream(isatty=True)
+    tty_stderr = DummyTextStream(isatty=True)
+
+    monkeypatch.setattr(sys, "stdin", original_stdin)
+    monkeypatch.setattr(sys, "stdout", original_stdout)
+    monkeypatch.setattr(sys, "stderr", original_stderr)
+    monkeypatch.setattr(sys, "__stdin__", original_stdin, raising=False)
+    monkeypatch.setattr(sys, "__stdout__", original_stdout, raising=False)
+    monkeypatch.setattr(sys, "__stderr__", original_stderr, raising=False)
+    monkeypatch.setattr(
+        cli,
+        "_open_tty_streams",
+        lambda: cli._StandardStreams(
+            stdin=tty_stdin,
+            stdout=tty_stdout,
+            stderr=tty_stderr,
+        ),
+    )
+
+    with cli._shell_integration_stdio(True):
+        assert sys.stdin is tty_stdin
+        assert sys.stdout is tty_stdout
+        assert sys.stderr is tty_stderr
+        assert sys.__stdin__ is tty_stdin
+        assert sys.__stdout__ is tty_stdout
+        assert sys.__stderr__ is tty_stderr
+
+    assert sys.stdin is original_stdin
+    assert sys.stdout is original_stdout
+    assert sys.stderr is original_stderr
+    assert tty_stdin.closed is True
+    assert tty_stdout.closed is True
+    assert tty_stderr.closed is True
+
+
+def test_shell_integration_stdio_falls_back_when_tty_open_fails(monkeypatch) -> None:
+    original_stdin = DummyTextStream(isatty=True)
+    original_stdout = DummyTextStream(isatty=False)
+    original_stderr = DummyTextStream(isatty=True)
+
+    monkeypatch.setattr(sys, "stdin", original_stdin)
+    monkeypatch.setattr(sys, "stdout", original_stdout)
+    monkeypatch.setattr(sys, "stderr", original_stderr)
+    monkeypatch.setattr(sys, "__stdin__", original_stdin, raising=False)
+    monkeypatch.setattr(sys, "__stdout__", original_stdout, raising=False)
+    monkeypatch.setattr(sys, "__stderr__", original_stderr, raising=False)
+    monkeypatch.setattr(
+        cli,
+        "_open_tty_streams",
+        lambda: (_ for _ in ()).throw(OSError("/dev/tty unavailable")),
+    )
+
+    with cli._shell_integration_stdio(True):
+        assert sys.stdin is original_stdin
+        assert sys.stdout is original_stdout
+        assert sys.stderr is original_stderr
+
+
+def test_main_print_last_dir_runs_app_with_tty_streams_when_stdout_is_captured(
+    monkeypatch,
+) -> None:
+    original_stdin = DummyTextStream(isatty=True)
+    original_stdout = DummyTextStream(isatty=False)
+    original_stderr = DummyTextStream(isatty=True)
+    tty_stdin = DummyTextStream(isatty=True)
+    tty_stdout = DummyTextStream(isatty=True)
+    tty_stderr = DummyTextStream(isatty=True)
+    app = DummyApp(return_value="/tmp/peneo-last-dir")
+
+    def run_with_tty_streams(*, mouse: bool = True) -> None:
+        app.run_calls += 1
+        assert mouse is False
+        assert sys.stdin is tty_stdin
+        assert sys.stdout is tty_stdout
+        assert sys.stderr is tty_stderr
+        assert sys.__stdout__ is tty_stdout
+        assert sys.__stderr__ is tty_stderr
+
+    app.run = run_with_tty_streams  # type: ignore[method-assign]
+
+    monkeypatch.setattr(sys, "stdin", original_stdin)
+    monkeypatch.setattr(sys, "stdout", original_stdout)
+    monkeypatch.setattr(sys, "stderr", original_stderr)
+    monkeypatch.setattr(sys, "__stdin__", original_stdin, raising=False)
+    monkeypatch.setattr(sys, "__stdout__", original_stdout, raising=False)
+    monkeypatch.setattr(sys, "__stderr__", original_stderr, raising=False)
+    monkeypatch.setattr(cli, "load_app_config", lambda: ConfigLoadResult(config=AppConfig()))
+    monkeypatch.setattr(
+        cli,
+        "configure_file_logging",
+        lambda **_kwargs: LoggingSetupResult(enabled=True, path="/tmp/peneo.log"),
+    )
+    monkeypatch.setattr(cli, "create_app", lambda **_kwargs: app)
+    monkeypatch.setattr(
+        cli,
+        "_open_tty_streams",
+        lambda: cli._StandardStreams(
+            stdin=tty_stdin,
+            stdout=tty_stdout,
+            stderr=tty_stderr,
+        ),
+    )
+
+    return_code = cli.main(["--print-last-dir"])
+
+    assert return_code == 0
+    assert app.run_calls == 1
+    assert original_stdout.getvalue() == "/tmp/peneo-last-dir\n"
+    assert sys.stdout is original_stdout
+    assert tty_stdout.closed is True
 
 
 def test_main_passes_loaded_config_and_warnings_to_create_app(monkeypatch) -> None:

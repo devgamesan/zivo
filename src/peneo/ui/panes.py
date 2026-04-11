@@ -101,12 +101,15 @@ class SidePane(Vertical):
     """Lightweight pane used for parent and child directory listings."""
 
     CUT_STYLE = "bright_black dim"
-    EXECUTABLE_STYLE = "cyan"
-    EXECUTABLE_SELECTED_STYLE = "bold cyan"
-    EXECUTABLE_CUT_STYLE = "cyan dim"
-    DIRECTORY_STYLE = "blue"
-    DIRECTORY_SELECTED_STYLE = "bold white on blue"
-    DIRECTORY_CUT_STYLE = "blue dim"
+    EXECUTABLE_STYLE = "bold #55FF55"
+    EXECUTABLE_SELECTED_STYLE = "bold #55FF55"
+    EXECUTABLE_CUT_STYLE = "bold #55FF55 dim"
+    DIRECTORY_STYLE = "bold #5555FF"
+    DIRECTORY_SELECTED_STYLE = "bold white on #5555FF"
+    DIRECTORY_CUT_STYLE = "bold #5555FF dim"
+    SYMLINK_STYLE = "bold #55FFFF"
+    SYMLINK_SELECTED_STYLE = "bold #55FFFF"
+    SYMLINK_CUT_STYLE = "bold #55FFFF dim"
     ENTRY_HORIZONTAL_PADDING = 2
 
     def __init__(
@@ -183,11 +186,19 @@ class SidePane(Vertical):
 
         # カット状態が最優先
         if entry.cut:
+            if entry.symlink:
+                return Text(label, style=cls.SYMLINK_CUT_STYLE)
             if entry.kind == "dir":
                 return Text(label, style=cls.DIRECTORY_CUT_STYLE)
             if entry.executable:
                 return Text(label, style=cls.EXECUTABLE_CUT_STYLE)
             return Text(label, style=cls.CUT_STYLE)
+
+        # シンボリックリンク
+        if entry.symlink:
+            if entry.selected:
+                return Text(label, style=cls.SYMLINK_SELECTED_STYLE)
+            return Text(label, style=cls.SYMLINK_STYLE)
 
         # ディレクトリ（実行権限に関わらずディレクトリ色を優先）
         if entry.kind == "dir":
@@ -203,7 +214,7 @@ class SidePane(Vertical):
 
         # 選択状態
         if entry.selected:
-            return Text(label, style="bold green")
+            return Text(label, style="bold #55FF55")
 
         return Text(label)
 
@@ -235,6 +246,10 @@ class ChildPane(Vertical):
     def preview_id(self) -> str | None:
         return f"{self.id}-preview" if self.id else None
 
+    @property
+    def permissions_id(self) -> str | None:
+        return f"{self.id}-permissions" if self.id else None
+
     def compose(self) -> ComposeResult:
         yield Label(self._state.title, classes="pane-title")
         list_content = Static(
@@ -253,6 +268,13 @@ class ChildPane(Vertical):
         list_content.display = not self._state.is_preview
         yield list_content
         yield preview_content
+        permissions = Static(
+            self._state.permissions_label,
+            id=self.permissions_id,
+            classes="pane-permissions",
+        )
+        permissions.can_focus = False
+        yield permissions
 
     def on_mount(self) -> None:
         self.call_after_refresh(self._refresh_rendered_content)
@@ -270,6 +292,7 @@ class ChildPane(Vertical):
         preview_widget = self._preview_widget()
         list_widget.display = not state.is_preview
         preview_widget.display = state.is_preview
+        self._permissions_widget().update(state.permissions_label)
         self._last_render_width = 0
         self._refresh_rendered_content()
         self.call_after_refresh(self._refresh_rendered_content)
@@ -297,6 +320,9 @@ class ChildPane(Vertical):
     def _preview_widget(self) -> Static:
         return self.query_one(f"#{self.preview_id}", Static)
 
+    def _permissions_widget(self) -> Static:
+        return self.query_one(f"#{self.permissions_id}", Static)
+
     @staticmethod
     def _render_preview(state: ChildPaneViewState, render_width: int):
         if state.preview_message is not None:
@@ -317,7 +343,13 @@ class ChildPane(Vertical):
             lexer=lexer,
             theme=state.syntax_theme,
             word_wrap=False,
-            line_numbers=False,
+            line_numbers=state.preview_start_line is not None,
+            start_line=state.preview_start_line or 1,
+            highlight_lines=(
+                {state.preview_highlight_line}
+                if state.preview_highlight_line is not None
+                else None
+            ),
             code_width=max(1, render_width),
         )
 
@@ -327,15 +359,18 @@ class MainPane(Vertical):
 
     COLUMN_LABELS = ("Sel", "Name", "Size", "Modified")
     COLUMN_KEYS = ("sel", "name", "size", "modified")
-    SELECTED_STYLE = "bold green"
+    SELECTED_STYLE = "bold #55FF55"
     CUT_STYLE = "bright_black dim"
     SELECTED_CUT_STYLE = "bold bright_black"
-    EXECUTABLE_STYLE = "cyan"
-    EXECUTABLE_SELECTED_STYLE = "bold cyan"
-    EXECUTABLE_CUT_STYLE = "cyan dim"
-    DIRECTORY_STYLE = "blue"
-    DIRECTORY_SELECTED_STYLE = "bold blue"
-    DIRECTORY_CUT_STYLE = "blue dim"
+    EXECUTABLE_STYLE = "bold #55FF55"
+    EXECUTABLE_SELECTED_STYLE = "bold #55FF55"
+    EXECUTABLE_CUT_STYLE = "bold #55FF55 dim"
+    DIRECTORY_STYLE = "bold #5555FF"
+    DIRECTORY_SELECTED_STYLE = "bold #5555FF"
+    DIRECTORY_CUT_STYLE = "bold #5555FF dim"
+    SYMLINK_STYLE = "bold #55FFFF"
+    SYMLINK_SELECTED_STYLE = "bold #55FFFF"
+    SYMLINK_CUT_STYLE = "bold #55FFFF dim"
     NAME_MIN_WIDTH = 3
     FIXED_COLUMN_PREFERRED_WIDTHS = {
         "sel": 1,
@@ -503,6 +538,7 @@ class MainPane(Vertical):
                         entry.cut,
                         entry.executable,
                         entry.kind,
+                        entry.symlink,
                     ),
                 )
             except KeyError:
@@ -641,6 +677,7 @@ class MainPane(Vertical):
                 entry.cut,
                 entry.executable,
                 entry.kind,
+                entry.symlink,
             ),
             cls._render_cell(
                 truncate_middle(build_entry_label(entry), column_widths["name"]),
@@ -648,6 +685,7 @@ class MainPane(Vertical):
                 entry.cut,
                 entry.executable,
                 entry.kind,
+                entry.symlink,
             ),
             cls._render_cell(
                 entry.size_label,
@@ -655,6 +693,7 @@ class MainPane(Vertical):
                 entry.cut,
                 entry.executable,
                 entry.kind,
+                entry.symlink,
             ),
             cls._render_cell(
                 entry.modified_label,
@@ -662,6 +701,7 @@ class MainPane(Vertical):
                 entry.cut,
                 entry.executable,
                 entry.kind,
+                entry.symlink,
             ),
         )
 
@@ -703,9 +743,12 @@ class MainPane(Vertical):
         cut: bool,
         executable: bool = False,
         kind: str | None = None,
+        symlink: bool = False,
     ) -> Text:
         # カット状態が最優先
         if cut:
+            if symlink:
+                return Text(value, style=cls.SYMLINK_CUT_STYLE)
             if kind == "dir":
                 return Text(value, style=cls.DIRECTORY_CUT_STYLE)
             if executable:
@@ -713,6 +756,12 @@ class MainPane(Vertical):
             if selected:
                 return Text(value, style=cls.SELECTED_CUT_STYLE)
             return Text(value, style=cls.CUT_STYLE)
+
+        # シンボリックリンク
+        if symlink:
+            if selected:
+                return Text(value, style=cls.SYMLINK_SELECTED_STYLE)
+            return Text(value, style=cls.SYMLINK_STYLE)
 
         # ディレクトリ（実行権限に関わらずディレクトリ色を優先）
         if kind == "dir":

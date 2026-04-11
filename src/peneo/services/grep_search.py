@@ -21,6 +21,8 @@ class GrepSearchService(Protocol):
         query: str,
         *,
         show_hidden: bool,
+        include_globs: tuple[str, ...] = (),
+        exclude_globs: tuple[str, ...] = (),
         is_cancelled: Callable[[], bool] | None = None,
     ) -> tuple[GrepSearchResultState, ...]: ...
 
@@ -47,6 +49,8 @@ class LiveGrepSearchService:
         query: str,
         *,
         show_hidden: bool,
+        include_globs: tuple[str, ...] = (),
+        exclude_globs: tuple[str, ...] = (),
         is_cancelled: Callable[[], bool] | None = None,
     ) -> tuple[GrepSearchResultState, ...]:
         stripped_query = query.strip()
@@ -59,7 +63,12 @@ class LiveGrepSearchService:
         if not root.is_dir():
             raise OSError(f"Not a directory: {root}")
 
-        command = self._build_command(stripped_query, show_hidden=show_hidden)
+        command = self._build_command(
+            stripped_query,
+            show_hidden=show_hidden,
+            include_globs=include_globs,
+            exclude_globs=exclude_globs,
+        )
         try:
             process = subprocess.Popen(
                 command,
@@ -113,7 +122,14 @@ class LiveGrepSearchService:
             )
         )
 
-    def _build_command(self, query: str, *, show_hidden: bool) -> list[str]:
+    def _build_command(
+        self,
+        query: str,
+        *,
+        show_hidden: bool,
+        include_globs: tuple[str, ...] = (),
+        exclude_globs: tuple[str, ...] = (),
+    ) -> list[str]:
         command = [
             self.rg_executable,
             "--json",
@@ -126,6 +142,10 @@ class LiveGrepSearchService:
         ]
         if show_hidden:
             command.append("--hidden")
+        for glob in include_globs:
+            command.extend(["-g", glob])
+        for glob in exclude_globs:
+            command.extend(["-g", f"!{glob}"])
         if is_regex_grep_search_query(query):
             command.extend(["-e", query.strip()[len(_REGEX_QUERY_PREFIX) :]])
         else:
@@ -187,12 +207,20 @@ class LiveGrepSearchService:
 class FakeGrepSearchService:
     """Deterministic grep-search service used by tests."""
 
-    results_by_query: dict[tuple[str, str, bool], tuple[GrepSearchResultState, ...]] = field(
+    results_by_query: dict[
+        tuple[str, str, tuple[str, ...], tuple[str, ...], bool],
+        tuple[GrepSearchResultState, ...],
+    ] = field(default_factory=dict)
+    failure_messages: dict[tuple[str, str, tuple[str, ...], tuple[str, ...], bool], str] = field(
         default_factory=dict
     )
-    failure_messages: dict[tuple[str, str, bool], str] = field(default_factory=dict)
-    invalid_query_messages: dict[tuple[str, str, bool], str] = field(default_factory=dict)
-    executed_requests: list[tuple[str, str, bool]] = field(default_factory=list)
+    invalid_query_messages: dict[
+        tuple[str, str, tuple[str, ...], tuple[str, ...], bool],
+        str,
+    ] = field(default_factory=dict)
+    executed_requests: list[tuple[str, str, tuple[str, ...], tuple[str, ...], bool]] = field(
+        default_factory=list
+    )
 
     def search(
         self,
@@ -200,9 +228,11 @@ class FakeGrepSearchService:
         query: str,
         *,
         show_hidden: bool,
+        include_globs: tuple[str, ...] = (),
+        exclude_globs: tuple[str, ...] = (),
         is_cancelled: Callable[[], bool] | None = None,
     ) -> tuple[GrepSearchResultState, ...]:
-        key = (root_path, query, show_hidden)
+        key = (root_path, query, include_globs, exclude_globs, show_hidden)
         self.executed_requests.append(key)
         if is_cancelled is not None and is_cancelled():
             return ()

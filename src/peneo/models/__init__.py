@@ -45,6 +45,7 @@ from .shell_command import ShellCommandResult
 from .shell_data import (
     AttributeDialogState,
     ChildPaneViewState,
+    CommandPaletteInputFieldViewState,
     CommandPaletteItemViewState,
     CommandPaletteViewState,
     ConfigDialogState,
@@ -70,6 +71,7 @@ __all__ = [
     "BehaviorConfig",
     "BookmarkConfig",
     "ChildPaneViewState",
+    "CommandPaletteInputFieldViewState",
     "CommandPaletteItemViewState",
     "CommandPaletteViewState",
     "ConfigDialogState",

@@ -24,6 +24,7 @@ from .models import (
     AppState,
     BrowserSnapshot,
     FileSearchResultState,
+    GrepSearchFieldId,
     GrepSearchResultState,
     NotificationState,
     PaneState,
@@ -150,6 +151,21 @@ class SetCommandPaletteQuery:
     """Update the command palette query."""
 
     query: str
+
+
+@dataclass(frozen=True)
+class SetGrepSearchField:
+    """Update one grep-search input field."""
+
+    field: GrepSearchFieldId
+    value: str
+
+
+@dataclass(frozen=True)
+class CycleGrepSearchField:
+    """Move focus between grep-search input fields."""
+
+    delta: int
 
 
 @dataclass(frozen=True)
@@ -864,6 +880,8 @@ Action = (
     | CancelCommandPalette
     | MoveCommandPaletteCursor
     | SetCommandPaletteQuery
+    | SetGrepSearchField
+    | CycleGrepSearchField
     | SubmitCommandPalette
     | DismissConfigEditor
     | MoveConfigEditorCursor
