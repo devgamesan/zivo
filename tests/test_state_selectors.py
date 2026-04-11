@@ -1323,7 +1323,7 @@ def test_select_help_bar_state_for_file_search_palette() -> None:
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type filename | ↑↓ select | enter jump | Ctrl+E edit | esc cancel",
+        "type filename | ↑↓ or Ctrl+N/P select | enter jump | Ctrl+E edit | esc cancel",
     )
 
 
@@ -1337,7 +1337,7 @@ def test_select_help_bar_state_for_grep_search_palette() -> None:
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type text / re:pattern | ↑↓ select | enter jump | Ctrl+E edit | esc cancel",
+        "type text / re:pattern | ↑↓ or Ctrl+N/P select | enter jump | Ctrl+E edit | esc cancel",
     )
 
 

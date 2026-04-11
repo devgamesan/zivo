@@ -5,6 +5,7 @@ from textual.containers import Container
 from textual.widgets import Static
 
 from peneo.models import CommandPaletteViewState
+from peneo.ui.panes import truncate_middle
 
 
 class CommandPalette(Container):
@@ -66,6 +67,10 @@ class CommandPalette(Container):
         if not state.items:
             return Text(state.empty_message, style="dim")
 
+        # Maximum label width for grep/file search results to prevent line wrapping
+        # This ensures single-line display even for long results
+        max_label_width = 120
+
         rendered = Text()
         for index, item in enumerate(state.items):
             line = Text()
@@ -79,7 +84,13 @@ class CommandPalette(Container):
                 style = ""
 
             line.append("> " if item.selected else "  ", style=style)
-            line.append(item.label, style=style)
+
+            # Truncate long labels to prevent wrapping
+            label = item.label
+            if len(label) > max_label_width:
+                label = truncate_middle(label, max_label_width)
+
+            line.append(label, style=style)
             if item.shortcut:
                 shortcut_style = "dim"
                 if style:

@@ -133,6 +133,7 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 | Key | Action |
 | --- | ------ |
 | `↑` / `↓` | Move cursor through results |
+| `Ctrl+N` / `Ctrl+P` | Move cursor down/up through results |
 | `PageUp` / `PageDown` | Move cursor by page |
 | `Home` / `End` | Jump to first/last result |
 | `Enter` | Open selected result |

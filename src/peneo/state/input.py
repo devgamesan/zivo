@@ -550,6 +550,12 @@ def _dispatch_command_palette_input(
     if key == "down" or (key == "j" and not search_palette):
         return _supported(MoveCommandPaletteCursor(delta=1))
 
+    if key == "ctrl+n":
+        return _supported(MoveCommandPaletteCursor(delta=1))
+
+    if key == "ctrl+p":
+        return _supported(MoveCommandPaletteCursor(delta=-1))
+
     if key == "pageup":
         visible = compute_search_visible_window(state.terminal_height)
         return _supported(MoveCommandPaletteCursor(delta=-visible))

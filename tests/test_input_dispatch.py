@@ -733,6 +733,70 @@ def test_palette_e_key_does_not_open_editor_for_other_sources() -> None:
     assert actions == (SetNotification(None), SetCommandPaletteQuery("teste"))
 
 
+def test_palette_ctrl_n_moves_cursor_down_in_grep_palette() -> None:
+    from peneo.state.models import CommandPaletteState
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="grep_search",
+            query="test",
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="ctrl+n")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=1))
+
+
+def test_palette_ctrl_p_moves_cursor_up_in_grep_palette() -> None:
+    from peneo.state.models import CommandPaletteState
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="grep_search",
+            query="test",
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="ctrl+p")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=-1))
+
+
+def test_palette_ctrl_n_moves_cursor_down_in_file_search_palette() -> None:
+    from peneo.state.models import CommandPaletteState
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="file_search",
+            query="test",
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="ctrl+n")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=1))
+
+
+def test_palette_ctrl_p_moves_cursor_up_in_file_search_palette() -> None:
+    from peneo.state.models import CommandPaletteState
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="file_search",
+            query="test",
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="ctrl+p")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=-1))
+
+
 def test_palette_printable_key_updates_query() -> None:
     state = replace(build_initial_app_state(), ui_mode="PALETTE")
 

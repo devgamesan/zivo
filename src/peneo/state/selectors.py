@@ -292,14 +292,14 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             if state.config.help_bar.palette_file_search:
                 return HelpBarState(state.config.help_bar.palette_file_search)
             return HelpBarState(
-                ("type filename | ↑↓ select | enter jump | Ctrl+E edit | esc cancel",)
+                ("type filename | ↑↓ or Ctrl+N/P select | enter jump | Ctrl+E edit | esc cancel",)
             )
         if state.command_palette is not None and state.command_palette.source == "grep_search":
             if state.config.help_bar.palette_grep_search:
                 return HelpBarState(state.config.help_bar.palette_grep_search)
             return HelpBarState(
                 (
-                    "type text / re:pattern | ↑↓ select | "
+                    "type text / re:pattern | ↑↓ or Ctrl+N/P select | "
                     "enter jump | Ctrl+E edit | esc cancel",
                 )
             )
