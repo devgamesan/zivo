@@ -495,6 +495,10 @@ def test_directory_size_target_paths_respects_current_hidden_visibility() -> Non
 def test_directory_size_target_paths_returns_empty_when_directory_sizes_are_disabled() -> None:
     state = replace(
         build_initial_app_state(),
+        config=replace(
+            build_initial_app_state().config,
+            display=replace(build_initial_app_state().config.display, show_directory_sizes=False),
+        ),
         current_pane=PaneState(
             directory_path="/home/tadashi/develop/peneo",
             entries=(DirectoryEntryState("/home/tadashi/develop/peneo/docs", "docs", "dir"),),
@@ -951,7 +955,12 @@ def test_select_shell_data_reuses_pane_entries_when_only_notification_changes() 
 
 
 def test_select_shell_data_reuses_current_entries_when_only_cursor_changes() -> None:
-    state = build_initial_app_state()
+    state = build_initial_app_state(
+        config=replace(
+            build_initial_app_state().config,
+            display=replace(build_initial_app_state().config.display, show_directory_sizes=False),
+        ),
+    )
 
     initial_shell = select_shell_data(state)
     moved_shell = select_shell_data(

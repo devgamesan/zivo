@@ -567,10 +567,12 @@ def test_enter_cursor_directory_promotes_matching_child_pane() -> None:
         directory_path="/tmp/project/docs",
         entries=(),
     )
-    assert result.state.directory_size_cache == ()
+    assert result.state.directory_size_cache == (
+        DirectorySizeCacheEntry("/tmp/project/docs/api", "pending"),
+    )
     assert result.state.pending_browser_snapshot_request_id is None
     assert result.state.pending_child_pane_request_id == 1
-    assert result.state.pending_directory_size_request_id is None
+    assert result.state.pending_directory_size_request_id == 2
     assert result.state.history.back == ("/tmp/project",)
     assert result.state.history.forward == ()
     assert result.effects == (
@@ -578,6 +580,10 @@ def test_enter_cursor_directory_promotes_matching_child_pane() -> None:
             request_id=1,
             current_path="/tmp/project/docs",
             cursor_path="/tmp/project/docs/api",
+        ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=("/tmp/project/docs/api",),
         ),
     )
 
@@ -709,7 +715,7 @@ def test_reload_directory_requests_snapshot_with_current_cursor() -> None:
 
     result = reduce_app_state(state, ReloadDirectory())
 
-    assert result.state.pending_browser_snapshot_request_id == 2
+    assert result.state.pending_browser_snapshot_request_id == 3
     assert result.state.ui_mode == "BUSY"
     assert len(result.effects) == 1
     assert result.effects[0].path == "/home/tadashi/develop/peneo"
@@ -1461,7 +1467,7 @@ def test_cycle_config_editor_directory_size_visibility_updates_draft_and_dirty_s
     next_state = _reduce_state(state, CycleConfigEditorValue(delta=1))
 
     assert next_state.config_editor is not None
-    assert next_state.config_editor.draft.display.show_directory_sizes is True
+    assert next_state.config_editor.draft.display.show_directory_sizes is False
     assert next_state.config_editor.dirty is True
 
 
@@ -1681,6 +1687,14 @@ def test_config_save_completed_requests_preview_when_enabled() -> None:
             request_id=1,
             current_path="/home/tadashi/develop/peneo",
             cursor_path=path,
+        ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
         ),
     )
 
@@ -2994,6 +3008,14 @@ def test_cancel_grep_command_palette_restores_current_cursor_preview() -> None:
             request_id=1,
             current_path="/home/tadashi/develop/peneo",
             cursor_path=path,
+        ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
         ),
     )
 
@@ -4333,6 +4355,14 @@ def test_toggle_selection_and_advance_moves_cursor_to_next_visible_entry() -> No
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/src",
         ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
+        ),
     )
 
 
@@ -4364,6 +4394,14 @@ def test_move_cursor_and_select_range_sets_anchor_and_selects_contiguous_entries
             request_id=1,
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/src",
+        ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
         ),
     )
 
@@ -4605,7 +4643,16 @@ def test_move_cursor_emits_child_snapshot_effect_only_when_target_changes() -> N
     )
 
     result = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/peneo/docs"))
-    assert result.effects == ()
+    assert result.effects == (
+        RunDirectorySizeEffect(
+            request_id=1,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
+        ),
+    )
 
     moved = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/peneo/src"))
 
@@ -4617,6 +4664,14 @@ def test_move_cursor_emits_child_snapshot_effect_only_when_target_changes() -> N
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/src",
         ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
+        ),
     )
 
     down = reduce_app_state(state, MoveCursor(delta=1, visible_paths=visible_paths))
@@ -4627,6 +4682,14 @@ def test_move_cursor_emits_child_snapshot_effect_only_when_target_changes() -> N
             request_id=1,
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/src",
+        ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
         ),
     )
 
@@ -4643,6 +4706,14 @@ def test_set_cursor_path_to_file_requests_child_pane_preview() -> None:
             request_id=1,
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/README.md",
+        ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
         ),
     )
 
@@ -4670,7 +4741,16 @@ def test_set_cursor_path_to_file_clears_child_pane_when_preview_disabled() -> No
         entries=(),
     )
     assert result.state.pending_child_pane_request_id is None
-    assert result.effects == ()
+    assert result.effects == (
+        RunDirectorySizeEffect(
+            request_id=1,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
+        ),
+    )
 
 
 def test_child_pane_snapshot_loaded_ignores_stale_request() -> None:
@@ -4802,7 +4882,7 @@ def test_jump_cursor_start() -> None:
     assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/docs"
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
-            request_id=2,
+            request_id=3,
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/docs",
         ),
@@ -4825,6 +4905,14 @@ def test_jump_cursor_end() -> None:
             request_id=1,
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/tests",
+        ),
+        RunDirectorySizeEffect(
+            request_id=2,
+            paths=(
+                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/peneo/tests",
+            ),
         ),
     )
 
@@ -5369,7 +5457,7 @@ def test_move_cursor_by_page_down() -> None:
     assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/README.md"
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
-            request_id=1,
+            request_id=2,
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/README.md",
         ),
@@ -5394,7 +5482,7 @@ def test_move_cursor_by_page_up() -> None:
     assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/src"
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
-            request_id=2,
+            request_id=3,
             current_path="/home/tadashi/develop/peneo",
             cursor_path="/home/tadashi/develop/peneo/src",
         ),

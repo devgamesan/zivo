@@ -36,7 +36,7 @@ def test_loader_creates_default_config_when_missing(tmp_path) -> None:
     assert '#   "gnome-terminal --working-directory={path}",' in written
     assert '# command = "nvim -u NONE"' in written
     assert 'theme = "textual-dark"' in written
-    assert "show_directory_sizes = false" in written
+    assert "show_directory_sizes = true" in written
     assert "show_preview = true" in written
     assert 'default_sort_field = "name"' in written
     assert "[logging]" in written
@@ -134,7 +134,7 @@ def test_loader_keeps_valid_values_and_warns_for_invalid_entries(tmp_path) -> No
     assert result.config.terminal.linux == ("konsole --working-directory {path}",)
     assert result.config.editor.command is None
     assert result.config.display.show_hidden_files is True
-    assert result.config.display.show_directory_sizes is False
+    assert result.config.display.show_directory_sizes is True
     assert result.config.display.show_preview is True
     assert result.config.display.theme == "textual-dark"
     assert result.config.display.default_sort_field == "name"

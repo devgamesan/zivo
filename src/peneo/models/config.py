@@ -30,7 +30,7 @@ class DisplayConfig:
     """Display-related startup defaults."""
 
     show_hidden_files: bool = False
-    show_directory_sizes: bool = False
+    show_directory_sizes: bool = True
     show_preview: bool = True
     show_help_bar: bool = True
     theme: ConfigTheme = "textual-dark"
