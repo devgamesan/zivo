@@ -106,8 +106,11 @@ class PeneoApp(App[None]):
     TITLE = "Peneo"
     SUB_TITLE = "Three-pane shell"
     BINDINGS = [
-        Binding(key, f"dispatch_bound_key('{key}')", show=False, priority=True)
-        for key in iter_bound_keys()
+        Binding("ctrl+p", None, show=False, priority=True),
+        Binding("ctrl+n", None, show=False, priority=True),
+        *[Binding(key, f"dispatch_bound_key('{key}')", show=False, priority=True)
+          for key in iter_bound_keys()
+        ]
     ]
     CSS = """
     Screen {
