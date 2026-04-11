@@ -28,6 +28,8 @@ class CommandPalette(Container):
         yield Static("", id="command-palette-items")
 
     def on_mount(self) -> None:
+        items_widget = self.query_one("#command-palette-items", Static)
+        items_widget.word_wrap = False
         self.set_state(self.state)
 
     def set_state(self, state: CommandPaletteViewState | None) -> None:
