@@ -50,7 +50,7 @@ from peneo.state import (
     PaneState,
     SetTerminalHeight,
 )
-from peneo.state.selectors import compute_current_pane_visible_window
+from peneo.state.selectors import compute_current_pane_visible_window, select_command_palette_state
 from peneo.ui import (
     AttributeDialog,
     CommandPalette,
@@ -2735,6 +2735,42 @@ async def test_app_file_search_renders_preview_within_current_pane(tmp_path) -> 
 
 
 @pytest.mark.asyncio
+async def test_app_file_search_long_results_stay_single_line_in_palette(tmp_path) -> None:
+    path = str(tmp_path)
+    (tmp_path / "seed.txt").write_text("seed\n", encoding="utf-8")
+    file_search_service = FakeFileSearchService(
+        results_by_query={
+            (path, "deep", False): tuple(
+                FileSearchResultState(
+                    path=f"{path}/deeply/nested/location_{index}/README.md",
+                    display_path=(
+                        f"deeply/nested/location_{index}/"
+                        "subdirectory/with/an-excessively-long-file-name-that-should-not-wrap/"
+                        "README.md"
+                    ),
+                )
+                for index in range(18)
+            )
+        }
+    )
+    app = create_app(file_search_service=file_search_service, initial_path=path)
+
+    async with app.run_test(size=(72, 24)) as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("f")
+        await pilot.press("d", "e", "e", "p")
+        await _wait_for_request_count(file_search_service, 1)
+        await asyncio.sleep(0.05)
+
+        palette = await _wait_for_command_palette(app)
+        items = palette.query_one("#command-palette-items", Static)
+        palette_state = select_command_palette_state(app.app_state)
+
+        assert palette_state is not None
+        assert items.visual.get_height(items.region.width) == len(palette_state.items)
+
+
+@pytest.mark.asyncio
 async def test_app_file_search_cancel_restores_child_pane_snapshot() -> None:
     path = "/tmp/peneo-file-search-preview-cancel"
     docs_path = f"{path}/docs"
@@ -3059,6 +3095,46 @@ async def test_app_grep_search_renders_context_preview_within_current_pane(tmp_p
         child_pane = app.query_one("#child-pane")
 
         assert command_palette.region.x + command_palette.region.width <= child_pane.region.x
+
+
+@pytest.mark.asyncio
+async def test_app_grep_search_long_results_stay_single_line_in_palette(tmp_path) -> None:
+    path = str(tmp_path)
+    (tmp_path / "seed.txt").write_text("seed\n", encoding="utf-8")
+    grep_search_service = FakeGrepSearchService(
+        results_by_query={
+            (path, "todo", (), (), False): tuple(
+                GrepSearchResultState(
+                    path=f"{path}/src/module_{index}.py",
+                    display_path=(
+                        f"src/features/search/module_{index}/"
+                        "very/deeply/nested/package/file_with_a_name_that_should_not_wrap.py"
+                    ),
+                    line_number=index + 1,
+                    line_text=(
+                        "TODO: keep this grep result on a single visual line even when the "
+                        "matched content is far longer than the available palette width"
+                    ),
+                )
+                for index in range(18)
+            )
+        }
+    )
+    app = create_app(grep_search_service=grep_search_service, initial_path=path)
+
+    async with app.run_test(size=(72, 24)) as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("g")
+        await pilot.press("t", "o", "d", "o")
+        await _wait_for_request_count(grep_search_service, 1)
+        await asyncio.sleep(0.05)
+
+        palette = await _wait_for_command_palette(app)
+        items = palette.query_one("#command-palette-items", Static)
+        palette_state = select_command_palette_state(app.app_state)
+
+        assert palette_state is not None
+        assert items.visual.get_height(items.region.width) == len(palette_state.items)
 
 
 @pytest.mark.asyncio

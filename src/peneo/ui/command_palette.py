@@ -1,5 +1,6 @@
 """Command palette widget."""
 
+from rich.cells import cell_len
 from rich.text import Text
 from textual.containers import Container
 from textual.widgets import Static
@@ -10,6 +11,8 @@ from peneo.ui.panes import truncate_middle
 
 class CommandPalette(Container):
     """Compact command palette shown above the help and status bars."""
+
+    _DEFAULT_RENDER_WIDTH = 120
 
     def __init__(
         self,
@@ -47,14 +50,23 @@ class CommandPalette(Container):
 
         self.set_class(state.has_more_items, "-expanded")
         title_widget.update(state.title)
+        query_width = self._resolve_render_width(query_widget)
+        items_width = self._resolve_render_width(items_widget)
         if state.input_fields:
-            query_widget.update(self._render_input_fields(state.input_fields))
+            query_widget.update(self._render_input_fields(state.input_fields, query_width))
         else:
-            query_widget.update(self._render_query_line(state))
-        items_widget.update(self._render_items(state))
+            query_widget.update(self._render_query_line(state, query_width))
+        items_widget.update(self._render_items(state, items_width))
 
     @staticmethod
-    def _render_query_line(state: CommandPaletteViewState) -> Text:
+    def _resolve_render_width(widget: Static) -> int:
+        for width in (widget.content_region.width, widget.size.width, widget.region.width):
+            if width > 0:
+                return width
+        return CommandPalette._DEFAULT_RENDER_WIDTH
+
+    @classmethod
+    def _render_query_line(cls, state: CommandPaletteViewState, render_width: int) -> Text:
         query_text = Text()
         query_text.append("> ", style="bold")
         placeholder = (
@@ -66,37 +78,44 @@ class CommandPalette(Container):
             if state.title.startswith("Directory History") or state.title.startswith("Go to path")
             else "type a command"
         )
-        query_text.append(state.query or placeholder, style="bold" if state.query else "dim")
+        available_width = max(1, render_width - cell_len("> "))
+        value = truncate_middle(state.query or placeholder, available_width)
+        query_text.no_wrap = True
+        query_text.overflow = "ellipsis"
+        query_text.append(value, style="bold" if state.query else "dim")
         return query_text
 
-    @staticmethod
+    @classmethod
     def _render_input_fields(
+        cls,
         fields: tuple[CommandPaletteInputFieldViewState, ...],
+        render_width: int,
     ) -> Text:
-        rendered = Text()
+        rendered = Text(no_wrap=True, overflow="ellipsis")
         for index, field in enumerate(fields):
             label_style = "reverse bold" if field.active else "bold"
             value_style = "bold" if field.active and field.value else ""
             placeholder_style = "dim"
-            rendered.append(f"{field.label:>8}: ", style=label_style)
+            prefix = f"{field.label:>8}: "
+            rendered.append(prefix, style=label_style)
+            available_width = max(1, render_width - cell_len(prefix))
             if field.value:
-                rendered.append(field.value, style=value_style)
+                rendered.append(truncate_middle(field.value, available_width), style=value_style)
             else:
-                rendered.append(field.placeholder, style=placeholder_style)
+                rendered.append(
+                    truncate_middle(field.placeholder, available_width),
+                    style=placeholder_style,
+                )
             if index < len(fields) - 1:
                 rendered.append("\n")
         return rendered
 
-    @staticmethod
-    def _render_items(state: CommandPaletteViewState) -> Text:
+    @classmethod
+    def _render_items(cls, state: CommandPaletteViewState, render_width: int) -> Text:
         if not state.items:
-            return Text(state.empty_message, style="dim")
+            return Text(state.empty_message, style="dim", no_wrap=True, overflow="ellipsis")
 
-        # Maximum label width for grep/file search results to prevent line wrapping
-        # This ensures single-line display even for long results
-        max_label_width = 120
-
-        rendered = Text()
+        rendered = Text(no_wrap=True, overflow="ellipsis")
         for index, item in enumerate(state.items):
             line = Text()
             if item.selected and item.enabled:
@@ -108,19 +127,20 @@ class CommandPalette(Container):
             else:
                 style = ""
 
-            line.append("> " if item.selected else "  ", style=style)
-
-            # Truncate long labels to prevent wrapping
-            label = item.label
-            if len(label) > max_label_width:
-                label = truncate_middle(label, max_label_width)
-
+            prefix = "> " if item.selected else "  "
+            shortcut_suffix = f" [{item.shortcut}]" if item.shortcut else ""
+            line.append(prefix, style=style)
+            available_width = max(
+                1,
+                render_width - cell_len(prefix) - cell_len(shortcut_suffix),
+            )
+            label = truncate_middle(item.label, available_width)
             line.append(label, style=style)
             if item.shortcut:
                 shortcut_style = "dim"
                 if style:
                     shortcut_style = f"{style} dim"
-                line.append(f" [{item.shortcut}]", style=shortcut_style)
+                line.append(shortcut_suffix, style=shortcut_style)
             rendered.append_text(line)
             if index < len(state.items) - 1:
                 rendered.append("\n")
