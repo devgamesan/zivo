@@ -2,6 +2,8 @@
 
 import os
 import string
+from collections.abc import Callable
+from dataclasses import dataclass
 
 from .actions import (
     Action,
@@ -96,6 +98,19 @@ from .selectors import (
 )
 
 DispatchedActions = tuple[Action, ...]
+
+
+@dataclass(frozen=True)
+class _BrowsingCtx:
+    """_dispatch_browsing_input 内で共有される事前計算コンテキスト."""
+
+    visible_paths: tuple[str, ...]
+    cursor_entry: DirectoryEntryState | None
+    target_paths: tuple[str, ...]
+    filter_is_active: bool
+
+
+_BrowsingHandler = Callable[[AppState, _BrowsingCtx], DispatchedActions]
 
 BROWSING_KEYMAP = {
     "up": "cursor_up",
@@ -254,207 +269,25 @@ def _resolve_printable_character(*, key: str, character: str | None) -> str | No
 def _dispatch_browsing_input(
     state: AppState, *, key: str, character: str | None
 ) -> DispatchedActions:
-    visible_paths = _visible_paths(state)
-    cursor_entry = _current_entry(state)
-    target_paths = select_target_paths(state)
-    filter_is_active = state.filter.active and bool(state.filter.query)
+    ctx = _BrowsingCtx(
+        visible_paths=_visible_paths(state),
+        cursor_entry=_current_entry(state),
+        target_paths=select_target_paths(state),
+        filter_is_active=state.filter.active and bool(state.filter.query),
+    )
     command = BROWSING_KEYMAP.get(key)
 
-    if command == "cursor_up":
-        if state.current_pane.selection_anchor_path is not None:
-            return _supported(
-                ClearSelection(),
-                MoveCursor(delta=-1, visible_paths=visible_paths),
-            )
-        return _supported(MoveCursor(delta=-1, visible_paths=visible_paths))
+    if command is not None:
+        handler = _BROWSING_COMMAND_DISPATCH.get(command)
+        if handler is not None:
+            return handler(state, ctx)
 
-    if command == "cursor_down":
-        if state.current_pane.selection_anchor_path is not None:
-            return _supported(
-                ClearSelection(),
-                MoveCursor(delta=1, visible_paths=visible_paths),
-            )
-        return _supported(MoveCursor(delta=1, visible_paths=visible_paths))
-
-    if command == "cursor_up_selecting":
-        return _supported(MoveCursorAndSelectRange(delta=-1, visible_paths=visible_paths))
-
-    if command == "cursor_down_selecting":
-        return _supported(MoveCursorAndSelectRange(delta=1, visible_paths=visible_paths))
-
-    if command == "jump_cursor_start":
-        return _supported(JumpCursor(position="start", visible_paths=visible_paths))
-
-    if command == "jump_cursor_end":
-        return _supported(JumpCursor(position="end", visible_paths=visible_paths))
-
-    if command == "cursor_pageup":
-        page_size = compute_current_pane_visible_window(state.terminal_height)
-        return _supported(
-            MoveCursorByPage(direction="up", page_size=page_size, visible_paths=visible_paths)
-        )
-
-    if command == "cursor_pagedown":
-        page_size = compute_current_pane_visible_window(state.terminal_height)
-        return _supported(
-            MoveCursorByPage(
-                direction="down", page_size=page_size, visible_paths=visible_paths
-            )
-        )
-
-    if command == "open_new_tab":
-        return _supported(OpenNewTab())
-
-    if command == "close_current_tab":
-        return _supported(CloseCurrentTab())
-
-    if command == "activate_next_tab":
-        return _supported(ActivateNextTab())
-
-    if command == "activate_previous_tab":
-        return _supported(ActivatePreviousTab())
-
-    if command == "toggle_selection" and state.current_pane.cursor_path is not None:
-        return _supported(
-            ToggleSelectionAndAdvance(
-                path=state.current_pane.cursor_path,
-                visible_paths=visible_paths,
-            )
-        )
-
-    if command == "clear_selection":
-        if filter_is_active:
-            return _supported(CancelFilterInput())
-        return _supported(ClearSelection())
-
-    if command == "select_all":
-        return _supported(SelectAllVisibleEntries(visible_paths))
-
-    if command == "begin_filter":
-        return _supported(BeginFilterInput())
-
-    if command == "begin_bookmark_search":
-        return _supported(BeginBookmarkSearch())
-
-    if command == "toggle_bookmark":
-        if state.current_path in state.config.bookmarks.paths:
-            return _supported(RemoveBookmark(path=state.current_path))
-        return _supported(AddBookmark(path=state.current_path))
-
-    if command == "copy_targets":
-        return _supported(CopyTargets(target_paths))
-
-    if command == "cut_targets":
-        return _supported(CutTargets(target_paths))
-
-    if command == "copy_paths_to_clipboard":
-        return _supported(CopyPathsToClipboard())
-
-    if command == "paste_clipboard":
-        return _supported(PasteClipboard())
-
-    if command == "go_back":
-        return _supported(GoBack())
-
-    if command == "go_forward":
-        return _supported(GoForward())
-
-    if command == "go_to_parent":
-        return _supported(GoToParentDirectory())
-
-    if command == "reload_directory":
-        return _supported(ReloadDirectory())
-
-    if command == "begin_rename":
-        if not target_paths:
-            return _warn("Nothing to rename")
-        if len(target_paths) != 1:
-            return _warn("Rename requires a single target")
-        return _supported(BeginRenameInput(target_paths[0]))
-
-    if command == "begin_shell_command":
-        return _supported(BeginShellCommandInput())
-
-    if command == "begin_command_palette":
-        return _supported(BeginCommandPalette())
-
-    if command == "begin_file_search":
-        return _supported(BeginFileSearch())
-
-    if command == "begin_grep_search":
-        return _supported(BeginGrepSearch())
-
-    if command == "begin_history_search":
-        return _supported(BeginHistorySearch())
-
-    if command == "begin_go_to_path":
-        return _supported(BeginGoToPath())
-
-    if command == "go_to_home_directory":
-        return _supported(GoToHomeDirectory())
-
-    if command == "create_file":
-        return _supported(BeginCreateInput("file"))
-
-    if command == "create_dir":
-        return _supported(BeginCreateInput("dir"))
-
-    if command == "toggle_split_terminal":
-        return _supported(ToggleSplitTerminal())
-
-    if command == "exit_current_path":
-        return _supported(ExitCurrentPath())
-
-    if command == "cycle_sort":
-        return _supported(_next_sort_action(state))
-
-    if command == "toggle_directories_first":
-        return _supported(
-            SetSort(
-                field=state.sort.field,
-                descending=state.sort.descending,
-                directories_first=not state.sort.directories_first,
-            )
-        )
-
-    if command == "toggle_hidden":
-        return _supported(ToggleHiddenFiles())
-
-    if command == "delete_targets":
-        if not target_paths:
-            return _warn("Nothing to delete")
-        return _supported(BeginDeleteTargets(target_paths, mode="trash"))
-
-    if command == "permanent_delete_targets":
-        if not target_paths:
-            return _warn("Nothing to permanently delete")
-        return _supported(BeginDeleteTargets(target_paths, mode="permanent"))
-
-    if command == "show_attributes":
-        return _supported(ShowAttributes())
-
-    if command == "open_in_editor":
-        if cursor_entry is not None and cursor_entry.kind == "file":
-            return _supported(OpenPathInEditor(cursor_entry.path))
-        return _warn("Editor launch requires a file")
-
-    if command == "enter_directory":
-        if cursor_entry is not None and cursor_entry.kind == "dir":
-            return _supported(EnterCursorDirectory())
-        return ()
-
+    # enter キーの生キー特殊処理（enter_or_open コマンドはテーブルに含めない）
     if key == "enter":
-        if cursor_entry is not None and cursor_entry.kind == "dir":
+        if ctx.cursor_entry is not None and ctx.cursor_entry.kind == "dir":
             return _supported(EnterCursorDirectory())
-        if cursor_entry is not None and cursor_entry.kind == "file":
-            return _supported(OpenPathWithDefaultApp(cursor_entry.path))
-        return ()
-
-    if command == "open_terminal":
-        return _supported(OpenTerminalAtPath(state.current_path))
-
-    if command == "open_file_manager":
-        return _supported(OpenPathWithDefaultApp(state.current_path))
+        if ctx.cursor_entry is not None and ctx.cursor_entry.kind == "file":
+            return _supported(OpenPathWithDefaultApp(ctx.cursor_entry.path))
 
     return ()
 
@@ -830,8 +663,252 @@ def _supported(*actions: Action) -> DispatchedActions:
     return (SetNotification(None), *actions)
 
 
+def _simple(action_cls: type[Action]) -> _BrowsingHandler:
+    """ゼロ引数アクションクラスを _BrowsingHandler に適合させるアダプタ."""
+
+    def handler(_state: AppState, _ctx: _BrowsingCtx) -> DispatchedActions:
+        return _supported(action_cls())
+
+    return handler
+
+
 def _warn(message: str) -> DispatchedActions:
     return (SetNotification(NotificationState(level="warning", message=message)),)
+
+
+# ---------------------------------------------------------------------------
+# Browsing mode command handlers
+# ---------------------------------------------------------------------------
+
+# --- Parameterized handlers (Category B) ---
+
+
+def _handle_cursor_up_selecting(
+    _state: AppState, ctx: _BrowsingCtx
+) -> DispatchedActions:
+    return _supported(MoveCursorAndSelectRange(delta=-1, visible_paths=ctx.visible_paths))
+
+
+def _handle_cursor_down_selecting(
+    _state: AppState, ctx: _BrowsingCtx
+) -> DispatchedActions:
+    return _supported(MoveCursorAndSelectRange(delta=1, visible_paths=ctx.visible_paths))
+
+
+def _handle_jump_cursor_start(
+    _state: AppState, ctx: _BrowsingCtx
+) -> DispatchedActions:
+    return _supported(JumpCursor(position="start", visible_paths=ctx.visible_paths))
+
+
+def _handle_jump_cursor_end(
+    _state: AppState, ctx: _BrowsingCtx
+) -> DispatchedActions:
+    return _supported(JumpCursor(position="end", visible_paths=ctx.visible_paths))
+
+
+def _handle_cursor_pageup(state: AppState, ctx: _BrowsingCtx) -> DispatchedActions:
+    page_size = compute_current_pane_visible_window(state.terminal_height)
+    return _supported(
+        MoveCursorByPage(direction="up", page_size=page_size, visible_paths=ctx.visible_paths)
+    )
+
+
+def _handle_cursor_pagedown(state: AppState, ctx: _BrowsingCtx) -> DispatchedActions:
+    page_size = compute_current_pane_visible_window(state.terminal_height)
+    return _supported(
+        MoveCursorByPage(direction="down", page_size=page_size, visible_paths=ctx.visible_paths)
+    )
+
+
+def _handle_select_all(_state: AppState, ctx: _BrowsingCtx) -> DispatchedActions:
+    return _supported(SelectAllVisibleEntries(ctx.visible_paths))
+
+
+def _handle_copy_targets(_state: AppState, ctx: _BrowsingCtx) -> DispatchedActions:
+    return _supported(CopyTargets(ctx.target_paths))
+
+
+def _handle_cut_targets(_state: AppState, ctx: _BrowsingCtx) -> DispatchedActions:
+    return _supported(CutTargets(ctx.target_paths))
+
+
+def _handle_create_file(_state: AppState, _ctx: _BrowsingCtx) -> DispatchedActions:
+    return _supported(BeginCreateInput("file"))
+
+
+def _handle_create_dir(_state: AppState, _ctx: _BrowsingCtx) -> DispatchedActions:
+    return _supported(BeginCreateInput("dir"))
+
+
+def _handle_open_terminal(state: AppState, _ctx: _BrowsingCtx) -> DispatchedActions:
+    return _supported(OpenTerminalAtPath(state.current_path))
+
+
+def _handle_open_file_manager(state: AppState, _ctx: _BrowsingCtx) -> DispatchedActions:
+    return _supported(OpenPathWithDefaultApp(state.current_path))
+
+
+# --- State-dependent handlers (Category C) ---
+
+
+def _handle_cursor_up(state: AppState, ctx: _BrowsingCtx) -> DispatchedActions:
+    if state.current_pane.selection_anchor_path is not None:
+        return _supported(
+            ClearSelection(),
+            MoveCursor(delta=-1, visible_paths=ctx.visible_paths),
+        )
+    return _supported(MoveCursor(delta=-1, visible_paths=ctx.visible_paths))
+
+
+def _handle_cursor_down(state: AppState, ctx: _BrowsingCtx) -> DispatchedActions:
+    if state.current_pane.selection_anchor_path is not None:
+        return _supported(
+            ClearSelection(),
+            MoveCursor(delta=1, visible_paths=ctx.visible_paths),
+        )
+    return _supported(MoveCursor(delta=1, visible_paths=ctx.visible_paths))
+
+
+def _handle_toggle_selection(state: AppState, ctx: _BrowsingCtx) -> DispatchedActions:
+    if state.current_pane.cursor_path is not None:
+        return _supported(
+            ToggleSelectionAndAdvance(
+                path=state.current_pane.cursor_path,
+                visible_paths=ctx.visible_paths,
+            )
+        )
+    return ()
+
+
+def _handle_clear_selection(_state: AppState, ctx: _BrowsingCtx) -> DispatchedActions:
+    if ctx.filter_is_active:
+        return _supported(CancelFilterInput())
+    return _supported(ClearSelection())
+
+
+def _handle_toggle_bookmark(state: AppState, _ctx: _BrowsingCtx) -> DispatchedActions:
+    if state.current_path in state.config.bookmarks.paths:
+        return _supported(RemoveBookmark(path=state.current_path))
+    return _supported(AddBookmark(path=state.current_path))
+
+
+def _handle_begin_rename(_state: AppState, ctx: _BrowsingCtx) -> DispatchedActions:
+    if not ctx.target_paths:
+        return _warn("Nothing to rename")
+    if len(ctx.target_paths) != 1:
+        return _warn("Rename requires a single target")
+    return _supported(BeginRenameInput(ctx.target_paths[0]))
+
+
+def _handle_cycle_sort(state: AppState, _ctx: _BrowsingCtx) -> DispatchedActions:
+    return _supported(_next_sort_action(state))
+
+
+def _handle_toggle_directories_first(
+    state: AppState, _ctx: _BrowsingCtx
+) -> DispatchedActions:
+    return _supported(
+        SetSort(
+            field=state.sort.field,
+            descending=state.sort.descending,
+            directories_first=not state.sort.directories_first,
+        )
+    )
+
+
+def _handle_delete_targets(_state: AppState, ctx: _BrowsingCtx) -> DispatchedActions:
+    if not ctx.target_paths:
+        return _warn("Nothing to delete")
+    return _supported(BeginDeleteTargets(ctx.target_paths, mode="trash"))
+
+
+def _handle_permanent_delete_targets(
+    _state: AppState, ctx: _BrowsingCtx
+) -> DispatchedActions:
+    if not ctx.target_paths:
+        return _warn("Nothing to permanently delete")
+    return _supported(BeginDeleteTargets(ctx.target_paths, mode="permanent"))
+
+
+def _handle_open_in_editor(_state: AppState, ctx: _BrowsingCtx) -> DispatchedActions:
+    if ctx.cursor_entry is not None and ctx.cursor_entry.kind == "file":
+        return _supported(OpenPathInEditor(ctx.cursor_entry.path))
+    return _warn("Editor launch requires a file")
+
+
+def _handle_enter_directory(_state: AppState, ctx: _BrowsingCtx) -> DispatchedActions:
+    if ctx.cursor_entry is not None and ctx.cursor_entry.kind == "dir":
+        return _supported(EnterCursorDirectory())
+    return ()
+
+
+# ---------------------------------------------------------------------------
+# Browsing mode dispatch tables
+# ---------------------------------------------------------------------------
+
+_BROWSING_SIMPLE_DISPATCH: dict[str, type[Action]] = {
+    "begin_filter": BeginFilterInput,
+    "begin_bookmark_search": BeginBookmarkSearch,
+    "begin_shell_command": BeginShellCommandInput,
+    "begin_command_palette": BeginCommandPalette,
+    "begin_file_search": BeginFileSearch,
+    "begin_grep_search": BeginGrepSearch,
+    "begin_history_search": BeginHistorySearch,
+    "begin_go_to_path": BeginGoToPath,
+    "go_to_home_directory": GoToHomeDirectory,
+    "toggle_split_terminal": ToggleSplitTerminal,
+    "reload_directory": ReloadDirectory,
+    "go_back": GoBack,
+    "go_forward": GoForward,
+    "go_to_parent": GoToParentDirectory,
+    "toggle_hidden": ToggleHiddenFiles,
+    "copy_paths_to_clipboard": CopyPathsToClipboard,
+    "paste_clipboard": PasteClipboard,
+    "open_new_tab": OpenNewTab,
+    "close_current_tab": CloseCurrentTab,
+    "activate_next_tab": ActivateNextTab,
+    "activate_previous_tab": ActivatePreviousTab,
+    "exit_current_path": ExitCurrentPath,
+    "show_attributes": ShowAttributes,
+}
+
+_BROWSING_PARAM_DISPATCH: dict[str, _BrowsingHandler] = {
+    "cursor_up_selecting": _handle_cursor_up_selecting,
+    "cursor_down_selecting": _handle_cursor_down_selecting,
+    "jump_cursor_start": _handle_jump_cursor_start,
+    "jump_cursor_end": _handle_jump_cursor_end,
+    "cursor_pageup": _handle_cursor_pageup,
+    "cursor_pagedown": _handle_cursor_pagedown,
+    "select_all": _handle_select_all,
+    "copy_targets": _handle_copy_targets,
+    "cut_targets": _handle_cut_targets,
+    "create_file": _handle_create_file,
+    "create_dir": _handle_create_dir,
+    "open_terminal": _handle_open_terminal,
+    "open_file_manager": _handle_open_file_manager,
+}
+
+_BROWSING_COMPLEX_DISPATCH: dict[str, _BrowsingHandler] = {
+    "cursor_up": _handle_cursor_up,
+    "cursor_down": _handle_cursor_down,
+    "toggle_selection": _handle_toggle_selection,
+    "clear_selection": _handle_clear_selection,
+    "toggle_bookmark": _handle_toggle_bookmark,
+    "begin_rename": _handle_begin_rename,
+    "cycle_sort": _handle_cycle_sort,
+    "toggle_directories_first": _handle_toggle_directories_first,
+    "delete_targets": _handle_delete_targets,
+    "permanent_delete_targets": _handle_permanent_delete_targets,
+    "open_in_editor": _handle_open_in_editor,
+    "enter_directory": _handle_enter_directory,
+}
+
+_BROWSING_COMMAND_DISPATCH: dict[str, _BrowsingHandler] = {
+    **{name: _simple(cls) for name, cls in _BROWSING_SIMPLE_DISPATCH.items()},
+    **_BROWSING_PARAM_DISPATCH,
+    **_BROWSING_COMPLEX_DISPATCH,
+}
 
 
 def _terminal_has_focus(state: AppState) -> bool:
