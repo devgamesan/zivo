@@ -922,7 +922,7 @@ def test_palette_pageup_moves_cursor_by_page() -> None:
 
     actions = dispatch_key_input(state, key="pageup")
 
-    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=-16))
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=-15))
 
 
 def test_palette_pagedown_moves_cursor_by_page() -> None:
@@ -930,7 +930,31 @@ def test_palette_pagedown_moves_cursor_by_page() -> None:
 
     actions = dispatch_key_input(state, key="pagedown")
 
-    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=16))
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=15))
+
+
+def test_grep_palette_pageup_accounts_for_extra_input_rows() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(source="grep_search"),
+    )
+
+    actions = dispatch_key_input(state, key="pageup")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=-13))
+
+
+def test_grep_palette_pagedown_accounts_for_extra_input_rows() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(source="grep_search"),
+    )
+
+    actions = dispatch_key_input(state, key="pagedown")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=13))
 
 
 def test_palette_unbound_key_shows_guidance() -> None:

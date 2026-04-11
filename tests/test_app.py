@@ -2768,6 +2768,7 @@ async def test_app_file_search_long_results_stay_single_line_in_palette(tmp_path
 
         assert palette_state is not None
         assert items.visual.get_height(items.region.width) == len(palette_state.items)
+        assert items.visual.get_height(items.region.width) <= items.region.height
 
 
 @pytest.mark.asyncio
@@ -3135,6 +3136,7 @@ async def test_app_grep_search_long_results_stay_single_line_in_palette(tmp_path
 
         assert palette_state is not None
         assert items.visual.get_height(items.region.width) == len(palette_state.items)
+        assert items.visual.get_height(items.region.width) <= items.region.height
 
 
 @pytest.mark.asyncio

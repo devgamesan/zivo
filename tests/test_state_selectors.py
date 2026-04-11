@@ -1807,9 +1807,8 @@ def test_select_command_palette_state_windows_large_file_search_results() -> Non
     palette_state = select_command_palette_state(state)
 
     assert palette_state is not None
-    assert palette_state.title == "Find File (3-18 / 20)"
+    assert palette_state.title == "Find File (4-18 / 20)"
     assert [item.label for item in palette_state.items] == [
-        "src/module_2.py",
         "src/module_3.py",
         "src/module_4.py",
         "src/module_5.py",
@@ -1826,7 +1825,7 @@ def test_select_command_palette_state_windows_large_file_search_results() -> Non
         "src/module_16.py",
         "src/module_17.py",
     ]
-    assert palette_state.items[8].selected is True
+    assert palette_state.items[7].selected is True
     assert palette_state.has_more_items is True
 
 
@@ -1855,6 +1854,36 @@ def test_select_command_palette_state_for_grep_search_results() -> None:
     assert [item.label for item in palette_state.items] == [
         "src/peneo/app.py:42: TODO: update palette"
     ]
+
+
+def test_select_command_palette_state_windows_large_grep_search_results() -> None:
+    results = tuple(
+        GrepSearchResultState(
+            path=f"/home/tadashi/develop/peneo/src/module_{index}.py",
+            display_path=f"src/module_{index}.py",
+            line_number=index + 1,
+            line_text="TODO: update palette",
+        )
+        for index in range(20)
+    )
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = replace(
+        state,
+        command_palette=CommandPaletteState(
+            source="grep_search",
+            query="todo",
+            cursor_index=10,
+            grep_search_results=results,
+        ),
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert palette_state.title == "Grep (5-17 / 20)"
+    assert len(palette_state.items) == 13
+    assert palette_state.items[6].selected is True
+    assert palette_state.has_more_items is True
 
 
 def test_select_command_palette_state_shows_grep_searching_message() -> None:
@@ -2133,19 +2162,22 @@ class TestComputeSearchVisibleWindow:
     """Tests for dynamic search window size calculation."""
 
     def test_default_terminal_height(self) -> None:
-        assert selectors_module.compute_search_visible_window(24) == 16
+        assert selectors_module.compute_search_visible_window(24) == 15
 
     def test_large_terminal(self) -> None:
-        assert selectors_module.compute_search_visible_window(48) == 40
+        assert selectors_module.compute_search_visible_window(48) == 39
 
     def test_very_large_terminal(self) -> None:
-        assert selectors_module.compute_search_visible_window(80) == 72
+        assert selectors_module.compute_search_visible_window(80) == 71
 
     def test_small_terminal_uses_minimum(self) -> None:
         assert selectors_module.compute_search_visible_window(10) == 3
 
     def test_tiny_terminal_uses_minimum(self) -> None:
         assert selectors_module.compute_search_visible_window(1) == 3
+
+    def test_extra_rows_reduce_visible_window(self) -> None:
+        assert selectors_module.compute_search_visible_window(24, extra_rows=2) == 13
 
 
 class TestSelectSearchWindowWithDynamicSize:
@@ -2381,5 +2413,5 @@ class TestCommandPaletteDynamicWindow:
         palette_state = select_command_palette_state(state)
 
         assert palette_state is not None
-        assert len(palette_state.items) == 16
+        assert len(palette_state.items) == 15
         assert palette_state.has_more_items is True

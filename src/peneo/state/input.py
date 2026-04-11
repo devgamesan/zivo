@@ -578,11 +578,13 @@ def _dispatch_command_palette_input(
         return _supported(MoveCommandPaletteCursor(delta=-1))
 
     if key == "pageup":
-        visible = compute_search_visible_window(state.terminal_height)
+        extra_rows = 2 if palette_source == "grep_search" else 0
+        visible = compute_search_visible_window(state.terminal_height, extra_rows=extra_rows)
         return _supported(MoveCommandPaletteCursor(delta=-visible))
 
     if key == "pagedown":
-        visible = compute_search_visible_window(state.terminal_height)
+        extra_rows = 2 if palette_source == "grep_search" else 0
+        visible = compute_search_visible_window(state.terminal_height, extra_rows=extra_rows)
         return _supported(MoveCommandPaletteCursor(delta=visible))
 
     if key == "home":

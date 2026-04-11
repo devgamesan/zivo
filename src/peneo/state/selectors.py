@@ -46,7 +46,8 @@ from .models import (
 SIDE_PANE_SORT = SortState(field="name", descending=False, directories_first=True)
 COMMAND_PALETTE_VISIBLE_WINDOW = 8
 MIN_SEARCH_VISIBLE_WINDOW = 3
-_SEARCH_OVERHEAD_ROWS = 8
+_SEARCH_OVERHEAD_ROWS = 9
+_GREP_SEARCH_EXTRA_INPUT_ROWS = 2
 MIN_CURRENT_PANE_VISIBLE_WINDOW = 5
 _CURRENT_PANE_OVERHEAD_ROWS = 8
 
@@ -1267,10 +1268,13 @@ def _format_sort_label(sort: SortState) -> str:
     return f"{sort.field} {direction} dirs:{directories}"
 
 
-def compute_search_visible_window(terminal_height: int) -> int:
+def compute_search_visible_window(terminal_height: int, *, extra_rows: int = 0) -> int:
     """Calculate visible command-palette items based on terminal height."""
 
-    return max(MIN_SEARCH_VISIBLE_WINDOW, terminal_height - _SEARCH_OVERHEAD_ROWS)
+    return max(
+        MIN_SEARCH_VISIBLE_WINDOW,
+        terminal_height - _SEARCH_OVERHEAD_ROWS - extra_rows,
+    )
 
 
 def _build_command_palette_items_view(
@@ -1342,7 +1346,10 @@ def _select_grep_search_window(
     results: tuple[GrepSearchResultState, ...],
     cursor_index: int,
 ) -> tuple[tuple[tuple[int, GrepSearchResultState], ...], str]:
-    visible_window = compute_search_visible_window(state.terminal_height)
+    visible_window = compute_search_visible_window(
+        state.terminal_height,
+        extra_rows=_GREP_SEARCH_EXTRA_INPUT_ROWS,
+    )
     return _select_search_window(
         results, cursor_index, title="Grep", visible_window=visible_window,
     )
