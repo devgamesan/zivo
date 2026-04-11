@@ -1,5 +1,6 @@
 """Command palette widget."""
 
+from rich.cells import cell_len
 from rich.text import Text
 from textual.containers import Container
 from textual.widgets import Static
@@ -87,7 +88,7 @@ class CommandPalette(Container):
 
             # Truncate long labels to prevent wrapping
             label = item.label
-            if len(label) > max_label_width:
+            if cell_len(label) > max_label_width:
                 label = truncate_middle(label, max_label_width)
 
             line.append(label, style=style)
