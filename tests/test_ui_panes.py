@@ -1,5 +1,32 @@
+from rich.style import Style
+
 from peneo.models import PaneEntry
-from peneo.ui.panes import MainPane, SidePane, build_entry_label, truncate_middle
+from peneo.ui.panes import (
+    MainPane,
+    _ft_resolve_style,
+    _render_file_label,
+    _style_without_background,
+    build_entry_label,
+    truncate_middle,
+)
+
+
+def _style_map() -> dict[str, Style]:
+    return {
+        "ft-cut": Style.parse("dim"),
+        "ft-directory": Style.parse("bold blue"),
+        "ft-directory-cut": Style.parse("bold blue dim"),
+        "ft-directory-sel": Style.parse("bold underline blue"),
+        "ft-directory-sel-table": Style.parse("bold blue"),
+        "ft-executable": Style.parse("bold green"),
+        "ft-executable-cut": Style.parse("bold green dim"),
+        "ft-executable-sel": Style.parse("bold green"),
+        "ft-selected": Style.parse("bold green"),
+        "ft-selected-cut": Style.parse("bold bright_black"),
+        "ft-symlink": Style.parse("bold cyan"),
+        "ft-symlink-cut": Style.parse("bold cyan dim"),
+        "ft-symlink-sel": Style.parse("bold cyan"),
+    }
 
 
 def test_truncate_middle_keeps_text_when_width_is_sufficient() -> None:
@@ -46,97 +73,246 @@ def test_pane_entry_defaults_executable_to_false() -> None:
     assert entry.executable is False
 
 
-def test_side_pane_selected_directory_uses_background_highlight() -> None:
+def test_side_pane_selected_directory_uses_text_only_highlight() -> None:
+    styles = _style_map()
     entry = PaneEntry("docs", "dir", selected=True)
 
-    rendered = SidePane._render_label(entry)
+    rendered = _render_file_label(
+        entry,
+        0,
+        styles,
+        selected_directory_style="ft-directory-sel",
+        selected_cut_style="ft-cut",
+    )
 
-    assert rendered.style == "bold white on #5555FF"
+    assert rendered.style == styles["ft-directory-sel"]
 
 
-# -- MainPane._entry_style ------------------------------------------------------
+# -- File type style resolution -------------------------------------------------
 
 
 def test_entry_style_cut_symlink() -> None:
+    styles = _style_map()
     entry = PaneEntry("link", "file", cut=True, symlink=True)
-    assert MainPane._entry_style(entry) == MainPane.SYMLINK_CUT_STYLE
+    assert (
+        _ft_resolve_style(
+            entry,
+            styles,
+            selected_directory_style="ft-directory-sel-table",
+            selected_cut_style="ft-selected-cut",
+        )
+        == styles["ft-symlink-cut"]
+    )
 
 
 def test_entry_style_cut_directory() -> None:
+    styles = _style_map()
     entry = PaneEntry("dir", "dir", cut=True)
-    assert MainPane._entry_style(entry) == MainPane.DIRECTORY_CUT_STYLE
+    assert (
+        _ft_resolve_style(
+            entry,
+            styles,
+            selected_directory_style="ft-directory-sel-table",
+            selected_cut_style="ft-selected-cut",
+        )
+        == styles["ft-directory-cut"]
+    )
 
 
 def test_entry_style_cut_executable() -> None:
+    styles = _style_map()
     entry = PaneEntry("script.sh", "file", cut=True, executable=True)
-    assert MainPane._entry_style(entry) == MainPane.EXECUTABLE_CUT_STYLE
+    assert (
+        _ft_resolve_style(
+            entry,
+            styles,
+            selected_directory_style="ft-directory-sel-table",
+            selected_cut_style="ft-selected-cut",
+        )
+        == styles["ft-executable-cut"]
+    )
 
 
 def test_entry_style_cut_selected() -> None:
+    styles = _style_map()
     entry = PaneEntry("file.txt", "file", cut=True, selected=True)
-    assert MainPane._entry_style(entry) == MainPane.SELECTED_CUT_STYLE
+    assert (
+        _ft_resolve_style(
+            entry,
+            styles,
+            selected_directory_style="ft-directory-sel-table",
+            selected_cut_style="ft-selected-cut",
+        )
+        == styles["ft-selected-cut"]
+    )
 
 
 def test_entry_style_cut_plain() -> None:
+    styles = _style_map()
     entry = PaneEntry("file.txt", "file", cut=True)
-    assert MainPane._entry_style(entry) == MainPane.CUT_STYLE
+    assert (
+        _ft_resolve_style(
+            entry,
+            styles,
+            selected_directory_style="ft-directory-sel-table",
+            selected_cut_style="ft-selected-cut",
+        )
+        == styles["ft-cut"]
+    )
 
 
 def test_entry_style_symlink_selected() -> None:
+    styles = _style_map()
     entry = PaneEntry("link", "file", symlink=True, selected=True)
-    assert MainPane._entry_style(entry) == MainPane.SYMLINK_SELECTED_STYLE
+    assert (
+        _ft_resolve_style(
+            entry,
+            styles,
+            selected_directory_style="ft-directory-sel-table",
+            selected_cut_style="ft-selected-cut",
+        )
+        == styles["ft-symlink-sel"]
+    )
 
 
 def test_entry_style_symlink() -> None:
+    styles = _style_map()
     entry = PaneEntry("link", "file", symlink=True)
-    assert MainPane._entry_style(entry) == MainPane.SYMLINK_STYLE
+    assert (
+        _ft_resolve_style(
+            entry,
+            styles,
+            selected_directory_style="ft-directory-sel-table",
+            selected_cut_style="ft-selected-cut",
+        )
+        == styles["ft-symlink"]
+    )
 
 
 def test_entry_style_directory_selected() -> None:
+    styles = _style_map()
     entry = PaneEntry("docs", "dir", selected=True)
-    assert MainPane._entry_style(entry) == MainPane.DIRECTORY_SELECTED_STYLE
+    assert (
+        _ft_resolve_style(
+            entry,
+            styles,
+            selected_directory_style="ft-directory-sel-table",
+            selected_cut_style="ft-selected-cut",
+        )
+        == styles["ft-directory-sel-table"]
+    )
 
 
 def test_entry_style_directory() -> None:
+    styles = _style_map()
     entry = PaneEntry("docs", "dir")
-    assert MainPane._entry_style(entry) == MainPane.DIRECTORY_STYLE
+    assert (
+        _ft_resolve_style(
+            entry,
+            styles,
+            selected_directory_style="ft-directory-sel-table",
+            selected_cut_style="ft-selected-cut",
+        )
+        == styles["ft-directory"]
+    )
 
 
 def test_entry_style_executable_selected() -> None:
+    styles = _style_map()
     entry = PaneEntry("run.sh", "file", executable=True, selected=True)
-    assert MainPane._entry_style(entry) == MainPane.EXECUTABLE_SELECTED_STYLE
+    assert (
+        _ft_resolve_style(
+            entry,
+            styles,
+            selected_directory_style="ft-directory-sel-table",
+            selected_cut_style="ft-selected-cut",
+        )
+        == styles["ft-executable-sel"]
+    )
 
 
 def test_entry_style_executable() -> None:
+    styles = _style_map()
     entry = PaneEntry("run.sh", "file", executable=True)
-    assert MainPane._entry_style(entry) == MainPane.EXECUTABLE_STYLE
+    assert (
+        _ft_resolve_style(
+            entry,
+            styles,
+            selected_directory_style="ft-directory-sel-table",
+            selected_cut_style="ft-selected-cut",
+        )
+        == styles["ft-executable"]
+    )
 
 
 def test_entry_style_selected() -> None:
+    styles = _style_map()
     entry = PaneEntry("file.txt", "file", selected=True)
-    assert MainPane._entry_style(entry) == MainPane.SELECTED_STYLE
+    assert (
+        _ft_resolve_style(
+            entry,
+            styles,
+            selected_directory_style="ft-directory-sel-table",
+            selected_cut_style="ft-selected-cut",
+        )
+        == styles["ft-selected"]
+    )
 
 
 def test_entry_style_plain() -> None:
+    styles = _style_map()
     entry = PaneEntry("file.txt", "file")
-    assert MainPane._entry_style(entry) is None
+    assert (
+        _ft_resolve_style(
+            entry,
+            styles,
+            selected_directory_style="ft-directory-sel-table",
+            selected_cut_style="ft-selected-cut",
+        )
+        is None
+    )
 
 
-# -- MainPane._render_cell ------------------------------------------------------
+# -- Label rendering ------------------------------------------------------------
 
 
 def test_render_cell_plain_entry() -> None:
+    styles = _style_map()
     entry = PaneEntry("file.txt", "file")
-    result = MainPane._render_cell("file.txt", entry)
+    result = _render_file_label(
+        entry,
+        0,
+        styles,
+        selected_directory_style="ft-directory-sel-table",
+        selected_cut_style="ft-selected-cut",
+    )
     assert result.plain == "file.txt"
     assert not result.style
 
 
 def test_render_cell_selected_entry() -> None:
+    styles = _style_map()
     entry = PaneEntry("file.txt", "file", selected=True)
-    result = MainPane._render_cell("file.txt", entry)
+    result = _render_file_label(
+        entry,
+        0,
+        styles,
+        selected_directory_style="ft-directory-sel-table",
+        selected_cut_style="ft-selected-cut",
+    )
     assert result.plain == "file.txt"
-    assert result.style == MainPane.SELECTED_STYLE
+    assert result.style == styles["ft-selected"]
+
+
+def test_style_without_background_keeps_foreground_and_text_attributes() -> None:
+    style = Style.parse("bold blue on black")
+
+    stripped = _style_without_background(style)
+
+    assert stripped is not None
+    assert stripped.color == style.color
+    assert stripped.bgcolor is None
+    assert stripped.bold is True
 
 
 # -- MainPane._shrink_fixed_columns ---------------------------------------------

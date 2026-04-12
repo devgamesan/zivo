@@ -61,6 +61,8 @@ async def refresh_shell(
     app_state: AppState,
     shell: ThreePaneShellData,
     split_terminal_session: SplitTerminalSession | None,
+    *,
+    theme_changed: bool = False,
 ) -> None:
     try:
         tab_bar = app.query_one("#tab-bar", TabBar)
@@ -164,6 +166,10 @@ async def refresh_shell(
     current_pane.set_context_input(shell.current_context_input)
     await parent_pane.set_entries(shell.parent_entries)
     await child_pane.set_state(shell.child_pane)
+    if theme_changed:
+        parent_pane.refresh_styles()
+        current_pane.refresh_styles()
+        child_pane.refresh_styles()
     split_terminal.set_state(shell.split_terminal)
     resize_split_terminal_session(app, app_state, split_terminal_session)
     command_palette_layer.display = shell.command_palette is not None

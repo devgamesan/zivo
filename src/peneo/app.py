@@ -317,12 +317,15 @@ class PeneoApp(App[None]):
         previous_state = self._app_state
         changed, effects = self._apply_actions(actions)
         sync_runtime_state(self, previous_state, self._app_state)
-        if previous_state.config.display.theme != self._app_state.config.display.theme:
+        theme_changed = (
+            previous_state.config.display.theme != self._app_state.config.display.theme
+        )
+        if theme_changed:
             self.theme = self._app_state.config.display.theme
         if previous_state.config != self._app_state.config:
             self._sync_external_launch_service()
-        if changed:
-            await self._refresh_shell()
+        if changed or theme_changed:
+            await self._refresh_shell(theme_changed=theme_changed)
         schedule_effects(self, effects)
 
     def _build_external_launch_service(self, app_config: AppConfig) -> LiveExternalLaunchService:
@@ -400,13 +403,14 @@ class PeneoApp(App[None]):
             return
         self.call_after_refresh(self._resize_split_terminal_session)
 
-    async def _refresh_shell(self) -> None:
+    async def _refresh_shell(self, *, theme_changed: bool = False) -> None:
         try:
             await refresh_shell(
                 self,
                 self._app_state,
                 select_shell_data(self._app_state),
                 self._split_terminal_session,
+                theme_changed=theme_changed,
             )
             self.call_after_refresh(self._sync_overlay_layout)
         except ScreenStackError:

@@ -6,6 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from rich.style import Style
 from rich.text import Text
 from textual.css.query import NoMatches
 from textual.widgets import DataTable, Label, Static
@@ -57,6 +58,7 @@ from peneo.state import (
 from peneo.state.selectors import compute_current_pane_visible_window, select_command_palette_state
 from peneo.ui import (
     AttributeDialog,
+    ChildPane,
     CommandPalette,
     ConfigDialog,
     ConflictDialog,
@@ -64,6 +66,7 @@ from peneo.ui import (
     HelpBar,
     InputBar,
     ShellCommandDialog,
+    SidePane,
     SplitTerminalPane,
     StatusBar,
     SummaryBar,
@@ -102,6 +105,43 @@ def _build_snapshot(
             entries=child_entries,
         ),
     )
+
+
+def _normalize_rich_style(style: str | Style | None) -> Style | None:
+    if style is None:
+        return None
+    if isinstance(style, Style):
+        return style
+    return Style.parse(style)
+
+
+def _style_without_background(style: Style) -> Style:
+    return Style(
+        color=style.color,
+        bold=style.bold,
+        dim=style.dim,
+        italic=style.italic,
+        underline=style.underline,
+        blink=style.blink,
+        blink2=style.blink2,
+        reverse=style.reverse,
+        conceal=style.conceal,
+        strike=style.strike,
+        underline2=style.underline2,
+        frame=style.frame,
+        encircle=style.encircle,
+        overline=style.overline,
+        link=style.link,
+        meta=style.meta,
+    )
+
+
+def _text_has_style(renderable: Text, expected_style: Style) -> bool:
+    return any(_normalize_rich_style(span.style) == expected_style for span in renderable.spans)
+
+
+def _text_style_matches(text: Text, expected_style: Style) -> bool:
+    return _normalize_rich_style(text.style) == expected_style
 
 
 async def _wait_for_status_bar(app, timeout: float = 0.5) -> StatusBar:
@@ -840,13 +880,17 @@ async def test_app_live_snapshot_highlights_current_directory_in_parent_pane(tmp
         await _wait_for_snapshot_loaded(app, str(tmp_path))
         await _wait_for_row_count(app, 2)
 
+        parent_pane = app.query_one("#parent-pane", SidePane)
         parent_list = app.query_one("#parent-pane-list", Static)
         parent_renderable = parent_list.renderable
 
         assert app.app_state.parent_pane.cursor_path == str(tmp_path)
         assert isinstance(parent_renderable, Text)
         assert tmp_path.name in parent_renderable.plain.splitlines()
-        assert any(span.style == "bold white on #5555FF" for span in parent_renderable.spans)
+        assert _text_has_style(
+            parent_renderable,
+            _style_without_background(parent_pane.get_component_rich_style("ft-directory-sel")),
+        )
 
 
 @pytest.mark.asyncio
@@ -875,6 +919,7 @@ async def test_app_renders_loaded_three_pane_shell() -> None:
         await _wait_for_parent_entries(app, ["peneo-app", "sibling"])
         await _wait_for_child_entries(app, ["spec.md"])
 
+        parent_pane = app.query_one("#parent-pane", SidePane)
         parent_list = app.query_one("#parent-pane-list", Static)
         current_table = app.query_one("#current-pane-table", DataTable)
         child_list = app.query_one("#child-pane-list", Static)
@@ -894,7 +939,10 @@ async def test_app_renders_loaded_three_pane_shell() -> None:
         assert parent_entries == ["peneo-app", "sibling"]
         parent_renderable = parent_list.renderable
         assert isinstance(parent_renderable, Text)
-        assert any(span.style == "bold white on #5555FF" for span in parent_renderable.spans)
+        assert _text_has_style(
+            parent_renderable,
+            _style_without_background(parent_pane.get_component_rich_style("ft-directory-sel")),
+        )
         assert headers == ["Sel", "Name", "Size", "Modified"]
         assert current_table.row_count == 2
         assert child_entries == ["spec.md"]
@@ -1403,11 +1451,17 @@ async def test_app_keyboard_input_updates_selection_and_child_pane() -> None:
         assert str(status_bar.renderable) == ""
 
         current_table = app.query_one("#current-pane-table", DataTable)
+        current_pane = app.query_one("#current-pane", MainPane)
         first_row = current_table.get_row_at(0)
 
         assert isinstance(first_row[0], Text)
         assert first_row[0].plain == "*"
-        assert first_row[0].style == "bold #5555FF"
+        assert _text_style_matches(
+            first_row[0],
+            _style_without_background(
+                current_pane.get_component_rich_style("ft-directory-sel-table")
+            ),
+        )
         assert first_row[1].plain == "docs"
         await _wait_for_child_pane_runtime_idle(app, timeout=1.0)
 
@@ -1574,13 +1628,17 @@ async def test_app_cut_marks_row_with_dimmed_style() -> None:
         await asyncio.sleep(0.05)
 
         current_table = app.query_one("#current-pane-table", DataTable)
+        current_pane = app.query_one("#current-pane", MainPane)
         first_row = current_table.get_row_at(0)
 
         assert app.app_state.clipboard.mode == "cut"
         assert app.app_state.clipboard.paths == (f"{path}/docs",)
         assert isinstance(first_row[1], Text)
         assert first_row[1].plain == "docs"
-        assert first_row[1].style == "bold #5555FF dim"
+        assert _text_style_matches(
+            first_row[1],
+            _style_without_background(current_pane.get_component_rich_style("ft-directory-cut")),
+        )
 
 
 @pytest.mark.asyncio
@@ -3543,7 +3601,7 @@ async def test_app_command_palette_opens_config_dialog_and_saves_changes() -> No
 
 
 @pytest.mark.asyncio
-async def test_app_config_dialog_save_updates_theme() -> None:
+async def test_app_config_dialog_save_updates_theme(monkeypatch) -> None:
     path = "/tmp/peneo-command-palette-theme"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -3567,6 +3625,30 @@ async def test_app_config_dialog_save_updates_theme() -> None:
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
+        parent_pane = app.query_one("#parent-pane", SidePane)
+        child_pane = app.query_one("#child-pane", ChildPane)
+        current_pane = app.query_one("#current-pane", MainPane)
+        refresh_calls = {"parent": 0, "current": 0, "child": 0}
+
+        original_parent_refresh = parent_pane.refresh_styles
+        original_current_refresh = current_pane.refresh_styles
+        original_child_refresh = child_pane.refresh_styles
+
+        def track_parent_refresh() -> None:
+            refresh_calls["parent"] += 1
+            original_parent_refresh()
+
+        def track_current_refresh() -> None:
+            refresh_calls["current"] += 1
+            original_current_refresh()
+
+        def track_child_refresh() -> None:
+            refresh_calls["child"] += 1
+            original_child_refresh()
+
+        monkeypatch.setattr(parent_pane, "refresh_styles", track_parent_refresh)
+        monkeypatch.setattr(current_pane, "refresh_styles", track_current_refresh)
+        monkeypatch.setattr(child_pane, "refresh_styles", track_child_refresh)
         await pilot.press(":")
         await pilot.press("c", "o", "n", "f", "i", "g")
         await pilot.press("enter")
@@ -3584,6 +3666,19 @@ async def test_app_config_dialog_save_updates_theme() -> None:
         _saved_path, saved_config = config_save_service.saved_requests[0]
         assert saved_config.display.theme == "textual-light"
         assert app.theme == "textual-light"
+
+        parent_list = app.query_one("#parent-pane-list", Static)
+        parent_renderable = parent_list.renderable
+        current_table = app.query_one("#current-pane-table", DataTable)
+        updated_parent_style = parent_pane.get_component_rich_style("ft-directory-sel")
+        updated_table_style = current_pane.get_component_rich_style("ft-directory-sel-table")
+        first_row = current_table.get_row_at(0)
+
+        assert refresh_calls == {"parent": 1, "current": 1, "child": 1}
+        assert isinstance(parent_renderable, Text)
+        assert _text_has_style(parent_renderable, _style_without_background(updated_parent_style))
+        assert isinstance(first_row[0], Text)
+        assert _text_style_matches(first_row[0], _style_without_background(updated_table_style))
 
 
 @pytest.mark.asyncio

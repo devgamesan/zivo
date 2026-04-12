@@ -279,3 +279,69 @@ Screen {
 #split-terminal.-focused {
     background: $boost;
 }
+
+/* File type component styles resolved via COMPONENT_CLASSES */
+.ft-executable {
+    color: $success;
+    text-style: bold;
+}
+
+.ft-executable-sel {
+    color: $success;
+    text-style: bold;
+}
+
+.ft-executable-cut {
+    color: $success;
+    text-style: bold dim;
+}
+
+.ft-directory {
+    color: $accent;
+    text-style: bold;
+}
+
+.ft-directory-sel {
+    color: $accent;
+    text-style: bold underline;
+}
+
+.ft-directory-sel-table {
+    color: $accent;
+    text-style: bold;
+}
+
+.ft-directory-cut {
+    color: $accent;
+    text-style: bold dim;
+}
+
+.ft-symlink {
+    color: $secondary;
+    text-style: bold;
+}
+
+.ft-symlink-sel {
+    color: $secondary;
+    text-style: bold;
+}
+
+.ft-symlink-cut {
+    color: $secondary;
+    text-style: bold dim;
+}
+
+.ft-selected {
+    color: $success;
+    text-style: bold;
+}
+
+.ft-cut {
+    color: $text-muted;
+    text-style: dim;
+}
+
+.ft-selected-cut {
+    color: $text-muted;
+    text-style: bold;
+}
