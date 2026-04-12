@@ -660,7 +660,7 @@ def test_create_app_applies_configured_startup_state() -> None:
             terminal=TerminalConfig(),
             display=DisplayConfig(
                 show_hidden_files=True,
-                theme="textual-light",
+                theme="dracula",
                 default_sort_field="modified",
                 default_sort_descending=True,
                 directories_first=False,
@@ -673,7 +673,7 @@ def test_create_app_applies_configured_startup_state() -> None:
     )
 
     assert app.app_state.show_hidden is True
-    assert app.theme == "textual-light"
+    assert app.theme == "dracula"
     assert app.app_state.sort.field == "modified"
     assert app.app_state.sort.descending is True
     assert app.app_state.sort.directories_first is False

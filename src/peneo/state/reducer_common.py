@@ -19,6 +19,7 @@ from peneo.models import (
     RenameRequest,
     UndoEntry,
 )
+from peneo.theme_support import SUPPORTED_APP_THEMES
 
 from .actions import Action, RequestDirectorySizes
 from .effects import (
@@ -51,7 +52,7 @@ from .selectors import select_target_paths, select_visible_current_entry_states
 ReducerFn = Callable[[AppState, Action], ReduceResult]
 
 CONFIG_SORT_FIELDS = ("name", "modified", "size")
-CONFIG_THEMES = ("textual-dark", "textual-light")
+CONFIG_THEMES = SUPPORTED_APP_THEMES
 CONFIG_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 CONFIG_PASTE_ACTIONS = ("prompt", "overwrite", "skip", "rename")
 CONFIG_EDITOR_COMMANDS = (None, "nvim", "vim", "nano", "hx", "micro", "emacs -nw")

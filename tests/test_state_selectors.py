@@ -1786,6 +1786,11 @@ def test_select_config_dialog_state_formats_editor_lines() -> None:
     )
 
 
+def test_select_child_syntax_theme_tracks_builtin_theme_brightness() -> None:
+    assert selectors_module._select_child_syntax_theme("solarized-light") == "friendly"
+    assert selectors_module._select_child_syntax_theme("dracula") == "monokai"
+
+
 def test_select_config_dialog_state_shows_custom_editor_command_hint() -> None:
     state = replace(
         build_initial_app_state(config_path="/tmp/peneo/config.toml"),

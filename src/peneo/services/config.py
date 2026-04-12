@@ -21,6 +21,7 @@ from peneo.models import (
     TerminalConfig,
 )
 from peneo.models.config import BehaviorConfig
+from peneo.theme_support import SUPPORTED_APP_THEME_DISPLAY, SUPPORTED_APP_THEMES
 
 SystemNameResolver = Callable[[], str]
 EnvironmentVariableReader = Callable[[str], str | None]
@@ -34,7 +35,7 @@ class ConfigSaveService(Protocol):
     def save(self, *, path: str, config: AppConfig) -> str: ...
 
 _VALID_SORT_FIELDS = frozenset({"name", "modified", "size"})
-_VALID_THEMES = frozenset({"textual-dark", "textual-light"})
+_VALID_THEMES = frozenset(SUPPORTED_APP_THEMES)
 _VALID_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 _VALID_PASTE_ACTIONS = frozenset({"overwrite", "skip", "rename", "prompt"})
 _VALID_TERMINAL_EDITOR_NAMES = frozenset(
@@ -224,7 +225,7 @@ def _load_display_config(section: object, warnings: list[str]) -> DisplayConfig:
             key="theme",
             default=config.theme,
             valid_values=_VALID_THEMES,
-            valid_display="textual-dark, textual-light",
+            valid_display=SUPPORTED_APP_THEME_DISPLAY,
             section_name="display",
             warnings=warnings,
         ),

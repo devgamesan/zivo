@@ -29,6 +29,7 @@ from peneo.models import (
     TabItemState,
     ThreePaneShellData,
 )
+from peneo.theme_support import preview_syntax_theme_for_app_theme
 
 from .command_palette import (
     CommandPaletteItem,
@@ -1225,7 +1226,7 @@ def _format_bool(value: bool) -> str:
 
 @lru_cache(maxsize=32)
 def _select_child_syntax_theme(app_theme: str) -> str:
-    return "friendly" if app_theme == "textual-light" else "monokai"
+    return preview_syntax_theme_for_app_theme(app_theme)
 
 
 @lru_cache(maxsize=256)

@@ -1469,6 +1469,29 @@ def test_cycle_config_editor_theme_updates_draft_and_dirty_state() -> None:
     assert next_state.config_editor.dirty is True
 
 
+def test_cycle_config_editor_theme_supports_all_builtin_themes() -> None:
+    base_state = build_initial_app_state()
+    themed_config = replace(
+        base_state.config,
+        display=replace(base_state.config.display, theme="solarized-light"),
+    )
+    state = replace(
+        base_state,
+        ui_mode="CONFIG",
+        config_editor=ConfigEditorState(
+            path="/tmp/peneo/config.toml",
+            draft=themed_config,
+            cursor_index=2,
+        ),
+    )
+
+    next_state = _reduce_state(state, CycleConfigEditorValue(delta=1))
+
+    assert next_state.config_editor is not None
+    assert next_state.config_editor.draft.display.theme == "textual-ansi"
+    assert next_state.config_editor.dirty is True
+
+
 def test_cycle_config_editor_directory_size_visibility_updates_draft_and_dirty_state() -> None:
     state = replace(
         build_initial_app_state(config_path="/tmp/peneo/config.toml"),

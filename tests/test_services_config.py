@@ -10,6 +10,7 @@ from peneo.models import (
     TerminalConfig,
 )
 from peneo.services.config import AppConfigLoader, LiveConfigSaveService, resolve_config_path
+from peneo.theme_support import SUPPORTED_APP_THEMES
 
 
 def test_resolve_config_path_uses_xdg_directory(tmp_path) -> None:
@@ -59,7 +60,7 @@ def test_loader_reads_valid_config_values(tmp_path) -> None:
         show_hidden_files = true
         show_directory_sizes = true
         show_preview = false
-        theme = "textual-light"
+        theme = "dracula"
         default_sort_field = "modified"
         default_sort_descending = true
         directories_first = false
@@ -87,7 +88,7 @@ def test_loader_reads_valid_config_values(tmp_path) -> None:
     assert result.config.display.show_hidden_files is True
     assert result.config.display.show_directory_sizes is True
     assert result.config.display.show_preview is False
-    assert result.config.display.theme == "textual-light"
+    assert result.config.display.theme == "dracula"
     assert result.config.display.default_sort_field == "modified"
     assert result.config.display.default_sort_descending is True
     assert result.config.display.directories_first is False
@@ -177,7 +178,7 @@ def test_config_save_service_writes_normalized_config_file(tmp_path) -> None:
                 show_hidden_files=True,
                 show_directory_sizes=True,
                 show_preview=False,
-                theme="textual-light",
+                theme="tokyo-night",
                 default_sort_field="size",
                 default_sort_descending=True,
                 directories_first=False,
@@ -203,13 +204,31 @@ def test_config_save_service_writes_normalized_config_file(tmp_path) -> None:
     assert "show_hidden_files = true" in written
     assert "show_directory_sizes = true" in written
     assert "show_preview = false" in written
-    assert 'theme = "textual-light"' in written
+    assert 'theme = "tokyo-night"' in written
     assert 'default_sort_field = "size"' in written
     assert "confirm_delete = false" in written
     assert 'paste_conflict_action = "rename"' in written
     assert "enabled = false" in written
     assert 'path = "/tmp/peneo-errors.log"' in written
     assert 'paths = ["/tmp/project", "/tmp/docs"]' in written
+
+
+def test_loader_accepts_all_supported_builtin_themes(tmp_path) -> None:
+    config_path = tmp_path / "config.toml"
+
+    for theme_name in SUPPORTED_APP_THEMES:
+        config_path.write_text(
+            f"""
+            [display]
+            theme = "{theme_name}"
+            """,
+            encoding="utf-8",
+        )
+
+        result = AppConfigLoader(config_path_resolver=lambda: config_path).load()
+
+        assert result.warnings == ()
+        assert result.config.display.theme == theme_name
 
 
 def test_loader_treats_blank_logging_path_as_default(tmp_path) -> None:
