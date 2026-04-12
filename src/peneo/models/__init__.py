@@ -13,6 +13,7 @@ from .config import (
     HelpBarConfig,
     LoggingConfig,
     PasteConflictAction,
+    PreviewSyntaxTheme,
     TerminalConfig,
 )
 from .external_launch import ExternalLaunchKind, ExternalLaunchRequest
@@ -122,6 +123,7 @@ __all__ = [
     "MutationResultLevel",
     "PaneEntry",
     "PasteConflictAction",
+    "PreviewSyntaxTheme",
     "SplitTerminalViewState",
     "PasteConflict",
     "PasteConflictPrompt",

@@ -55,7 +55,12 @@ from peneo.state import (
     PaneState,
     SetTerminalHeight,
 )
-from peneo.state.selectors import compute_current_pane_visible_window, select_command_palette_state
+from peneo.state.selectors import (
+    compute_current_pane_visible_window,
+    select_command_palette_state,
+    select_shell_data,
+)
+from peneo.theme_support import SUPPORTED_PREVIEW_SYNTAX_THEMES
 from peneo.ui import (
     AttributeDialog,
     ChildPane,
@@ -3679,6 +3684,89 @@ async def test_app_config_dialog_save_updates_theme(monkeypatch) -> None:
         assert _text_has_style(parent_renderable, _style_without_background(updated_parent_style))
         assert isinstance(first_row[0], Text)
         assert _text_style_matches(first_row[0], _style_without_background(updated_table_style))
+
+
+@pytest.mark.asyncio
+async def test_app_config_dialog_save_updates_preview_syntax_theme() -> None:
+    path = "/tmp/peneo-command-palette-preview-theme"
+    preview_path = f"{path}/README.md"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: BrowserSnapshot(
+                current_path=path,
+                parent_pane=PaneState(
+                    directory_path="/tmp",
+                    entries=(
+                        DirectoryEntryState(path, Path(path).name, "dir"),
+                    ),
+                    cursor_path=path,
+                ),
+                current_pane=PaneState(
+                    directory_path=path,
+                    entries=(
+                        DirectoryEntryState(
+                            preview_path,
+                            "README.md",
+                            "file",
+                            size_bytes=120,
+                        ),
+                    ),
+                    cursor_path=preview_path,
+                ),
+                child_pane=PaneState(
+                    directory_path=path,
+                    entries=(),
+                    mode="preview",
+                    preview_path=preview_path,
+                    preview_title="Preview: README.md",
+                    preview_content="# heading\nbody\n",
+                ),
+            )
+        }
+    )
+    config_save_service = FakeConfigSaveService()
+    app = create_app(
+        snapshot_loader=loader,
+        config_save_service=config_save_service,
+        config_path="/tmp/peneo/config.toml",
+        initial_path=path,
+    )
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        assert select_shell_data(app.app_state).child_pane.syntax_theme == "monokai"
+
+        await pilot.press(":")
+        await pilot.press("c", "o", "n", "f", "i", "g")
+        await pilot.press("enter")
+        await _wait_for_config_dialog(app)
+
+        for _ in range(5):
+            await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.press("s")
+        deadline = asyncio.get_running_loop().time() + 1.5
+        while True:
+            if (
+                len(config_save_service.saved_requests) == 1
+                and app.app_state.pending_config_save_request_id is None
+            ):
+                break
+            if asyncio.get_running_loop().time() >= deadline:
+                raise AssertionError("config save did not complete")
+            await asyncio.sleep(0.01)
+
+        assert len(config_save_service.saved_requests) == 1
+        _saved_path, saved_config = config_save_service.saved_requests[0]
+        assert saved_config.display.preview_syntax_theme == SUPPORTED_PREVIEW_SYNTAX_THEMES[1]
+        assert (
+            app.app_state.config.display.preview_syntax_theme
+            == SUPPORTED_PREVIEW_SYNTAX_THEMES[1]
+        )
+        assert (
+            select_shell_data(app.app_state).child_pane.syntax_theme
+            == SUPPORTED_PREVIEW_SYNTAX_THEMES[1]
+        )
 
 
 @pytest.mark.asyncio

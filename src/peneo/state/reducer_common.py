@@ -19,7 +19,7 @@ from peneo.models import (
     RenameRequest,
     UndoEntry,
 )
-from peneo.theme_support import SUPPORTED_APP_THEMES
+from peneo.theme_support import SUPPORTED_APP_THEMES, SUPPORTED_PREVIEW_SYNTAX_THEMES
 
 from .actions import Action, RequestDirectorySizes
 from .effects import (
@@ -53,6 +53,7 @@ ReducerFn = Callable[[AppState, Action], ReduceResult]
 
 CONFIG_SORT_FIELDS = ("name", "modified", "size")
 CONFIG_THEMES = SUPPORTED_APP_THEMES
+CONFIG_PREVIEW_SYNTAX_THEMES = SUPPORTED_PREVIEW_SYNTAX_THEMES
 CONFIG_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 CONFIG_PASTE_ACTIONS = ("prompt", "overwrite", "skip", "rename")
 CONFIG_EDITOR_COMMANDS = (None, "nvim", "vim", "nano", "hx", "micro", "emacs -nw")
@@ -698,6 +699,18 @@ def cycle_config_editor_value(config: AppConfig, cursor_index: int, delta: int) 
                 ),
             ),
         )
+    if field_id == "display.preview_syntax_theme":
+        return replace(
+            config,
+            display=replace(
+                config.display,
+                preview_syntax_theme=cycle_choice(
+                    CONFIG_PREVIEW_SYNTAX_THEMES,
+                    config.display.preview_syntax_theme,
+                    delta,
+                ),
+            ),
+        )
     if field_id == "display.default_sort_field":
         return replace(
             config,
@@ -779,6 +792,7 @@ def config_editor_field_ids() -> tuple[str, ...]:
         "display.theme",
         "display.show_directory_sizes",
         "display.show_preview",
+        "display.preview_syntax_theme",
         "display.show_help_bar",
         "display.default_sort_field",
         "display.default_sort_descending",
@@ -796,6 +810,7 @@ def config_editor_labels() -> tuple[str, ...]:
         "Theme",
         "Show directory sizes",
         "Show preview",
+        "Preview syntax theme",
         "Show help bar",
         "Default sort field",
         "Default sort descending",

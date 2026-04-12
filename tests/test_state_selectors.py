@@ -1773,6 +1773,7 @@ def test_select_config_dialog_state_formats_editor_lines() -> None:
     assert "  Editor command: system default" in dialog.lines
     assert "> Theme: textual-dark" in dialog.lines
     assert "  Show preview: true" in dialog.lines
+    assert "  Preview syntax theme: auto" in dialog.lines
     assert "  Default sort field: name" in dialog.lines
     assert "Editor presets: system default, nvim, vim, nano, hx, micro, emacs -nw" in dialog.lines
     assert "Terminal launch templates: edit config.toml with e" in dialog.lines
@@ -1787,8 +1788,13 @@ def test_select_config_dialog_state_formats_editor_lines() -> None:
 
 
 def test_select_child_syntax_theme_tracks_builtin_theme_brightness() -> None:
-    assert selectors_module._select_child_syntax_theme("solarized-light") == "friendly"
-    assert selectors_module._select_child_syntax_theme("dracula") == "monokai"
+    assert selectors_module._select_child_syntax_theme("solarized-light", "auto") == "friendly"
+    assert selectors_module._select_child_syntax_theme("dracula", "auto") == "monokai"
+
+
+def test_select_child_syntax_theme_prefers_explicit_preview_style() -> None:
+    assert selectors_module._select_child_syntax_theme("solarized-light", "xcode") == "xcode"
+    assert selectors_module._select_child_syntax_theme("dracula", "one-dark") == "one-dark"
 
 
 def test_select_config_dialog_state_shows_custom_editor_command_hint() -> None:

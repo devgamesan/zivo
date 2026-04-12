@@ -54,11 +54,13 @@ ConfigFieldId = Literal[
     "display.show_directory_sizes",
     "display.show_preview",
     "display.theme",
+    "display.preview_syntax_theme",
     "display.default_sort_field",
     "display.default_sort_descending",
     "display.directories_first",
     "behavior.confirm_delete",
     "behavior.paste_conflict_action",
+    "logging.level",
 ]
 
 

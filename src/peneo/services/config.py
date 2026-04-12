@@ -21,7 +21,12 @@ from peneo.models import (
     TerminalConfig,
 )
 from peneo.models.config import BehaviorConfig
-from peneo.theme_support import SUPPORTED_APP_THEME_DISPLAY, SUPPORTED_APP_THEMES
+from peneo.theme_support import (
+    SUPPORTED_APP_THEME_DISPLAY,
+    SUPPORTED_APP_THEMES,
+    SUPPORTED_PREVIEW_SYNTAX_THEME_DISPLAY,
+    SUPPORTED_PREVIEW_SYNTAX_THEMES,
+)
 
 SystemNameResolver = Callable[[], str]
 EnvironmentVariableReader = Callable[[str], str | None]
@@ -36,6 +41,7 @@ class ConfigSaveService(Protocol):
 
 _VALID_SORT_FIELDS = frozenset({"name", "modified", "size"})
 _VALID_THEMES = frozenset(SUPPORTED_APP_THEMES)
+_VALID_PREVIEW_SYNTAX_THEMES = frozenset(SUPPORTED_PREVIEW_SYNTAX_THEMES)
 _VALID_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 _VALID_PASTE_ACTIONS = frozenset({"overwrite", "skip", "rename", "prompt"})
 _VALID_TERMINAL_EDITOR_NAMES = frozenset(
@@ -226,6 +232,15 @@ def _load_display_config(section: object, warnings: list[str]) -> DisplayConfig:
             default=config.theme,
             valid_values=_VALID_THEMES,
             valid_display=SUPPORTED_APP_THEME_DISPLAY,
+            section_name="display",
+            warnings=warnings,
+        ),
+        preview_syntax_theme=_read_enum(
+            validated,
+            key="preview_syntax_theme",
+            default=config.preview_syntax_theme,
+            valid_values=_VALID_PREVIEW_SYNTAX_THEMES,
+            valid_display=SUPPORTED_PREVIEW_SYNTAX_THEME_DISPLAY,
             section_name="display",
             warnings=warnings,
         ),
@@ -528,6 +543,7 @@ def _render_display_section(config: AppConfig) -> str:
         f"show_directory_sizes = {_render_bool(config.display.show_directory_sizes)}\n"
         f"show_preview = {_render_bool(config.display.show_preview)}\n"
         f'theme = "{config.display.theme}"\n'
+        f'preview_syntax_theme = "{config.display.preview_syntax_theme}"\n'
         f'default_sort_field = "{config.display.default_sort_field}"\n'
         f"default_sort_descending = {_render_bool(config.display.default_sort_descending)}\n"
         f"directories_first = {_render_bool(config.display.directories_first)}"

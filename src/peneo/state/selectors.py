@@ -188,7 +188,10 @@ def _select_child_pane_for_cursor(
     state: AppState,
     cursor_entry: DirectoryEntryState | None,
 ) -> ChildPaneViewState:
-    syntax_theme = _select_child_syntax_theme(state.config.display.theme)
+    syntax_theme = _select_child_syntax_theme(
+        state.config.display.theme,
+        state.config.display.preview_syntax_theme,
+    )
     permissions_label = (
         _format_permissions_detail_label(cursor_entry)
         if cursor_entry
@@ -833,32 +836,38 @@ def select_config_dialog_state(state: AppState) -> ConfigDialogState | None:
         _format_config_line(
             5,
             selected_index,
+            "Preview syntax theme",
+            config.display.preview_syntax_theme,
+        ),
+        _format_config_line(
+            6,
+            selected_index,
             "Show help bar",
             _format_bool(config.display.show_help_bar),
         ),
         _format_config_line(
-            6,
+            7,
             selected_index,
             "Default sort field",
             config.display.default_sort_field,
         ),
         _format_config_line(
-            7,
+            8,
             selected_index,
             "Default sort descending",
             _format_bool(config.display.default_sort_descending),
         ),
         _format_config_line(
-            8, selected_index, "Directories first", _format_bool(config.display.directories_first)
+            9, selected_index, "Directories first", _format_bool(config.display.directories_first)
         ),
         _format_config_line(
-            9, selected_index, "Confirm delete", _format_bool(config.behavior.confirm_delete)
+            10, selected_index, "Confirm delete", _format_bool(config.behavior.confirm_delete)
         ),
         _format_config_line(
-            10, selected_index, "Paste conflict action", config.behavior.paste_conflict_action
+            11, selected_index, "Paste conflict action", config.behavior.paste_conflict_action
         ),
         _format_config_line(
-            11, selected_index, "Log level", config.logging.level
+            12, selected_index, "Log level", config.logging.level
         ),
         "",
         _format_custom_editor_hint(config.editor.command),
@@ -1224,9 +1233,9 @@ def _format_bool(value: bool) -> str:
     return "true" if value else "false"
 
 
-@lru_cache(maxsize=32)
-def _select_child_syntax_theme(app_theme: str) -> str:
-    return preview_syntax_theme_for_app_theme(app_theme)
+@lru_cache(maxsize=128)
+def _select_child_syntax_theme(app_theme: str, preview_syntax_theme: str) -> str:
+    return preview_syntax_theme_for_app_theme(app_theme, preview_syntax_theme)
 
 
 @lru_cache(maxsize=256)

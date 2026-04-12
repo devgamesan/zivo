@@ -318,6 +318,7 @@ The supported settings are:
 | `display` | `show_preview` | `true` / `false` | Shows the text-file preview in the right pane. Defaults to `true`. Directory and archive child panes are unaffected. grep result context preview follows the same setting. |
 | `display` | `show_help_bar` | `true` / `false` | Shows the help bar at the bottom of the screen. Defaults to `true`. The help bar is always shown when the command palette or split terminal is open, regardless of this setting. |
 | `display` | `theme` | Any built-in Textual theme, for example `textual-dark`, `textual-light`, `dracula`, or `tokyo-night` | Default UI theme applied on startup and after saving from the settings editor. |
+| `display` | `preview_syntax_theme` | `auto` or a supported Pygments style, for example `one-dark`, `xcode`, `nord`, or `gruvbox-dark` | Syntax-highlighting colors used by the right-pane text preview. `auto` keeps the current light/dark-based default selection. |
 | `display` | `default_sort_field` | `name` / `modified` / `size` | Default sort field for the main pane. |
 | `display` | `default_sort_descending` | `true` / `false` | Starts the main-pane sort in descending order when enabled. |
 | `display` | `directories_first` | `true` / `false` | Keeps directories grouped before files in the main pane. |
@@ -345,6 +346,7 @@ show_directory_sizes = true
 show_preview = true
 show_help_bar = true
 theme = "textual-dark"
+preview_syntax_theme = "auto"
 default_sort_field = "name"
 default_sort_descending = false
 directories_first = true
@@ -365,6 +367,7 @@ paths = ["/home/user/src", "/home/user/docs"]
 Invalid config values do not stop startup. Peneo falls back to built-in defaults and shows a warning after the initial directory load.
 When logging is enabled, startup failures and unhandled exceptions are appended to the configured log file for later investigation.
 The accepted `display.theme` values come from the built-in themes shipped with the installed Textual version.
+The accepted `display.preview_syntax_theme` values are `auto` plus the Pygments styles available in the installed environment.
 
 ## Command Palette
 

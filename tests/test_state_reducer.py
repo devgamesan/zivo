@@ -1412,7 +1412,7 @@ def test_move_config_editor_cursor_clamps_to_visible_settings() -> None:
     next_state = _reduce_state(state, MoveConfigEditorCursor(delta=99))
 
     assert next_state.config_editor is not None
-    assert next_state.config_editor.cursor_index == 11
+    assert next_state.config_editor.cursor_index == 12
 
 
 def test_cycle_config_editor_editor_command_updates_draft_and_dirty_state() -> None:
@@ -1525,6 +1525,24 @@ def test_cycle_config_editor_preview_visibility_updates_draft_and_dirty_state() 
 
     assert next_state.config_editor is not None
     assert next_state.config_editor.draft.display.show_preview is False
+    assert next_state.config_editor.dirty is True
+
+
+def test_cycle_config_editor_preview_syntax_theme_updates_draft_and_dirty_state() -> None:
+    state = replace(
+        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        ui_mode="CONFIG",
+        config_editor=ConfigEditorState(
+            path="/tmp/peneo/config.toml",
+            draft=build_initial_app_state().config,
+            cursor_index=5,
+        ),
+    )
+
+    next_state = _reduce_state(state, CycleConfigEditorValue(delta=1))
+
+    assert next_state.config_editor is not None
+    assert next_state.config_editor.draft.display.preview_syntax_theme == "abap"
     assert next_state.config_editor.dirty is True
 
 
