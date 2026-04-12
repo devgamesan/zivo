@@ -10,6 +10,8 @@ from peneo.models import (
     ExtractArchiveRequest,
     PasteConflict,
     PasteRequest,
+    UndoDeletePathStep,
+    UndoEntry,
 )
 from peneo.state import (
     ArchiveExtractConfirmationState,
@@ -1179,12 +1181,14 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
     help_state = select_help_bar_state(state)
 
     assert help_state.lines == (
-        "enter open | e edit | i info | space select | c copy | x cut | p paste | r rename",
+        "enter open | e edit | i info | space select | c copy | x cut | p paste | "
+        "r rename | z undo",
         "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to",
         "n new-file | N new-dir | H history | b bookmarks | t term | : palette | q quit",
     )
     assert help_state.text == (
-        "enter open | e edit | i info | space select | c copy | x cut | p paste | r rename\n"
+        "enter open | e edit | i info | space select | c copy | x cut | p paste | "
+        "r rename | z undo\n"
         "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to\n"
         "n new-file | N new-dir | H history | b bookmarks | t term | : palette | q quit"
     )
@@ -2515,3 +2519,27 @@ def test_command_palette_includes_tab_commands_with_lowercase_shortcuts() -> Non
     assert items["Previous tab"].shortcut == "shift+tab"
     assert items["Close current tab"].shortcut == "w"
     assert items["Close current tab"].enabled is False
+
+
+def test_command_palette_includes_undo_item_and_disables_when_empty() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    items = {item.label: item for item in palette_state.items}
+    assert items["Undo last file operation"].shortcut == "z"
+    assert items["Undo last file operation"].enabled is False
+
+
+def test_command_palette_enables_undo_item_when_stack_is_present() -> None:
+    state = replace(
+        _reduce_state(build_initial_app_state(), BeginCommandPalette()),
+        undo_stack=(UndoEntry(kind="paste_copy", steps=(UndoDeletePathStep("/tmp/copied"),)),),
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    items = {item.label: item for item in palette_state.items}
+    assert items["Undo last file operation"].enabled is True

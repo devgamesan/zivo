@@ -86,6 +86,7 @@ from .actions import (
     ToggleHiddenFiles,
     ToggleSelectionAndAdvance,
     ToggleSplitTerminal,
+    UndoLastOperation,
 )
 from .command_palette import normalize_command_palette_cursor
 from .models import AppState, DirectoryEntryState, GrepSearchFieldId, NotificationState
@@ -146,6 +147,7 @@ BROWSING_KEYMAP = {
     "c": "copy_targets",
     "x": "cut_targets",
     "p": "paste_clipboard",
+    "z": "undo_last_operation",
     "~": "go_to_home_directory",
     "H": "begin_history_search",
     "b": "begin_bookmark_search",
@@ -864,6 +866,7 @@ _BROWSING_SIMPLE_DISPATCH: dict[str, type[Action]] = {
     "toggle_hidden": ToggleHiddenFiles,
     "copy_paths_to_clipboard": CopyPathsToClipboard,
     "paste_clipboard": PasteClipboard,
+    "undo_last_operation": UndoLastOperation,
     "open_new_tab": OpenNewTab,
     "close_current_tab": CloseCurrentTab,
     "activate_next_tab": ActivateNextTab,

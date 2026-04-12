@@ -186,6 +186,12 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             enabled=True,
         ),
         CommandPaletteItem(
+            id="undo_last_operation",
+            label="Undo last file operation",
+            shortcut="z",
+            enabled=bool(state.undo_stack),
+        ),
+        CommandPaletteItem(
             id="new_tab",
             label="New tab",
             shortcut="o",

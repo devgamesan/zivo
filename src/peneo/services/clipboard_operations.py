@@ -8,6 +8,7 @@ from typing import Mapping, Protocol
 
 from peneo.adapters import FileOperationAdapter, LocalFileOperationAdapter
 from peneo.models import (
+    PasteAppliedChange,
     PasteConflict,
     PasteConflictPrompt,
     PasteExecutionResult,
@@ -42,7 +43,9 @@ class LiveClipboardOperationService:
 
         success_count = 0
         skipped_count = 0
+        overwrote_count = 0
         failures: list[PasteFailure] = []
+        applied_changes: list[PasteAppliedChange] = []
 
         for source_path in request.source_paths:
             destination_path = self._destination_for_source(source_path, request.destination_dir)
@@ -66,6 +69,7 @@ class LiveClipboardOperationService:
                         )
                         continue
                     self.adapter.remove_path(destination_path)
+                    overwrote_count += 1
 
             try:
                 if request.mode == "copy":
@@ -82,6 +86,12 @@ class LiveClipboardOperationService:
                 )
             else:
                 success_count += 1
+                applied_changes.append(
+                    PasteAppliedChange(
+                        source_path=source_path,
+                        destination_path=destination_path,
+                    )
+                )
 
         return PasteExecutionResult(
             summary=PasteSummary(
@@ -92,7 +102,10 @@ class LiveClipboardOperationService:
                 skipped_count=skipped_count,
                 failures=tuple(failures),
                 conflict_resolution=request.conflict_resolution,
+                overwrote_count=overwrote_count,
             )
+            ,
+            applied_changes=tuple(applied_changes),
         )
 
     def _collect_conflicts(self, request: PasteRequest) -> tuple[PasteConflict, ...]:
@@ -150,7 +163,17 @@ class FakeClipboardOperationService:
                     skipped_count=0,
                     failures=(),
                     conflict_resolution=request.conflict_resolution,
-                )
+                ),
+                applied_changes=tuple(
+                    PasteAppliedChange(
+                        source_path=source_path,
+                        destination_path=self._destination_for_source(
+                            source_path,
+                            request.destination_dir,
+                        ),
+                    )
+                    for source_path in request.source_paths
+                ),
             )
         return result
 

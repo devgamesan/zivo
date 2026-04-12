@@ -47,10 +47,12 @@ from peneo.services import (
     LiveGrepSearchService,
     LiveShellCommandService,
     LiveSplitTerminalService,
+    LiveUndoService,
     LiveZipCompressService,
     ShellCommandService,
     SplitTerminalService,
     SplitTerminalSession,
+    UndoService,
     ZipCompressService,
     resolve_config_path,
 )
@@ -129,6 +131,7 @@ class PeneoApp(App[None]):
         grep_search_service: GrepSearchService | None = None,
         shell_command_service: ShellCommandService | None = None,
         split_terminal_service: SplitTerminalService | None = None,
+        undo_service: UndoService | None = None,
         *,
         app_config: AppConfig | None = None,
         config_path: str | None = None,
@@ -167,6 +170,7 @@ class PeneoApp(App[None]):
         self._grep_search_service = grep_search_service or LiveGrepSearchService()
         self._shell_command_service = shell_command_service or LiveShellCommandService()
         self._split_terminal_service = split_terminal_service or LiveSplitTerminalService()
+        self._undo_service = undo_service or LiveUndoService()
         self._pending_workers: dict[str, Effect] = {}
         self._split_terminal_session: SplitTerminalSession | None = None
         self._child_pane_timer: Timer | None = None
@@ -435,6 +439,7 @@ def create_app(
     grep_search_service: GrepSearchService | None = None,
     shell_command_service: ShellCommandService | None = None,
     split_terminal_service: SplitTerminalService | None = None,
+    undo_service: UndoService | None = None,
     *,
     app_config: AppConfig | None = None,
     config_path: str | None = None,
@@ -461,6 +466,7 @@ def create_app(
         grep_search_service=grep_search_service,
         shell_command_service=shell_command_service,
         split_terminal_service=split_terminal_service,
+        undo_service=undo_service,
         app_config=app_config,
         config_path=config_path,
         startup_notification=startup_notification,

@@ -15,6 +15,7 @@ from peneo.models import (
     PasteConflict,
     PasteConflictAction,
     PasteRequest,
+    UndoEntry,
 )
 from peneo.models.shell_data import EntryKind, NotificationLevel
 
@@ -415,6 +416,9 @@ class AppState:
     pending_directory_size_request_id: int | None = None
     pending_config_save_request_id: int | None = None
     pending_shell_command_request_id: int | None = None
+    undo_stack: tuple[UndoEntry, ...] = ()
+    pending_undo_entry: UndoEntry | None = None
+    pending_undo_request_id: int | None = None
     terminal_height: int = 24
     current_pane_projection_mode: CurrentPaneProjectionMode = "full"
     current_pane_window_start: int = 0

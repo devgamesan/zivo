@@ -5,7 +5,16 @@ from pathlib import Path
 from typing import Callable, Literal
 
 from peneo.archive_utils import default_extract_destination, default_zip_destination
-from peneo.models import DeleteRequest, PasteRequest, RenameRequest
+from peneo.models import (
+    DeleteRequest,
+    PasteAppliedChange,
+    PasteRequest,
+    RenameRequest,
+    UndoDeletePathStep,
+    UndoEntry,
+    UndoMovePathStep,
+    UndoRestoreTrashStep,
+)
 
 from .actions import (
     Action,
@@ -47,6 +56,9 @@ from .actions import (
     SubmitPendingInput,
     ToggleSelection,
     ToggleSelectionAndAdvance,
+    UndoCompleted,
+    UndoFailed,
+    UndoLastOperation,
     ZipCompressCompleted,
     ZipCompressFailed,
     ZipCompressPreparationCompleted,
@@ -91,6 +103,7 @@ from .reducer_common import (
     run_archive_prepare_request,
     run_file_mutation_request,
     run_paste_request,
+    run_undo_request,
     run_zip_compress_prepare_request,
     run_zip_compress_request,
     sync_child_pane,
@@ -108,6 +121,66 @@ def _detect_platform() -> Literal["linux", "darwin"] | None:
     elif system == "Darwin":
         return "darwin"
     return None
+
+
+_UNDO_STACK_LIMIT = 20
+
+
+def _push_undo_entry(state: AppState, entry: UndoEntry | None) -> tuple[UndoEntry, ...]:
+    if entry is None:
+        return state.undo_stack
+    trimmed_stack = state.undo_stack[-(_UNDO_STACK_LIMIT - 1) :]
+    return (*trimmed_stack, entry)
+
+
+def _undo_entry_for_file_mutation(action_result) -> UndoEntry | None:
+    if action_result.operation == "rename" and action_result.path and action_result.source_path:
+        return UndoEntry(
+            kind="rename",
+            steps=(
+                UndoMovePathStep(
+                    source_path=action_result.path,
+                    destination_path=action_result.source_path,
+                ),
+            ),
+        )
+    if (
+        action_result.operation == "delete"
+        and action_result.delete_mode == "trash"
+        and action_result.trash_records
+    ):
+        return UndoEntry(
+            kind="trash_delete",
+            steps=tuple(
+                UndoRestoreTrashStep(record=record) for record in action_result.trash_records
+            ),
+        )
+    return None
+
+
+def _undo_entry_for_paste(
+    summary,
+    applied_changes: tuple[PasteAppliedChange, ...],
+) -> UndoEntry | None:
+    if summary.success_count == 0 or not applied_changes or summary.overwrote_count:
+        return None
+    if summary.mode == "copy":
+        return UndoEntry(
+            kind="paste_copy",
+            steps=tuple(
+                UndoDeletePathStep(path=change.destination_path) for change in applied_changes
+            ),
+        )
+    return UndoEntry(
+        kind="paste_cut",
+        steps=tuple(
+            UndoMovePathStep(
+                source_path=change.destination_path,
+                destination_path=change.source_path,
+            )
+            for change in applied_changes
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -608,6 +681,28 @@ def _handle_paste_clipboard(
     return run_paste_request(state, request)
 
 
+def _handle_undo_last_operation(
+    state: AppState,
+    action: UndoLastOperation,
+    reduce_state: ReducerFn,
+) -> ReduceResult | None:
+    if state.pending_undo_request_id is not None:
+        return finalize(
+            replace(
+                state,
+                notification=NotificationState(level="warning", message="Undo already in progress"),
+            )
+        )
+    if not state.undo_stack:
+        return finalize(
+            replace(
+                state,
+                notification=NotificationState(level="warning", message="Nothing to undo"),
+            )
+        )
+    return run_undo_request(state, state.undo_stack[-1])
+
+
 def _handle_resolve_paste_conflict(
     state: AppState,
     action: ResolvePasteConflict,
@@ -703,6 +798,10 @@ def _handle_clipboard_paste_completed(
     next_state = replace(
         state,
         clipboard=next_clipboard,
+        undo_stack=_push_undo_entry(
+            state,
+            _undo_entry_for_paste(action.summary, action.applied_changes),
+        ),
         notification=None,
         paste_conflict=None,
         delete_confirmation=None,
@@ -1242,6 +1341,7 @@ def _handle_file_mutation_completed(
         zip_compress_progress=None,
         name_conflict=None,
         pending_file_mutation_request_id=None,
+        undo_stack=_push_undo_entry(state, _undo_entry_for_file_mutation(action.result)),
         post_reload_notification=NotificationState(
             level=action.result.level,
             message=action.result.message,
@@ -1252,6 +1352,73 @@ def _handle_file_mutation_completed(
         next_state,
         cursor_path=cursor_path_after_file_mutation(state, action.result),
         keep_current_cursor=not bool(action.result.removed_paths),
+    )
+
+
+def _handle_undo_completed(
+    state: AppState,
+    action: UndoCompleted,
+    reduce_state: ReducerFn,
+) -> ReduceResult | None:
+    if action.request_id != state.pending_undo_request_id:
+        return finalize(state)
+    selected_paths = state.current_pane.selected_paths
+    if action.result.removed_paths:
+        selected_paths = frozenset(
+            path for path in selected_paths if path not in action.result.removed_paths
+        )
+    next_stack = state.undo_stack
+    if (
+        state.pending_undo_entry is not None
+        and state.undo_stack
+        and state.undo_stack[-1] == state.pending_undo_entry
+    ):
+        next_stack = state.undo_stack[:-1]
+    next_state = replace(
+        state,
+        notification=None,
+        current_pane=replace(
+            state.current_pane,
+            selected_paths=selected_paths,
+            selection_anchor_path=None,
+        ),
+        undo_stack=next_stack,
+        pending_undo_entry=None,
+        pending_undo_request_id=None,
+        post_reload_notification=NotificationState(
+            level=action.result.level,
+            message=action.result.message,
+        ),
+        ui_mode="BROWSING",
+    )
+    keep_current_cursor = True
+    if (
+        action.result.removed_paths
+        and state.current_pane.cursor_path in action.result.removed_paths
+    ):
+        keep_current_cursor = False
+    return request_snapshot_refresh(
+        next_state,
+        cursor_path=action.result.path,
+        keep_current_cursor=keep_current_cursor,
+    )
+
+
+def _handle_undo_failed(
+    state: AppState,
+    action: UndoFailed,
+    reduce_state: ReducerFn,
+) -> ReduceResult | None:
+    if action.request_id != state.pending_undo_request_id:
+        return finalize(state)
+    return finalize(
+        replace(
+            state,
+            notification=NotificationState(level="error", message=action.message),
+            pending_undo_entry=None,
+            pending_undo_request_id=None,
+            ui_mode="BROWSING",
+        )
     )
 
 
@@ -1301,6 +1468,7 @@ _MUTATION_HANDLERS: dict[type[Action], _MutationHandler] = {
     CopyTargets: _handle_copy_targets,
     CutTargets: _handle_cut_targets,
     PasteClipboard: _handle_paste_clipboard,
+    UndoLastOperation: _handle_undo_last_operation,
     ResolvePasteConflict: _handle_resolve_paste_conflict,
     CancelPasteConflict: _handle_cancel_paste_conflict,
     ClipboardPasteNeedsResolution: _handle_clipboard_paste_needs_resolution,
@@ -1326,6 +1494,8 @@ _MUTATION_HANDLERS: dict[type[Action], _MutationHandler] = {
     ZipCompressCompleted: _handle_zip_compress_completed,
     ZipCompressFailed: _handle_zip_compress_failed,
     FileMutationCompleted: _handle_file_mutation_completed,
+    UndoCompleted: _handle_undo_completed,
+    UndoFailed: _handle_undo_failed,
     FileMutationFailed: _handle_file_mutation_failed,
 }
 

@@ -181,7 +181,7 @@ sequenceDiagram
 
 ### `src/peneo/state/reducer_mutations.py`
 
-- Handles selection, copy / cut / paste, rename, create, trash delete, and archive-extract transitions
+- Handles selection, copy / cut / paste, undo, rename, create, trash delete, and archive-extract transitions
 - Owns paste-conflict, name-conflict, archive-confirmation, and extraction-progress state
 
 ### `src/peneo/state/reducer_palette.py`
@@ -239,8 +239,9 @@ sequenceDiagram
 - `file_search.py`: handles recursive file search under the current directory
 - `grep_search.py`: handles recursive content search through `rg`
 - `directory_size.py`: calculates recursive sizes for visible directories
-- `clipboard_operations.py`: executes copy / cut / paste and detects conflicts
-- `file_mutations.py`: handles rename / create / trash delete
+- `clipboard_operations.py`: executes copy / cut / paste, detects conflicts, and records undo metadata
+- `file_mutations.py`: handles rename / create / trash delete and captures trash-restore metadata
+- `undo_operations.py`: executes undo for reversible file operations
 - `archive_extract.py`: handles archive preflight scanning, conflict detection, safe extraction, and progress reporting
 - `config.py`: loads, validates, saves, and renders `config.toml`
 - `external_launcher.py`: handles default-app launch, terminal-editor launch, external-terminal launch, and path copy

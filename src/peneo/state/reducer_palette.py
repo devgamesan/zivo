@@ -54,6 +54,7 @@ from .actions import (
     SubmitCommandPalette,
     ToggleHiddenFiles,
     ToggleSplitTerminal,
+    UndoLastOperation,
 )
 from .command_palette import get_command_palette_items, normalize_command_palette_cursor
 from .effects import (
@@ -679,6 +680,8 @@ def _run_palette_command_item(
         return _run_go_to_home_directory_command(next_state, reduce_state)
     if item_id == "reload_directory":
         return _run_reload_directory_command(next_state, reduce_state)
+    if item_id == "undo_last_operation":
+        return reduce_state(next_state, UndoLastOperation())
     if item_id == "toggle_split_terminal":
         return _run_toggle_split_terminal_command(next_state, reduce_state)
     if item_id == "select_all":

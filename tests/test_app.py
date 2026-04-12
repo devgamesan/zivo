@@ -26,6 +26,9 @@ from peneo.models import (
     PasteSummary,
     ShellCommandResult,
     TerminalConfig,
+    UndoDeletePathStep,
+    UndoEntry,
+    UndoResult,
 )
 from peneo.services import (
     FakeBrowserSnapshotLoader,
@@ -37,6 +40,7 @@ from peneo.services import (
     FakeGrepSearchService,
     FakeShellCommandService,
     FakeSplitTerminalService,
+    FakeUndoService,
     LiveExternalLaunchService,
 )
 from peneo.state import (
@@ -2458,7 +2462,8 @@ async def test_app_displays_browsing_help_bar() -> None:
     )
     app = create_app(snapshot_loader=loader, initial_path=path)
     expected_help = (
-        "enter open | e edit | i info | space select | c copy | x cut | p paste | r rename\n"
+        "enter open | e edit | i info | space select | c copy | x cut | p paste | "
+        "r rename | z undo\n"
         "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to\n"
         "n new-file | N new-dir | H history | b bookmarks | t term | : palette | q quit"
     )
@@ -2468,6 +2473,42 @@ async def test_app_displays_browsing_help_bar() -> None:
         help_bar = await _wait_for_help_bar_text(app, expected_help)
 
         assert str(help_bar.renderable) == expected_help
+
+
+@pytest.mark.asyncio
+async def test_app_pressing_z_runs_undo() -> None:
+    path = "/tmp/peneo-undo"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (DirectoryEntryState(f"{path}/docs", "docs", "dir"),),
+                child_path=f"{path}/docs",
+            )
+        }
+    )
+    undo_entry = UndoEntry(
+        kind="paste_copy",
+        steps=(UndoDeletePathStep(path=f"{path}/docs copy"),),
+    )
+    undo_service = FakeUndoService(
+        results={
+            undo_entry: UndoResult(
+                path=None,
+                message="Undid copied item",
+                removed_paths=(f"{path}/docs copy",),
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, undo_service=undo_service, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        app._app_state = replace(app.app_state, undo_stack=(undo_entry,))
+        await pilot.press("z")
+        await _wait_for_status_message(app, "info: Undid copied item", timeout=1.0)
+
+        assert app.app_state.undo_stack == ()
 
 
 @pytest.mark.asyncio

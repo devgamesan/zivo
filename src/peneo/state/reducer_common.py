@@ -17,6 +17,7 @@ from peneo.models import (
     PasteRequest,
     PasteSummary,
     RenameRequest,
+    UndoEntry,
 )
 
 from .actions import Action, RequestDirectorySizes
@@ -30,6 +31,7 @@ from .effects import (
     RunClipboardPasteEffect,
     RunExternalLaunchEffect,
     RunFileMutationEffect,
+    RunUndoEffect,
     RunZipCompressEffect,
     RunZipCompressPreparationEffect,
 )
@@ -269,6 +271,22 @@ def run_file_mutation_request(
     return ReduceResult(
         state=next_state,
         effects=(RunFileMutationEffect(request_id=request_id, request=request),),
+    )
+
+
+def run_undo_request(state: AppState, entry: UndoEntry) -> ReduceResult:
+    request_id = state.next_request_id
+    next_state = replace(
+        state,
+        notification=None,
+        pending_undo_entry=entry,
+        pending_undo_request_id=request_id,
+        next_request_id=request_id + 1,
+        ui_mode="BUSY",
+    )
+    return ReduceResult(
+        state=next_state,
+        effects=(RunUndoEffect(request_id=request_id, entry=entry),),
     )
 
 
@@ -1008,6 +1026,8 @@ def notification_for_paste_summary(summary: PasteSummary) -> NotificationState:
     message = f"{verb} {summary.success_count} item(s)"
     if summary.skipped_count:
         message += f", skipped {summary.skipped_count}"
+    if summary.overwrote_count:
+        message += ", undo unavailable for overwritten items"
     return NotificationState(level="info", message=message)
 
 

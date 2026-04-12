@@ -8,6 +8,7 @@ from typing import Mapping, Protocol
 
 from peneo.adapters import FileOperationAdapter, LocalFileOperationAdapter
 from peneo.models import CreatePathRequest, DeleteRequest, FileMutationResult, RenameRequest
+from peneo.services.trash_operations import TrashService, resolve_trash_service
 
 
 class FileMutationService(Protocol):
@@ -24,6 +25,7 @@ class LiveFileMutationService:
     """Execute rename/create/delete operations on the local filesystem."""
 
     adapter: FileOperationAdapter = field(default_factory=LocalFileOperationAdapter)
+    trash_service: TrashService = field(default_factory=resolve_trash_service)
 
     def execute(
         self,
@@ -42,6 +44,8 @@ class LiveFileMutationService:
         return FileMutationResult(
             path=str(destination_path),
             message=f"Renamed to {request.new_name}",
+            operation="rename",
+            source_path=str(source_path),
         )
 
     def _execute_create(self, request: CreatePathRequest) -> FileMutationResult:
@@ -57,11 +61,17 @@ class LiveFileMutationService:
     def _execute_delete(self, request: DeleteRequest) -> FileMutationResult:
         removed_paths: list[str] = []
         failures: list[tuple[str, str]] = []
+        trash_records = []
 
         for path in request.paths:
             try:
                 if request.mode == "trash":
-                    self.adapter.send_to_trash(path)
+                    trash_record = self.trash_service.capture_restorable_trash(
+                        path,
+                        lambda current_path=path: self.adapter.send_to_trash(current_path),
+                    )
+                    if trash_record is not None:
+                        trash_records.append(trash_record)
                 else:
                     self.adapter.remove_path(path)
             except OSError as error:
@@ -95,6 +105,9 @@ class LiveFileMutationService:
                 message=message,
                 level="warning",
                 removed_paths=tuple(removed_paths),
+                operation="delete",
+                delete_mode=request.mode,
+                trash_records=tuple(trash_records),
             )
 
         noun = "item" if len(removed_paths) == 1 else "items"
@@ -107,6 +120,9 @@ class LiveFileMutationService:
             path=None,
             message=message,
             removed_paths=tuple(removed_paths),
+            operation="delete",
+            delete_mode=request.mode,
+            trash_records=tuple(trash_records),
         )
 
 
@@ -141,6 +157,8 @@ class FakeFileMutationService:
             return FileMutationResult(
                 path=str(source_path.parent / request.new_name),
                 message=f"Renamed to {request.new_name}",
+                operation="rename",
+                source_path=str(source_path),
             )
 
         if isinstance(request, DeleteRequest):
@@ -154,6 +172,8 @@ class FakeFileMutationService:
                 path=None,
                 message=message,
                 removed_paths=request.paths,
+                operation="delete",
+                delete_mode=request.mode,
             )
 
         target_path = _absolute_entry_path(request.parent_dir) / request.name
@@ -162,7 +182,7 @@ class FakeFileMutationService:
             if request.kind == "file"
             else f"Created directory {request.name}"
         )
-        return FileMutationResult(path=str(target_path), message=message)
+        return FileMutationResult(path=str(target_path), message=message, operation="create")
 
 
 def _absolute_entry_path(path: str) -> Path:

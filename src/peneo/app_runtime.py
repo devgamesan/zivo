@@ -21,6 +21,7 @@ from peneo.models import (
     PasteConflictPrompt,
     PasteExecutionResult,
     ShellCommandResult,
+    UndoResult,
 )
 from peneo.services import InvalidFileSearchQueryError, InvalidGrepSearchQueryError
 from peneo.state import (
@@ -64,6 +65,7 @@ from peneo.state import (
     RunFileSearchEffect,
     RunGrepSearchEffect,
     RunShellCommandEffect,
+    RunUndoEffect,
     RunZipCompressEffect,
     RunZipCompressPreparationEffect,
     SetNotification,
@@ -72,6 +74,8 @@ from peneo.state import (
     SplitTerminalStarted,
     SplitTerminalStartFailed,
     StartSplitTerminalEffect,
+    UndoCompleted,
+    UndoFailed,
     WriteSplitTerminalInputEffect,
     ZipCompressCompleted,
     ZipCompressFailed,
@@ -390,6 +394,20 @@ def schedule_file_mutation(app: Any, effect: RunFileMutationEffect) -> None:
             name=f"file-mutation:{effect.request_id}",
             group="file-mutation",
             description=str(effect.request),
+            exclusive=True,
+        ),
+    )
+
+
+def schedule_undo(app: Any, effect: RunUndoEffect) -> None:
+    _run_worker(
+        app,
+        effect,
+        partial(app._undo_service.execute, effect.entry),
+        _WorkerSpec(
+            name=f"undo:{effect.request_id}",
+            group="undo",
+            description=effect.entry.kind,
             exclusive=True,
         ),
     )
@@ -827,6 +845,7 @@ _EFFECT_SCHEDULERS = (
     (RunConfigSaveEffect, schedule_config_save),
     (RunDirectorySizeEffect, schedule_directory_sizes),
     (RunFileMutationEffect, schedule_file_mutation),
+    (RunUndoEffect, schedule_undo),
     (RunExternalLaunchEffect, _schedule_external_launch_effect),
     (RunShellCommandEffect, schedule_shell_command),
     (RunFileSearchEffect, schedule_file_search),
@@ -884,6 +903,7 @@ def _complete_clipboard_paste(
         ClipboardPasteCompleted(
             request_id=effect.request_id,
             summary=result.summary,
+            applied_changes=result.applied_changes,
         ),
     )
 
@@ -892,6 +912,16 @@ def _complete_file_mutation(effect: Effect, result: FileMutationResult) -> tuple
     return (
         FileMutationCompleted(
             request_id=effect.request_id,
+            result=result,
+        ),
+    )
+
+
+def _complete_undo(effect: RunUndoEffect, result: UndoResult) -> tuple[Any, ...]:
+    return (
+        UndoCompleted(
+            request_id=effect.request_id,
+            entry=effect.entry,
             result=result,
         ),
     )
@@ -1061,6 +1091,7 @@ _failed_external_launch = _make_failed_handler(
     extra_field_builders={"request": lambda e, _err, _msg: e.request},
 )
 _failed_shell_command = _make_failed_handler(ShellCommandFailed)
+_failed_undo = _make_failed_handler(UndoFailed)
 _failed_file_search = _make_failed_handler(
     FileSearchFailed,
     extra_field_builders={
@@ -1085,6 +1116,7 @@ _RESULT_COMPLETE_HANDLERS: tuple[tuple[type[Any], CompleteActionHandler], ...] =
     (CreateZipArchivePreparationResult, _complete_zip_compress_preparation),
     (CreateZipArchiveResult, _complete_zip_compress),
     (FileMutationResult, _complete_file_mutation),
+    (UndoResult, _complete_undo),
 )
 
 _COMPLETE_ACTION_HANDLERS: tuple[tuple[type[Any], CompleteActionHandler], ...] = (
@@ -1111,6 +1143,7 @@ _FAILED_ACTION_HANDLERS: tuple[tuple[type[Any], FailureActionHandler], ...] = (
     (RunDirectorySizeEffect, _failed_directory_sizes),
     (RunExternalLaunchEffect, _failed_external_launch),
     (RunShellCommandEffect, _failed_shell_command),
+    (RunUndoEffect, _failed_undo),
     (RunFileSearchEffect, _failed_file_search),
     (RunGrepSearchEffect, _failed_grep_search),
 )

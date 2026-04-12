@@ -88,6 +88,11 @@ from .trash_operations import (
     UnsupportedPlatformTrashService,
     resolve_trash_service,
 )
+from .undo_operations import (
+    FakeUndoService,
+    LiveUndoService,
+    UndoService,
+)
 from .zip_compress import (
     FakeZipCompressService,
     LiveZipCompressService,
@@ -155,4 +160,7 @@ __all__ = [
     "TrashService",
     "UnsupportedPlatformTrashService",
     "resolve_trash_service",
+    "FakeUndoService",
+    "LiveUndoService",
+    "UndoService",
 ]

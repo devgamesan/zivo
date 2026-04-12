@@ -74,6 +74,7 @@ from peneo.state import (
     ToggleHiddenFiles,
     ToggleSelectionAndAdvance,
     ToggleSplitTerminal,
+    UndoLastOperation,
     ZipCompressConfirmationState,
     build_initial_app_state,
     dispatch_key_input,
@@ -430,6 +431,14 @@ def test_browsing_p_dispatches_paste_clipboard() -> None:
     actions = dispatch_key_input(state, key="p", character="p")
 
     assert actions == (SetNotification(None), PasteClipboard())
+
+
+def test_browsing_z_dispatches_undo_last_operation() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="z", character="z")
+
+    assert actions == (SetNotification(None), UndoLastOperation())
 
 
 def test_browsing_capital_C_dispatches_copy_paths_to_clipboard() -> None:
