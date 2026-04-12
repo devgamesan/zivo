@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from dataclasses import replace
 
 from rich.cells import cell_len
+from rich.style import Style
 from rich.syntax import Syntax
 from rich.text import Text
 from textual import events
@@ -24,6 +25,23 @@ from .input_bar import InputBar
 from .summary_bar import SummaryBar
 
 ELLIPSIS = "~"
+FILE_TYPE_COMPONENT_CLASSES = frozenset(
+    {
+        "ft-cut",
+        "ft-directory",
+        "ft-directory-cut",
+        "ft-directory-sel",
+        "ft-directory-sel-table",
+        "ft-executable",
+        "ft-executable-cut",
+        "ft-executable-sel",
+        "ft-selected",
+        "ft-selected-cut",
+        "ft-symlink",
+        "ft-symlink-cut",
+        "ft-symlink-sel",
+    }
+)
 
 
 def build_entry_label(entry: PaneEntry) -> str:
@@ -97,20 +115,150 @@ def _take_suffix_cells(text: str, width: int) -> str:
     return "".join(reversed(collected))
 
 
+def _resolve_component_styles(widget: object) -> dict[str, Style]:
+    """Resolve all file-type component styles from the widget's CSS."""
+
+    return {
+        name: widget.get_component_rich_style(name)  # type: ignore[union-attr]
+        for name in FILE_TYPE_COMPONENT_CLASSES
+    }
+
+
+def _style_without_background(style: Style | None) -> Style | None:
+    """Drop background color so table cell text doesn't paint its own block."""
+
+    if style is None or style.bgcolor is None:
+        return style
+    return Style(
+        color=style.color,
+        bold=style.bold,
+        dim=style.dim,
+        italic=style.italic,
+        underline=style.underline,
+        blink=style.blink,
+        blink2=style.blink2,
+        reverse=style.reverse,
+        conceal=style.conceal,
+        strike=style.strike,
+        underline2=style.underline2,
+        frame=style.frame,
+        encircle=style.encircle,
+        overline=style.overline,
+        link=style.link,
+        meta=style.meta,
+    )
+
+
+def _ft_style_name(
+    entry: PaneEntry,
+    *,
+    selected_directory_style: str,
+    selected_cut_style: str,
+) -> str | None:
+    """Return the component class name that should style the entry."""
+
+    if entry.cut:
+        if entry.symlink:
+            return "ft-symlink-cut"
+        if entry.kind == "dir":
+            return "ft-directory-cut"
+        if entry.executable:
+            return "ft-executable-cut"
+        if entry.selected:
+            return selected_cut_style
+        return "ft-cut"
+    if entry.symlink:
+        if entry.selected:
+            return "ft-symlink-sel"
+        return "ft-symlink"
+    if entry.kind == "dir":
+        if entry.selected:
+            return selected_directory_style
+        return "ft-directory"
+    if entry.executable:
+        if entry.selected:
+            return "ft-executable-sel"
+        return "ft-executable"
+    if entry.selected:
+        return "ft-selected"
+    return None
+
+
+def _ft_resolve_style(
+    entry: PaneEntry,
+    styles: dict[str, Style],
+    *,
+    selected_directory_style: str,
+    selected_cut_style: str,
+) -> Style | None:
+    """Resolve the file-type Rich style for an entry."""
+
+    style_name = _ft_style_name(
+        entry,
+        selected_directory_style=selected_directory_style,
+        selected_cut_style=selected_cut_style,
+    )
+    if style_name is None:
+        return None
+    return styles.get(style_name)
+
+
+def _render_file_label(
+    entry: PaneEntry,
+    render_width: int,
+    styles: dict[str, Style],
+    *,
+    selected_directory_style: str,
+    selected_cut_style: str,
+) -> Text:
+    """Render a single file entry label with resolved theme styles."""
+
+    label = build_entry_label(entry)
+    if render_width > 0:
+        label = truncate_middle(label, render_width)
+    style = _ft_resolve_style(
+        entry,
+        styles,
+        selected_directory_style=selected_directory_style,
+        selected_cut_style=selected_cut_style,
+    )
+    style = _style_without_background(style)
+    return Text(label) if style is None else Text(label, style=style)
+
+
+def _render_file_entries(
+    entries: Sequence[PaneEntry],
+    render_width: int,
+    styles: dict[str, Style],
+    *,
+    selected_directory_style: str,
+    selected_cut_style: str,
+) -> Text:
+    """Render a sequence of file entries as a single Rich Text block."""
+
+    if not entries:
+        return Text()
+    return Text("\n").join(
+        [
+            _render_file_label(
+                entry,
+                render_width,
+                styles,
+                selected_directory_style=selected_directory_style,
+                selected_cut_style=selected_cut_style,
+            )
+            for entry in entries
+        ]
+    )
+
+
 class SidePane(Vertical):
     """Lightweight pane used for parent and child directory listings."""
 
-    CUT_STYLE = "bright_black dim"
-    EXECUTABLE_STYLE = "bold #55FF55"
-    EXECUTABLE_SELECTED_STYLE = "bold #55FF55"
-    EXECUTABLE_CUT_STYLE = "bold #55FF55 dim"
-    DIRECTORY_STYLE = "bold #5555FF"
-    DIRECTORY_SELECTED_STYLE = "bold white on #5555FF"
-    DIRECTORY_CUT_STYLE = "bold #5555FF dim"
-    SYMLINK_STYLE = "bold #55FFFF"
-    SYMLINK_SELECTED_STYLE = "bold #55FFFF"
-    SYMLINK_CUT_STYLE = "bold #55FFFF dim"
+    COMPONENT_CLASSES = FILE_TYPE_COMPONENT_CLASSES
     ENTRY_HORIZONTAL_PADDING = 2
+    SELECTED_DIRECTORY_STYLE = "ft-directory-sel"
+    SELECTED_CUT_STYLE = "ft-cut"
 
     def __init__(
         self,
@@ -123,6 +271,7 @@ class SidePane(Vertical):
         super().__init__(id=id, classes=classes)
         self._title = title
         self._entries = tuple(entries)
+        self._ft_styles: dict[str, Style] = {}
         self._last_render_width = 0
 
     @property
@@ -133,7 +282,13 @@ class SidePane(Vertical):
     def compose(self) -> ComposeResult:
         yield Label(self._title, classes="pane-title")
         content = Static(
-            self._render_entries(self._entries, 0),
+            _render_file_entries(
+                self._entries,
+                0,
+                {},
+                selected_directory_style=self.SELECTED_DIRECTORY_STYLE,
+                selected_cut_style=self.SELECTED_CUT_STYLE,
+            ),
             id=self.list_view_id,
             classes="pane-list",
         )
@@ -141,6 +296,7 @@ class SidePane(Vertical):
         yield content
 
     def on_mount(self) -> None:
+        self._ft_styles = _resolve_component_styles(self)
         self.call_after_refresh(self._refresh_rendered_labels)
 
     def on_resize(self, _event: events.Resize) -> None:
@@ -155,7 +311,15 @@ class SidePane(Vertical):
 
         content = self._content_widget()
         render_width = self._entry_width(content)
-        content.update(self._render_entries(next_entries, render_width))
+        content.update(
+            _render_file_entries(
+                next_entries,
+                render_width,
+                self._ft_styles,
+                selected_directory_style=self.SELECTED_DIRECTORY_STYLE,
+                selected_cut_style=self.SELECTED_CUT_STYLE,
+            )
+        )
         self._entries = next_entries
         self._last_render_width = render_width
 
@@ -164,68 +328,38 @@ class SidePane(Vertical):
         render_width = self._entry_width(content)
         if render_width <= 0 or render_width == self._last_render_width:
             return
-        content.update(self._render_entries(self._entries, render_width))
+        content.update(
+            _render_file_entries(
+                self._entries,
+                render_width,
+                self._ft_styles,
+                selected_directory_style=self.SELECTED_DIRECTORY_STYLE,
+                selected_cut_style=self.SELECTED_CUT_STYLE,
+            )
+        )
         self._last_render_width = render_width
 
     def _content_widget(self) -> Static:
         return self.query_one(f"#{self.list_view_id}", Static)
 
-    @classmethod
-    def _render_entries(cls, entries: Sequence[PaneEntry], render_width: int) -> Text:
-        if not entries:
-            return Text()
-        return Text("\n").join(
-            [cls._render_label(entry, render_width) for entry in entries]
-        )
-
-    @classmethod
-    def _render_label(cls, entry: PaneEntry, render_width: int = 0) -> Text:
-        label = build_entry_label(entry)
-        if render_width > 0:
-            label = truncate_middle(label, render_width)
-
-        # カット状態が最優先
-        if entry.cut:
-            if entry.symlink:
-                return Text(label, style=cls.SYMLINK_CUT_STYLE)
-            if entry.kind == "dir":
-                return Text(label, style=cls.DIRECTORY_CUT_STYLE)
-            if entry.executable:
-                return Text(label, style=cls.EXECUTABLE_CUT_STYLE)
-            return Text(label, style=cls.CUT_STYLE)
-
-        # シンボリックリンク
-        if entry.symlink:
-            if entry.selected:
-                return Text(label, style=cls.SYMLINK_SELECTED_STYLE)
-            return Text(label, style=cls.SYMLINK_STYLE)
-
-        # ディレクトリ（実行権限に関わらずディレクトリ色を優先）
-        if entry.kind == "dir":
-            if entry.selected:
-                return Text(label, style=cls.DIRECTORY_SELECTED_STYLE)
-            return Text(label, style=cls.DIRECTORY_STYLE)
-
-        # 実行権限付きファイル
-        if entry.executable:
-            if entry.selected:
-                return Text(label, style=cls.EXECUTABLE_SELECTED_STYLE)
-            return Text(label, style=cls.EXECUTABLE_STYLE)
-
-        # 選択状態
-        if entry.selected:
-            return Text(label, style="bold #55FF55")
-
-        return Text(label)
-
     def _entry_width(self, content: Static) -> int:
         return max(0, content.size.width - self.ENTRY_HORIZONTAL_PADDING)
+
+    def refresh_styles(self) -> None:
+        """Re-resolve component styles after a theme change."""
+
+        self._ft_styles = _resolve_component_styles(self)
+        self._last_render_width = 0
+        self._refresh_rendered_labels()
 
 
 class ChildPane(Vertical):
     """Right-side pane that switches between entries and text preview."""
 
+    COMPONENT_CLASSES = FILE_TYPE_COMPONENT_CLASSES
     PREVIEW_HORIZONTAL_PADDING = 2
+    SELECTED_DIRECTORY_STYLE = "ft-directory-sel"
+    SELECTED_CUT_STYLE = "ft-cut"
 
     def __init__(
         self,
@@ -236,6 +370,7 @@ class ChildPane(Vertical):
     ) -> None:
         super().__init__(id=id, classes=classes)
         self._state = state
+        self._ft_styles: dict[str, Style] = {}
         self._last_render_width = 0
 
     @property
@@ -253,7 +388,13 @@ class ChildPane(Vertical):
     def compose(self) -> ComposeResult:
         yield Label(self._state.title, classes="pane-title")
         list_content = Static(
-            SidePane._render_entries(self._state.entries, 0),
+            _render_file_entries(
+                self._state.entries,
+                0,
+                {},
+                selected_directory_style=self.SELECTED_DIRECTORY_STYLE,
+                selected_cut_style=self.SELECTED_CUT_STYLE,
+            ),
             id=self.list_view_id,
             classes="pane-list",
         )
@@ -277,6 +418,7 @@ class ChildPane(Vertical):
         yield permissions
 
     def on_mount(self) -> None:
+        self._ft_styles = _resolve_component_styles(self)
         self.call_after_refresh(self._refresh_rendered_content)
 
     def on_resize(self, _event: events.Resize) -> None:
@@ -311,7 +453,15 @@ class ChildPane(Vertical):
         render_width = max(0, widget.size.width - SidePane.ENTRY_HORIZONTAL_PADDING)
         if render_width <= 0 or render_width == self._last_render_width:
             return
-        widget.update(SidePane._render_entries(self._state.entries, render_width))
+        widget.update(
+            _render_file_entries(
+                self._state.entries,
+                render_width,
+                self._ft_styles,
+                selected_directory_style=self.SELECTED_DIRECTORY_STYLE,
+                selected_cut_style=self.SELECTED_CUT_STYLE,
+            )
+        )
         self._last_render_width = render_width
 
     def _list_widget(self) -> Static:
@@ -353,24 +503,20 @@ class ChildPane(Vertical):
             code_width=max(1, render_width),
         )
 
+    def refresh_styles(self) -> None:
+        """Re-resolve component styles after a theme change."""
+
+        self._ft_styles = _resolve_component_styles(self)
+        self._last_render_width = 0
+        self._refresh_rendered_content()
+
 
 class MainPane(Vertical):
     """Center pane with detailed columns for the current directory."""
 
     COLUMN_LABELS = ("Sel", "Name", "Size", "Modified")
     COLUMN_KEYS = ("sel", "name", "size", "modified")
-    SELECTED_STYLE = "bold #55FF55"
-    CUT_STYLE = "bright_black dim"
-    SELECTED_CUT_STYLE = "bold bright_black"
-    EXECUTABLE_STYLE = "bold #55FF55"
-    EXECUTABLE_SELECTED_STYLE = "bold #55FF55"
-    EXECUTABLE_CUT_STYLE = "bold #55FF55 dim"
-    DIRECTORY_STYLE = "bold #5555FF"
-    DIRECTORY_SELECTED_STYLE = "bold #5555FF"
-    DIRECTORY_CUT_STYLE = "bold #5555FF dim"
-    SYMLINK_STYLE = "bold #55FFFF"
-    SYMLINK_SELECTED_STYLE = "bold #55FFFF"
-    SYMLINK_CUT_STYLE = "bold #55FFFF dim"
+    COMPONENT_CLASSES = FILE_TYPE_COMPONENT_CLASSES
     NAME_MIN_WIDTH = 3
     FIXED_COLUMN_PREFERRED_WIDTHS = {
         "sel": 1,
@@ -403,6 +549,7 @@ class MainPane(Vertical):
         self._cursor_index = cursor_index
         self._cursor_visible = cursor_visible
         self._context_input = context_input
+        self._ft_styles: dict[str, Style] = {}
         self._last_table_width = 0
 
     @property
@@ -430,6 +577,7 @@ class MainPane(Vertical):
 
     def on_mount(self) -> None:
         """Populate the table after the widget is attached to an app."""
+        self._ft_styles = _resolve_component_styles(self)
         table = self.query_one(DataTable)
         table.cursor_type = "row"
         table.show_cursor = self._cursor_visible
@@ -440,6 +588,8 @@ class MainPane(Vertical):
 
     def on_resize(self, _event: events.Resize) -> None:
         self._refresh_table_width()
+
+    # -- Public state updates ---------------------------------------------------
 
     def set_entries(
         self,
@@ -466,6 +616,8 @@ class MainPane(Vertical):
         if entries_changed or cursor_changed:
             self._apply_cursor_state(table)
 
+    # -- Cursor management ------------------------------------------------------
+
     def set_cursor_state(
         self,
         cursor_index: int | None,
@@ -486,6 +638,21 @@ class MainPane(Vertical):
         self._apply_cursor_state(table)
         self.call_after_refresh(self._refresh_cursor_state)
 
+    def _sync_cursor(self, table: DataTable) -> None:
+        if not self._entries or self._cursor_index is None:
+            return
+        clamped_index = max(0, min(len(self._entries) - 1, self._cursor_index))
+        table.move_cursor(row=clamped_index, animate=False, scroll=True)
+
+    def _apply_cursor_state(self, table: DataTable) -> None:
+        table.show_cursor = self._cursor_visible
+        self._sync_cursor(table)
+
+    def _refresh_cursor_state(self) -> None:
+        self._apply_cursor_state(self.query_one(DataTable))
+
+    # -- Context input / summary ------------------------------------------------
+
     def set_context_input(self, state: InputBarState | None) -> None:
         """Update the contextual input line without remounting the pane."""
 
@@ -503,6 +670,8 @@ class MainPane(Vertical):
 
         self._summary = state
         self.query_one(SummaryBar).set_state(state)
+
+    # -- Incremental updates ----------------------------------------------------
 
     def apply_size_updates(self, updates: Sequence[CurrentPaneSizeUpdate]) -> None:
         """Update only the size cells for the supplied paths."""
@@ -529,18 +698,7 @@ class MainPane(Vertical):
         table = self.query_one(DataTable)
         for row_key, entry in changed_rows:
             try:
-                table.update_cell(
-                    row_key,
-                    "size",
-                    self._render_cell(
-                        entry.size_label,
-                        entry.selected,
-                        entry.cut,
-                        entry.executable,
-                        entry.kind,
-                        entry.symlink,
-                    ),
-                )
+                table.update_cell(row_key, "size", self._render_cell(entry.size_label, entry))
             except KeyError:
                 continue
 
@@ -579,18 +737,7 @@ class MainPane(Vertical):
                 except KeyError:
                     continue
 
-    def _sync_cursor(self, table: DataTable) -> None:
-        if not self._entries or self._cursor_index is None:
-            return
-        clamped_index = max(0, min(len(self._entries) - 1, self._cursor_index))
-        table.move_cursor(row=clamped_index, animate=False, scroll=True)
-
-    def _apply_cursor_state(self, table: DataTable) -> None:
-        table.show_cursor = self._cursor_visible
-        self._sync_cursor(table)
-
-    def _refresh_cursor_state(self) -> None:
-        self._apply_cursor_state(self.query_one(DataTable))
+    # -- Table building ---------------------------------------------------------
 
     def _refresh_table_width(self) -> None:
         table = self.query_one(DataTable)
@@ -656,6 +803,8 @@ class MainPane(Vertical):
             )
         self._last_table_width = table.size.width
 
+    # -- Row / cell helpers -----------------------------------------------------
+
     @classmethod
     def _entry_row_keys(cls, entries: Sequence[PaneEntry]) -> tuple[str, ...]:
         return tuple(cls._row_key(entry, index) for index, entry in enumerate(entries))
@@ -664,53 +813,39 @@ class MainPane(Vertical):
     def _row_key(entry: PaneEntry, index: int) -> str:
         return entry.path or f"__row__:{index}"
 
-    @classmethod
     def _build_row_cells(
-        cls,
+        self,
         entry: PaneEntry,
         column_widths: dict[str, int],
     ) -> tuple[Text, Text, Text, Text]:
         return (
-            cls._render_cell(
-                entry.selection_marker,
-                entry.selected,
-                entry.cut,
-                entry.executable,
-                entry.kind,
-                entry.symlink,
-            ),
-            cls._render_cell(
+            self._render_cell(entry.selection_marker, entry),
+            self._render_cell(
                 truncate_middle(build_entry_label(entry), column_widths["name"]),
-                entry.selected,
-                entry.cut,
-                entry.executable,
-                entry.kind,
-                entry.symlink,
+                entry,
             ),
-            cls._render_cell(
-                entry.size_label,
-                entry.selected,
-                entry.cut,
-                entry.executable,
-                entry.kind,
-                entry.symlink,
-            ),
-            cls._render_cell(
-                entry.modified_label,
-                entry.selected,
-                entry.cut,
-                entry.executable,
-                entry.kind,
-                entry.symlink,
-            ),
+            self._render_cell(entry.size_label, entry),
+            self._render_cell(entry.modified_label, entry),
         )
+
+    # -- Column layout ----------------------------------------------------------
 
     @classmethod
     def _allocate_column_widths(cls, table: DataTable) -> dict[str, int]:
         column_count = len(cls.COLUMN_LABELS)
         padding_width = column_count * table.cell_padding * 2
         available_content_width = max(1, table.size.width - padding_width)
+        fixed_widths = cls._shrink_fixed_columns(available_content_width)
+        name_width = max(1, available_content_width - sum(fixed_widths.values()))
+        return {
+            "sel": fixed_widths["sel"],
+            "name": name_width,
+            "size": fixed_widths["size"],
+            "modified": fixed_widths["modified"],
+        }
 
+    @classmethod
+    def _shrink_fixed_columns(cls, available_content_width: int) -> dict[str, int]:
         fixed_widths = dict(cls.FIXED_COLUMN_PREFERRED_WIDTHS)
         fixed_budget = max(0, available_content_width - cls.NAME_MIN_WIDTH)
         overflow = sum(fixed_widths.values()) - fixed_budget
@@ -727,56 +862,26 @@ class MainPane(Vertical):
         if sum(fixed_widths.values()) + cls.NAME_MIN_WIDTH > available_content_width:
             fixed_widths = dict(cls.FIXED_COLUMN_MIN_WIDTHS)
 
-        name_width = max(1, available_content_width - sum(fixed_widths.values()))
-        return {
-            "sel": fixed_widths["sel"],
-            "name": name_width,
-            "size": fixed_widths["size"],
-            "modified": fixed_widths["modified"],
-        }
+        return fixed_widths
 
-    @classmethod
-    def _render_cell(
-        cls,
-        value: str,
-        selected: bool,
-        cut: bool,
-        executable: bool = False,
-        kind: str | None = None,
-        symlink: bool = False,
-    ) -> Text:
-        # カット状態が最優先
-        if cut:
-            if symlink:
-                return Text(value, style=cls.SYMLINK_CUT_STYLE)
-            if kind == "dir":
-                return Text(value, style=cls.DIRECTORY_CUT_STYLE)
-            if executable:
-                return Text(value, style=cls.EXECUTABLE_CUT_STYLE)
-            if selected:
-                return Text(value, style=cls.SELECTED_CUT_STYLE)
-            return Text(value, style=cls.CUT_STYLE)
+    # -- Style / rendering ------------------------------------------------------
 
-        # シンボリックリンク
-        if symlink:
-            if selected:
-                return Text(value, style=cls.SYMLINK_SELECTED_STYLE)
-            return Text(value, style=cls.SYMLINK_STYLE)
+    def _entry_style(self, entry: PaneEntry) -> Style | None:
+        return _style_without_background(
+            _ft_resolve_style(
+                entry,
+                self._ft_styles,
+                selected_directory_style="ft-directory-sel-table",
+                selected_cut_style="ft-selected-cut",
+            )
+        )
 
-        # ディレクトリ（実行権限に関わらずディレクトリ色を優先）
-        if kind == "dir":
-            if selected:
-                return Text(value, style=cls.DIRECTORY_SELECTED_STYLE)
-            return Text(value, style=cls.DIRECTORY_STYLE)
+    def _render_cell(self, value: str, entry: PaneEntry) -> Text:
+        style = self._entry_style(entry)
+        return Text(value) if style is None else Text(value, style=style)
 
-        # 実行権限付きファイル
-        if executable:
-            if selected:
-                return Text(value, style=cls.EXECUTABLE_SELECTED_STYLE)
-            return Text(value, style=cls.EXECUTABLE_STYLE)
+    def refresh_styles(self) -> None:
+        """Re-resolve component styles after a theme change."""
 
-        # 選択状態
-        if selected:
-            return Text(value, style=cls.SELECTED_STYLE)
-
-        return Text(value)
+        self._ft_styles = _resolve_component_styles(self)
+        self._rebuild_table(self.query_one(DataTable))

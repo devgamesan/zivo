@@ -21,6 +21,7 @@ from peneo.ui import (
     SidePane,
     SplitTerminalPane,
     StatusBar,
+    TabBar,
 )
 
 
@@ -60,8 +61,11 @@ async def refresh_shell(
     app_state: AppState,
     shell: ThreePaneShellData,
     split_terminal_session: SplitTerminalSession | None,
+    *,
+    theme_changed: bool = False,
 ) -> None:
     try:
+        tab_bar = app.query_one("#tab-bar", TabBar)
         current_path_bar = app.query_one("#current-path-bar", CurrentPathBar)
         parent_pane = app.query_one("#parent-pane", SidePane)
         current_pane = app.query_one("#current-pane", MainPane)
@@ -82,6 +86,7 @@ async def refresh_shell(
     except NoMatches:
         selectors = (
             "#current-path-bar",
+            "#tab-bar",
             "#body",
             "#command-palette",
             "#command-palette-layer",
@@ -102,6 +107,7 @@ async def refresh_shell(
                 await app.query_one(selector).remove()
             except NoMatches:
                 pass
+        await app.mount(TabBar(shell.tab_bar, id="tab-bar"))
         await app.mount(CurrentPathBar(shell.current_path, id="current-path-bar"))
         await app.mount(build_body(shell))
         await app.mount(
@@ -143,6 +149,7 @@ async def refresh_shell(
         await app.mount(StatusBar(shell.status, id="status-bar"))
         return
 
+    tab_bar.set_state(shell.tab_bar)
     current_path_bar.set_path(shell.current_path)
     if shell.current_pane_update.mode == "size_delta":
         current_pane.apply_size_updates(shell.current_pane_update.size_updates)
@@ -159,6 +166,10 @@ async def refresh_shell(
     current_pane.set_context_input(shell.current_context_input)
     await parent_pane.set_entries(shell.parent_entries)
     await child_pane.set_state(shell.child_pane)
+    if theme_changed:
+        parent_pane.refresh_styles()
+        current_pane.refresh_styles()
+        child_pane.refresh_styles()
     split_terminal.set_state(shell.split_terminal)
     resize_split_terminal_session(app, app_state, split_terminal_session)
     command_palette_layer.display = shell.command_palette is not None

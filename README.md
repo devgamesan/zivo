@@ -13,6 +13,7 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 - **No memorization needed**: Common actions are always visible in the help bar
 - **Never get lost**: All actions can be called from the command palette
 - **Clear 3-pane layout**: Parent, current, and right panes displayed side by side, with text preview for focused files
+- **Tabbed browsing**: Keep multiple browser workspaces open inside one TUI and switch between them quickly
 - **Embedded terminal**: Seamlessly switch between browsing and shell with `t`
 - **Powerful search**: Jump directly to files with recursive file search and grep search
 - **Terminal editor integration**: Launch your preferred terminal editor in the current directory
@@ -20,7 +21,7 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 
 ## Features
 
-- Simple three-pane layout for parent / current / right panes. When the cursor is on a directory, the right pane shows its children. When the cursor is on a common text file, the right pane shows a syntax-highlighted text preview. You can navigate directories, multi-select items, copy, cut, paste, move items to trash, delete files, copy paths, rename, create files or directories, extract archives, create zip archives, search for files, run grep searches, and execute one-line shell commands entirely from the keyboard. Common actions stay visible in the help bar at the bottom.
+- Simple three-pane layout for parent / current / right panes. When the cursor is on a directory, the right pane shows its children. When the cursor is on a common text file, the right pane shows a syntax-highlighted text preview. You can navigate directories, multi-select items, copy, cut, paste, undo recent file operations, move items to trash, delete files, copy paths, rename, create files or directories, extract archives, create zip archives, search for files, run grep searches, and execute one-line shell commands entirely from the keyboard. Common actions stay visible in the help bar at the bottom.
 
   ![](docs/resources/screen-entire-screen.png)
 
@@ -31,6 +32,8 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 - The beginning of a text file can be previewed directly in the right pane, so you can quickly inspect the file without opening it.
 
   ![](docs/resources/screen-text-preview.png)
+
+- Multiple tabs let you keep separate working directories open in one Peneo session. You can open a new tab, switch to the next or previous tab, and close the current tab without leaving the TUI.
 
 - An embedded terminal can be opened below the browser panes. `t` switches quickly between the browser and terminal, and the terminal starts in the current directory so you can move between browsing and shell work without changing directories manually.
 
@@ -72,7 +75,7 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 | `PageUp` / `PageDown` | Move cursor by page |
 | `k` / `↑` | Move up |
 | `Home` / `End` | Jump to first/last visible entry |
-| `h` / `←` / `Backspace` | Go to parent directory |
+| `h` / `←` | Go to parent directory |
 | `l` / `→` | Enter directory |
 | `Shift+↑` / `Shift+↓` | Extend selection |
 | `Enter` | Open file/enter directory |
@@ -82,6 +85,7 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 | `c` | Copy selected items |
 | `x` | Cut selected items |
 | `p` | Paste from clipboard |
+| `z` | Undo the last reversible file operation |
 | `C` | Copy paths to clipboard |
 | `r` | Rename selected item |
 | `n` | Create new file |
@@ -105,6 +109,10 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 | `R` | Reload directory |
 | `t` | Toggle split terminal |
 | `T` | Open terminal at current directory |
+| `o` | Open new tab |
+| `w` | Close current tab |
+| `tab` | Switch to next tab |
+| `shift+tab` | Switch to previous tab |
 | `m` | Open current directory in file manager |
 | `:` | Open command palette |
 | `q` | Quit |
@@ -309,7 +317,8 @@ The supported settings are:
 | `display` | `show_directory_sizes` | `true` / `false` | Shows recursive directory sizes in the current pane. Defaults to `true`. Large directories can be expensive to scan. Peneo also calculates sizes automatically while the main pane is sorted by `size`. |
 | `display` | `show_preview` | `true` / `false` | Shows the text-file preview in the right pane. Defaults to `true`. Directory and archive child panes are unaffected. grep result context preview follows the same setting. |
 | `display` | `show_help_bar` | `true` / `false` | Shows the help bar at the bottom of the screen. Defaults to `true`. The help bar is always shown when the command palette or split terminal is open, regardless of this setting. |
-| `display` | `theme` | `textual-dark` / `textual-light` | Default UI theme applied on startup and after saving from the settings editor. |
+| `display` | `theme` | Any built-in Textual theme, for example `textual-dark`, `textual-light`, `dracula`, or `tokyo-night` | Default UI theme applied on startup and after saving from the settings editor. |
+| `display` | `preview_syntax_theme` | `auto` or a supported Pygments style, for example `one-dark`, `xcode`, `nord`, or `gruvbox-dark` | Syntax-highlighting colors used by the right-pane text preview. `auto` keeps the current light/dark-based default selection. |
 | `display` | `default_sort_field` | `name` / `modified` / `size` | Default sort field for the main pane. |
 | `display` | `default_sort_descending` | `true` / `false` | Starts the main-pane sort in descending order when enabled. |
 | `display` | `directories_first` | `true` / `false` | Keeps directories grouped before files in the main pane. |
@@ -337,6 +346,7 @@ show_directory_sizes = true
 show_preview = true
 show_help_bar = true
 theme = "textual-dark"
+preview_syntax_theme = "auto"
 default_sort_field = "name"
 default_sort_descending = false
 directories_first = true
@@ -356,13 +366,20 @@ paths = ["/home/user/src", "/home/user/docs"]
 
 Invalid config values do not stop startup. Peneo falls back to built-in defaults and shows a warning after the initial directory load.
 When logging is enabled, startup failures and unhandled exceptions are appended to the configured log file for later investigation.
+The accepted `display.theme` values come from the built-in themes shipped with the installed Textual version.
+The accepted `display.preview_syntax_theme` values are `auto` plus the Pygments styles available in the installed environment.
 
 ## Command Palette
 
 Less frequent actions are grouped in the command palette opened with `:`.
+The tab strip is only shown when two or more browser tabs are open.
 
 | Command | Shown when | Behavior / Notes |
 | --- | --- | --- |
+| `New tab` | Always | Opens a new browser tab initialized from the current directory. Also available with `o`. |
+| `Next tab` | Two or more tabs are open | Activates the next browser tab. Also available with `tab`. |
+| `Previous tab` | Two or more tabs are open | Activates the previous browser tab. Also available with `shift+tab`. |
+| `Close current tab` | Two or more tabs are open | Closes the active browser tab. The last remaining tab cannot be closed. Also available with `w`. |
 | `Find files` | Always | Opens recursive file search. |
 | `Grep search` | Always | Opens recursive grep search (`ripgrep` / `rg` required on `PATH`). |
 | `History search` | Always | Opens directory history list and jump to a selected directory. |
@@ -372,6 +389,7 @@ Less frequent actions are grouped in the command palette opened with `:`.
 | `Go to path` | Always | Opens go-to-path input to navigate to a specific path, shows matching directories, and supports `Tab` completion for the selected candidate. |
 | `Go to home directory` | Always | Navigates to the home directory. |
 | `Reload directory` | Always | Reloads the current directory. |
+| `Undo last file operation` | Undo history is not empty | Reverses the most recent undoable rename, paste, or trash operation. Also available with `z`. Trash restore is currently Linux-only. |
 | `Toggle split terminal` | Always | Opens or closes the embedded split terminal. |
 | `Select all` | Current directory has at least one visible entry | Selects every currently visible entry in the current directory, respecting hidden-file visibility and any active filter. |
 | `Show attributes` | Exactly one target is selected or focused | Opens the read-only attribute dialog for the selected item. Also available with `i`. |

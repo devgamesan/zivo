@@ -25,8 +25,11 @@ from peneo.models import (
     ShellCommandDialogState,
     SplitTerminalViewState,
     StatusBarState,
+    TabBarState,
+    TabItemState,
     ThreePaneShellData,
 )
+from peneo.theme_support import preview_syntax_theme_for_app_theme
 
 from .command_palette import (
     CommandPaletteItem,
@@ -41,15 +44,26 @@ from .models import (
     FileSearchResultState,
     GrepSearchResultState,
     SortState,
+    select_browser_tabs,
 )
 
 SIDE_PANE_SORT = SortState(field="name", descending=False, directories_first=True)
 COMMAND_PALETTE_VISIBLE_WINDOW = 8
 MIN_SEARCH_VISIBLE_WINDOW = 3
-_SEARCH_OVERHEAD_ROWS = 9
+_SEARCH_OVERHEAD_ROWS = 10
 _GREP_SEARCH_EXTRA_INPUT_ROWS = 2
 MIN_CURRENT_PANE_VISIBLE_WINDOW = 5
-_CURRENT_PANE_OVERHEAD_ROWS = 8
+_CURRENT_PANE_OVERHEAD_ROWS = 9
+
+
+def _format_tab_label(path: str) -> str:
+    resolved = Path(path).expanduser()
+    home = Path("~").expanduser()
+    if resolved == home:
+        return "~"
+    if resolved == resolved.parent:
+        return "/"
+    return resolved.name or str(resolved)
 
 
 def _has_execute_permission(entry: DirectoryEntryState) -> bool:
@@ -89,6 +103,7 @@ def select_shell_data(state: AppState) -> ThreePaneShellData:
         state.directory_size_delta.revision,
     )
     return ThreePaneShellData(
+        tab_bar=select_tab_bar_state(state),
         current_path=state.current_path,
         parent_entries=select_parent_entries(state),
         current_entries=(
@@ -117,6 +132,19 @@ def select_shell_data(state: AppState) -> ThreePaneShellData:
         config_dialog=select_config_dialog_state(state),
         shell_command_dialog=select_shell_command_dialog_state(state),
     )
+
+
+def select_tab_bar_state(state: AppState) -> TabBarState:
+    """Return display state for the top-level tab bar."""
+
+    tabs = tuple(
+        TabItemState(
+            label=_format_tab_label(tab.current_path),
+            active=index == state.active_tab_index,
+        )
+        for index, tab in enumerate(select_browser_tabs(state))
+    )
+    return TabBarState(tabs=tabs)
 
 
 def select_parent_entries(state: AppState) -> tuple[PaneEntry, ...]:
@@ -160,7 +188,10 @@ def _select_child_pane_for_cursor(
     state: AppState,
     cursor_entry: DirectoryEntryState | None,
 ) -> ChildPaneViewState:
-    syntax_theme = _select_child_syntax_theme(state.config.display.theme)
+    syntax_theme = _select_child_syntax_theme(
+        state.config.display.theme,
+        state.config.display.preview_syntax_theme,
+    )
     permissions_label = (
         _format_permissions_detail_label(cursor_entry)
         if cursor_entry
@@ -430,7 +461,8 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
         return HelpBarState(state.config.help_bar.browsing)
     return HelpBarState(
         (
-            "enter open | e edit | i info | space select | c copy | x cut | p paste | r rename",
+            "enter open | e edit | i info | space select | c copy | x cut | p paste | "
+            "r rename | z undo",
             "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to",
             "n new-file | N new-dir | H history | b bookmarks | t term | : palette | q quit",
         )
@@ -769,81 +801,42 @@ def select_config_dialog_state(state: AppState) -> ConfigDialogState | None:
     if state.ui_mode != "CONFIG" or state.config_editor is None:
         return None
 
+    from .reducer_common import CONFIG_EDITOR_CATEGORIES, config_editor_labels
+
     config = state.config_editor.draft
     selected_index = state.config_editor.cursor_index
-    lines = (
+    labels = config_editor_labels()
+    lines_list: list[str] = [
         f"Path: {state.config_editor.path}",
         "",
-        _format_config_line(
-            0, selected_index, "Editor command", _format_editor_command_value(config.editor.command)
-        ),
-        _format_config_line(
-            1,
-            selected_index,
-            "Show hidden files",
-            _format_bool(config.display.show_hidden_files),
-        ),
-        _format_config_line(
-            2,
-            selected_index,
-            "Theme",
-            config.display.theme,
-        ),
-        _format_config_line(
-            3,
-            selected_index,
-            "Show directory sizes",
-            _format_bool(config.display.show_directory_sizes),
-        ),
-        _format_config_line(
-            4,
-            selected_index,
-            "Show preview",
-            _format_bool(config.display.show_preview),
-        ),
-        _format_config_line(
-            5,
-            selected_index,
-            "Show help bar",
-            _format_bool(config.display.show_help_bar),
-        ),
-        _format_config_line(
-            6,
-            selected_index,
-            "Default sort field",
-            config.display.default_sort_field,
-        ),
-        _format_config_line(
-            7,
-            selected_index,
-            "Default sort descending",
-            _format_bool(config.display.default_sort_descending),
-        ),
-        _format_config_line(
-            8, selected_index, "Directories first", _format_bool(config.display.directories_first)
-        ),
-        _format_config_line(
-            9, selected_index, "Confirm delete", _format_bool(config.behavior.confirm_delete)
-        ),
-        _format_config_line(
-            10, selected_index, "Paste conflict action", config.behavior.paste_conflict_action
-        ),
-        _format_config_line(
-            11, selected_index, "Log level", config.logging.level
-        ),
+    ]
+
+    for header, field_indices in CONFIG_EDITOR_CATEGORIES:
+        lines_list.append(f"  ── {header} ──")
+        for field_idx in field_indices:
+            lines_list.append(
+                _format_config_line(
+                    is_selected=(field_idx == selected_index),
+                    label=labels[field_idx],
+                    value=_config_field_value(field_idx, config),
+                )
+            )
+
+    lines_list.extend([
         "",
         _format_custom_editor_hint(config.editor.command),
         "Terminal launch templates: edit config.toml with e",
         f"  Linux templates: {len(config.terminal.linux)}",
         f"  macOS templates: {len(config.terminal.macos)}",
         f"  Windows templates: {len(config.terminal.windows)}",
-    )
+    ])
+
     title = "Config Editor"
     if state.config_editor.dirty:
         title = "Config Editor*"
     return ConfigDialogState(
         title=title,
-        lines=lines,
+        lines=tuple(lines_list),
         options=(
             "↑↓/Ctrl+n/p choose",
             "←→/enter change",
@@ -1186,8 +1179,8 @@ def _filter_hidden_entries(
     return tuple(entry for entry in entries if not entry.hidden)
 
 
-def _format_config_line(index: int, selected_index: int, label: str, value: str) -> str:
-    prefix = ">" if index == selected_index else " "
+def _format_config_line(*, is_selected: bool, label: str, value: str) -> str:
+    prefix = ">" if is_selected else " "
     return f"{prefix} {label}: {value}"
 
 
@@ -1195,9 +1188,42 @@ def _format_bool(value: bool) -> str:
     return "true" if value else "false"
 
 
-@lru_cache(maxsize=32)
-def _select_child_syntax_theme(app_theme: str) -> str:
-    return "friendly" if app_theme == "textual-light" else "monokai"
+def _config_field_value(field_index: int, config: "AppConfig") -> str:  # type: ignore[name-defined]  # noqa: F821
+    from .reducer_common import config_editor_field_ids
+
+    field_id = config_editor_field_ids()[field_index]
+    if field_id == "editor.command":
+        return _format_editor_command_value(config.editor.command)
+    if field_id == "display.show_hidden_files":
+        return _format_bool(config.display.show_hidden_files)
+    if field_id == "display.theme":
+        return config.display.theme
+    if field_id == "display.show_directory_sizes":
+        return _format_bool(config.display.show_directory_sizes)
+    if field_id == "display.show_preview":
+        return _format_bool(config.display.show_preview)
+    if field_id == "display.preview_syntax_theme":
+        return config.display.preview_syntax_theme
+    if field_id == "display.show_help_bar":
+        return _format_bool(config.display.show_help_bar)
+    if field_id == "display.default_sort_field":
+        return config.display.default_sort_field
+    if field_id == "display.default_sort_descending":
+        return _format_bool(config.display.default_sort_descending)
+    if field_id == "display.directories_first":
+        return _format_bool(config.display.directories_first)
+    if field_id == "behavior.confirm_delete":
+        return _format_bool(config.behavior.confirm_delete)
+    if field_id == "behavior.paste_conflict_action":
+        return config.behavior.paste_conflict_action
+    if field_id == "logging.level":
+        return config.logging.level
+    return ""
+
+
+@lru_cache(maxsize=128)
+def _select_child_syntax_theme(app_theme: str, preview_syntax_theme: str) -> str:
+    return preview_syntax_theme_for_app_theme(app_theme, preview_syntax_theme)
 
 
 @lru_cache(maxsize=256)

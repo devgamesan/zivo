@@ -6,6 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from rich.style import Style
 from rich.text import Text
 from textual.css.query import NoMatches
 from textual.widgets import DataTable, Label, Static
@@ -26,6 +27,9 @@ from peneo.models import (
     PasteSummary,
     ShellCommandResult,
     TerminalConfig,
+    UndoDeletePathStep,
+    UndoEntry,
+    UndoResult,
 )
 from peneo.services import (
     FakeBrowserSnapshotLoader,
@@ -37,6 +41,7 @@ from peneo.services import (
     FakeGrepSearchService,
     FakeShellCommandService,
     FakeSplitTerminalService,
+    FakeUndoService,
     LiveExternalLaunchService,
 )
 from peneo.state import (
@@ -50,9 +55,15 @@ from peneo.state import (
     PaneState,
     SetTerminalHeight,
 )
-from peneo.state.selectors import compute_current_pane_visible_window, select_command_palette_state
+from peneo.state.selectors import (
+    compute_current_pane_visible_window,
+    select_command_palette_state,
+    select_shell_data,
+)
+from peneo.theme_support import SUPPORTED_PREVIEW_SYNTAX_THEMES
 from peneo.ui import (
     AttributeDialog,
+    ChildPane,
     CommandPalette,
     ConfigDialog,
     ConflictDialog,
@@ -60,9 +71,11 @@ from peneo.ui import (
     HelpBar,
     InputBar,
     ShellCommandDialog,
+    SidePane,
     SplitTerminalPane,
     StatusBar,
     SummaryBar,
+    TabBar,
 )
 from peneo.ui.panes import MainPane
 
@@ -99,6 +112,43 @@ def _build_snapshot(
     )
 
 
+def _normalize_rich_style(style: str | Style | None) -> Style | None:
+    if style is None:
+        return None
+    if isinstance(style, Style):
+        return style
+    return Style.parse(style)
+
+
+def _style_without_background(style: Style) -> Style:
+    return Style(
+        color=style.color,
+        bold=style.bold,
+        dim=style.dim,
+        italic=style.italic,
+        underline=style.underline,
+        blink=style.blink,
+        blink2=style.blink2,
+        reverse=style.reverse,
+        conceal=style.conceal,
+        strike=style.strike,
+        underline2=style.underline2,
+        frame=style.frame,
+        encircle=style.encircle,
+        overline=style.overline,
+        link=style.link,
+        meta=style.meta,
+    )
+
+
+def _text_has_style(renderable: Text, expected_style: Style) -> bool:
+    return any(_normalize_rich_style(span.style) == expected_style for span in renderable.spans)
+
+
+def _text_style_matches(text: Text, expected_style: Style) -> bool:
+    return _normalize_rich_style(text.style) == expected_style
+
+
 async def _wait_for_status_bar(app, timeout: float = 0.5) -> StatusBar:
     deadline = asyncio.get_running_loop().time() + timeout
     while True:
@@ -126,6 +176,17 @@ async def _wait_for_current_path_bar(app, timeout: float = 0.5) -> CurrentPathBa
     while True:
         try:
             return app.query_one("#current-path-bar", CurrentPathBar)
+        except NoMatches:
+            if asyncio.get_running_loop().time() >= deadline:
+                raise
+            await asyncio.sleep(0.01)
+
+
+async def _wait_for_tab_bar(app, timeout: float = 0.5) -> TabBar:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
+        try:
+            return app.query_one("#tab-bar", TabBar)
         except NoMatches:
             if asyncio.get_running_loop().time() >= deadline:
                 raise
@@ -604,7 +665,7 @@ def test_create_app_applies_configured_startup_state() -> None:
             terminal=TerminalConfig(),
             display=DisplayConfig(
                 show_hidden_files=True,
-                theme="textual-light",
+                theme="dracula",
                 default_sort_field="modified",
                 default_sort_descending=True,
                 directories_first=False,
@@ -617,7 +678,7 @@ def test_create_app_applies_configured_startup_state() -> None:
     )
 
     assert app.app_state.show_hidden is True
-    assert app.theme == "textual-light"
+    assert app.theme == "dracula"
     assert app.app_state.sort.field == "modified"
     assert app.app_state.sort.descending is True
     assert app.app_state.sort.directories_first is False
@@ -824,13 +885,17 @@ async def test_app_live_snapshot_highlights_current_directory_in_parent_pane(tmp
         await _wait_for_snapshot_loaded(app, str(tmp_path))
         await _wait_for_row_count(app, 2)
 
+        parent_pane = app.query_one("#parent-pane", SidePane)
         parent_list = app.query_one("#parent-pane-list", Static)
         parent_renderable = parent_list.renderable
 
         assert app.app_state.parent_pane.cursor_path == str(tmp_path)
         assert isinstance(parent_renderable, Text)
         assert tmp_path.name in parent_renderable.plain.splitlines()
-        assert any(span.style == "bold white on #5555FF" for span in parent_renderable.spans)
+        assert _text_has_style(
+            parent_renderable,
+            _style_without_background(parent_pane.get_component_rich_style("ft-directory-sel")),
+        )
 
 
 @pytest.mark.asyncio
@@ -859,6 +924,7 @@ async def test_app_renders_loaded_three_pane_shell() -> None:
         await _wait_for_parent_entries(app, ["peneo-app", "sibling"])
         await _wait_for_child_entries(app, ["spec.md"])
 
+        parent_pane = app.query_one("#parent-pane", SidePane)
         parent_list = app.query_one("#parent-pane-list", Static)
         current_table = app.query_one("#current-pane-table", DataTable)
         child_list = app.query_one("#child-pane-list", Static)
@@ -878,7 +944,10 @@ async def test_app_renders_loaded_three_pane_shell() -> None:
         assert parent_entries == ["peneo-app", "sibling"]
         parent_renderable = parent_list.renderable
         assert isinstance(parent_renderable, Text)
-        assert any(span.style == "bold white on #5555FF" for span in parent_renderable.spans)
+        assert _text_has_style(
+            parent_renderable,
+            _style_without_background(parent_pane.get_component_rich_style("ft-directory-sel")),
+        )
         assert headers == ["Sel", "Name", "Size", "Modified"]
         assert current_table.row_count == 2
         assert child_entries == ["spec.md"]
@@ -1263,6 +1332,83 @@ async def test_app_tab_keeps_focus_on_current_pane() -> None:
 
 
 @pytest.mark.asyncio
+async def test_app_hides_tab_bar_until_multiple_tabs_are_open() -> None:
+    path = "/tmp/peneo-single-tab"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (DirectoryEntryState(f"{path}/docs", "docs", "dir"),),
+                child_path=f"{path}/docs",
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test(size=(120, 20)):
+        await _wait_for_snapshot_loaded(app, path)
+
+        tab_bar = await _wait_for_tab_bar(app)
+
+        assert tab_bar.display is False
+
+
+@pytest.mark.asyncio
+async def test_app_tab_shortcuts_switch_between_browser_tabs() -> None:
+    path = "/tmp/peneo-tabs"
+    docs_path = f"{path}/docs"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (
+                    DirectoryEntryState(docs_path, "docs", "dir"),
+                    DirectoryEntryState(f"{path}/README.md", "README.md", "file"),
+                ),
+                child_path=docs_path,
+                child_entries=(DirectoryEntryState(f"{docs_path}/guide.md", "guide.md", "file"),),
+            ),
+            docs_path: _build_snapshot(
+                docs_path,
+                (DirectoryEntryState(f"{docs_path}/guide.md", "guide.md", "file"),),
+                child_path=docs_path,
+            ),
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test(size=(120, 20)) as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        current_table = app.query_one("#current-pane-table", DataTable)
+
+        await pilot.press("o")
+        await asyncio.sleep(0.05)
+
+        tab_bar = await _wait_for_tab_bar(app)
+        assert tab_bar.display is True
+        assert str(tab_bar.renderable) == "[1:peneo-tabs] [2:peneo-tabs]"
+        assert app.focused is current_table
+
+        await pilot.press("enter")
+        await _wait_for_snapshot_loaded(app, docs_path)
+
+        current_path_bar = await _wait_for_current_path_bar(app)
+        assert str(current_path_bar.renderable) == f"Current Path: {docs_path}"
+
+        await pilot.press("shift+tab")
+        await _wait_for_snapshot_loaded(app, path)
+        current_path_bar = await _wait_for_current_path_bar(app)
+        assert str(current_path_bar.renderable) == f"Current Path: {path}"
+        assert app.focused is current_table
+
+        await pilot.press("tab")
+        await _wait_for_snapshot_loaded(app, docs_path)
+        current_path_bar = await _wait_for_current_path_bar(app)
+        assert str(current_path_bar.renderable) == f"Current Path: {docs_path}"
+        assert app.focused is current_table
+
+
+@pytest.mark.asyncio
 async def test_app_keyboard_input_updates_selection_and_child_pane() -> None:
     path = "/tmp/peneo-keyboard"
     current_entries = (
@@ -1310,11 +1456,17 @@ async def test_app_keyboard_input_updates_selection_and_child_pane() -> None:
         assert str(status_bar.renderable) == ""
 
         current_table = app.query_one("#current-pane-table", DataTable)
+        current_pane = app.query_one("#current-pane", MainPane)
         first_row = current_table.get_row_at(0)
 
         assert isinstance(first_row[0], Text)
         assert first_row[0].plain == "*"
-        assert first_row[0].style == "bold #5555FF"
+        assert _text_style_matches(
+            first_row[0],
+            _style_without_background(
+                current_pane.get_component_rich_style("ft-directory-sel-table")
+            ),
+        )
         assert first_row[1].plain == "docs"
         await _wait_for_child_pane_runtime_idle(app, timeout=1.0)
 
@@ -1481,13 +1633,17 @@ async def test_app_cut_marks_row_with_dimmed_style() -> None:
         await asyncio.sleep(0.05)
 
         current_table = app.query_one("#current-pane-table", DataTable)
+        current_pane = app.query_one("#current-pane", MainPane)
         first_row = current_table.get_row_at(0)
 
         assert app.app_state.clipboard.mode == "cut"
         assert app.app_state.clipboard.paths == (f"{path}/docs",)
         assert isinstance(first_row[1], Text)
         assert first_row[1].plain == "docs"
-        assert first_row[1].style == "bold #5555FF dim"
+        assert _text_style_matches(
+            first_row[1],
+            _style_without_background(current_pane.get_component_rich_style("ft-directory-cut")),
+        )
 
 
 @pytest.mark.asyncio
@@ -1538,7 +1694,7 @@ async def test_app_cut_uses_targeted_row_updates(monkeypatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_app_right_enters_directory_and_backspace_returns_to_parent() -> None:
+async def test_app_right_enters_directory_and_left_returns_to_parent() -> None:
     root = "/tmp/peneo-nav"
     docs = f"{root}/docs"
     root_entries = (
@@ -1585,7 +1741,7 @@ async def test_app_right_enters_directory_and_backspace_returns_to_parent() -> N
         assert app.app_state.current_path == docs
         assert current_table.cursor_row == 0
 
-        await pilot.press("backspace")
+        await pilot.press("left")
         await _wait_for_path(app, root)
         assert str(current_path_bar.renderable) == f"Current Path: {root}"
 
@@ -1595,7 +1751,7 @@ async def test_app_right_enters_directory_and_backspace_returns_to_parent() -> N
 
 
 @pytest.mark.asyncio
-async def test_app_backspace_can_move_above_initial_directory() -> None:
+async def test_app_left_can_move_above_initial_directory() -> None:
     initial_path = "/tmp/peneo-nav/deeper"
     parent_path = "/tmp/peneo-nav"
     grandparent_path = "/tmp"
@@ -1657,7 +1813,7 @@ async def test_app_backspace_can_move_above_initial_directory() -> None:
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, initial_path)
-        await pilot.press("backspace")
+        await pilot.press("left")
         await _wait_for_path(app, parent_path)
         await pilot.press("left")
         await _wait_for_path(app, grandparent_path)
@@ -2369,7 +2525,8 @@ async def test_app_displays_browsing_help_bar() -> None:
     )
     app = create_app(snapshot_loader=loader, initial_path=path)
     expected_help = (
-        "enter open | e edit | i info | space select | c copy | x cut | p paste | r rename\n"
+        "enter open | e edit | i info | space select | c copy | x cut | p paste | "
+        "r rename | z undo\n"
         "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to\n"
         "n new-file | N new-dir | H history | b bookmarks | t term | : palette | q quit"
     )
@@ -2379,6 +2536,42 @@ async def test_app_displays_browsing_help_bar() -> None:
         help_bar = await _wait_for_help_bar_text(app, expected_help)
 
         assert str(help_bar.renderable) == expected_help
+
+
+@pytest.mark.asyncio
+async def test_app_pressing_z_runs_undo() -> None:
+    path = "/tmp/peneo-undo"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (DirectoryEntryState(f"{path}/docs", "docs", "dir"),),
+                child_path=f"{path}/docs",
+            )
+        }
+    )
+    undo_entry = UndoEntry(
+        kind="paste_copy",
+        steps=(UndoDeletePathStep(path=f"{path}/docs copy"),),
+    )
+    undo_service = FakeUndoService(
+        results={
+            undo_entry: UndoResult(
+                path=None,
+                message="Undid copied item",
+                removed_paths=(f"{path}/docs copy",),
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, undo_service=undo_service, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        app._app_state = replace(app.app_state, undo_stack=(undo_entry,))
+        await pilot.press("z")
+        await _wait_for_status_message(app, "info: Undid copied item", timeout=1.0)
+
+        assert app.app_state.undo_stack == ()
 
 
 @pytest.mark.asyncio
@@ -3400,7 +3593,8 @@ async def test_app_command_palette_opens_config_dialog_and_saves_changes() -> No
         assert "Path: /tmp/peneo/config.toml" in str(lines.renderable)
         assert "> Editor command: system default" in str(lines.renderable)
 
-        await pilot.press("down")
+        for _ in range(3):
+            await pilot.press("down")
         await pilot.press("enter")
         await pilot.press("s")
         await _wait_for_notification_message(app, "Config saved: /tmp/peneo/config.toml")
@@ -3413,7 +3607,7 @@ async def test_app_command_palette_opens_config_dialog_and_saves_changes() -> No
 
 
 @pytest.mark.asyncio
-async def test_app_config_dialog_save_updates_theme() -> None:
+async def test_app_config_dialog_save_updates_theme(monkeypatch) -> None:
     path = "/tmp/peneo-command-palette-theme"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -3437,6 +3631,30 @@ async def test_app_config_dialog_save_updates_theme() -> None:
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
+        parent_pane = app.query_one("#parent-pane", SidePane)
+        child_pane = app.query_one("#child-pane", ChildPane)
+        current_pane = app.query_one("#current-pane", MainPane)
+        refresh_calls = {"parent": 0, "current": 0, "child": 0}
+
+        original_parent_refresh = parent_pane.refresh_styles
+        original_current_refresh = current_pane.refresh_styles
+        original_child_refresh = child_pane.refresh_styles
+
+        def track_parent_refresh() -> None:
+            refresh_calls["parent"] += 1
+            original_parent_refresh()
+
+        def track_current_refresh() -> None:
+            refresh_calls["current"] += 1
+            original_current_refresh()
+
+        def track_child_refresh() -> None:
+            refresh_calls["child"] += 1
+            original_child_refresh()
+
+        monkeypatch.setattr(parent_pane, "refresh_styles", track_parent_refresh)
+        monkeypatch.setattr(current_pane, "refresh_styles", track_current_refresh)
+        monkeypatch.setattr(child_pane, "refresh_styles", track_child_refresh)
         await pilot.press(":")
         await pilot.press("c", "o", "n", "f", "i", "g")
         await pilot.press("enter")
@@ -3444,7 +3662,6 @@ async def test_app_config_dialog_save_updates_theme() -> None:
 
         assert app.theme == "textual-dark"
 
-        await pilot.press("down")
         await pilot.press("down")
         await pilot.press("enter")
         await pilot.press("s")
@@ -3454,6 +3671,102 @@ async def test_app_config_dialog_save_updates_theme() -> None:
         _saved_path, saved_config = config_save_service.saved_requests[0]
         assert saved_config.display.theme == "textual-light"
         assert app.theme == "textual-light"
+
+        parent_list = app.query_one("#parent-pane-list", Static)
+        parent_renderable = parent_list.renderable
+        current_table = app.query_one("#current-pane-table", DataTable)
+        updated_parent_style = parent_pane.get_component_rich_style("ft-directory-sel")
+        updated_table_style = current_pane.get_component_rich_style("ft-directory-sel-table")
+        first_row = current_table.get_row_at(0)
+
+        assert refresh_calls == {"parent": 1, "current": 1, "child": 1}
+        assert isinstance(parent_renderable, Text)
+        assert _text_has_style(parent_renderable, _style_without_background(updated_parent_style))
+        assert isinstance(first_row[0], Text)
+        assert _text_style_matches(first_row[0], _style_without_background(updated_table_style))
+
+
+@pytest.mark.asyncio
+async def test_app_config_dialog_save_updates_preview_syntax_theme() -> None:
+    path = "/tmp/peneo-command-palette-preview-theme"
+    preview_path = f"{path}/README.md"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: BrowserSnapshot(
+                current_path=path,
+                parent_pane=PaneState(
+                    directory_path="/tmp",
+                    entries=(
+                        DirectoryEntryState(path, Path(path).name, "dir"),
+                    ),
+                    cursor_path=path,
+                ),
+                current_pane=PaneState(
+                    directory_path=path,
+                    entries=(
+                        DirectoryEntryState(
+                            preview_path,
+                            "README.md",
+                            "file",
+                            size_bytes=120,
+                        ),
+                    ),
+                    cursor_path=preview_path,
+                ),
+                child_pane=PaneState(
+                    directory_path=path,
+                    entries=(),
+                    mode="preview",
+                    preview_path=preview_path,
+                    preview_title="Preview: README.md",
+                    preview_content="# heading\nbody\n",
+                ),
+            )
+        }
+    )
+    config_save_service = FakeConfigSaveService()
+    app = create_app(
+        snapshot_loader=loader,
+        config_save_service=config_save_service,
+        config_path="/tmp/peneo/config.toml",
+        initial_path=path,
+    )
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        assert select_shell_data(app.app_state).child_pane.syntax_theme == "monokai"
+
+        await pilot.press(":")
+        await pilot.press("c", "o", "n", "f", "i", "g")
+        await pilot.press("enter")
+        await _wait_for_config_dialog(app)
+
+        for _ in range(2):
+            await pilot.press("down")
+        await pilot.press("enter")
+        await pilot.press("s")
+        deadline = asyncio.get_running_loop().time() + 1.5
+        while True:
+            if (
+                len(config_save_service.saved_requests) == 1
+                and app.app_state.pending_config_save_request_id is None
+            ):
+                break
+            if asyncio.get_running_loop().time() >= deadline:
+                raise AssertionError("config save did not complete")
+            await asyncio.sleep(0.01)
+
+        assert len(config_save_service.saved_requests) == 1
+        _saved_path, saved_config = config_save_service.saved_requests[0]
+        assert saved_config.display.preview_syntax_theme == SUPPORTED_PREVIEW_SYNTAX_THEMES[1]
+        assert (
+            app.app_state.config.display.preview_syntax_theme
+            == SUPPORTED_PREVIEW_SYNTAX_THEMES[1]
+        )
+        assert (
+            select_shell_data(app.app_state).child_pane.syntax_theme
+            == SUPPORTED_PREVIEW_SYNTAX_THEMES[1]
+        )
 
 
 @pytest.mark.asyncio
@@ -4819,7 +5132,7 @@ async def test_app_main_flow_round_trip_on_live_filesystem(tmp_path) -> None:
         assert (docs_dir / "notes.txt").is_file()
         assert str(status_bar.renderable) == "info: Copied 1 item(s)"
 
-        await pilot.press("backspace")
+        await pilot.press("left")
         await _wait_for_path(app, str(tmp_path))
         await _wait_for_row_count(app, 4)
 

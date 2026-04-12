@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from peneo.adapters import LocalExternalLaunchAdapter
-from peneo.adapters.external_launcher import _run_foreground_command
+from peneo.adapters.external_launcher import _build_command_candidate, _run_foreground_command
 from peneo.models import EditorConfig, ExternalLaunchRequest, TerminalConfig
 from peneo.services import LiveExternalLaunchService
 
@@ -632,3 +632,68 @@ def runner_not_expected(
     input_text: str | None,
 ) -> None:
     raise AssertionError(f"command runner should not be used: {command}, {cwd}, {input_text}")
+
+
+# --- Tests for _build_command_candidate ---
+
+
+def test_build_command_candidate_with_line_number() -> None:
+    result = _build_command_candidate(("nvim",), "/tmp/file.py", line_number=42)
+    assert result == ("nvim", "+42", "/tmp/file.py")
+
+
+def test_build_command_candidate_without_line_number() -> None:
+    result = _build_command_candidate(("vim",), "/tmp/file.py")
+    assert result == ("vim", "/tmp/file.py")
+
+
+def test_build_command_candidate_with_extra_flags() -> None:
+    result = _build_command_candidate(("emacs", "-nw"), "/tmp/file.py", line_number=10)
+    assert result == ("emacs", "-nw", "+10", "/tmp/file.py")
+
+
+def test_build_command_candidate_returns_none_for_empty_command() -> None:
+    result = _build_command_candidate((), "/tmp/file.py")
+    assert result is None
+
+
+def test_build_command_candidate_returns_none_for_gui_editor() -> None:
+    result = _build_command_candidate(("code", "--wait"), "/tmp/file.py")
+    assert result is None
+
+
+# --- Tests for _command_exists ---
+
+
+def test_command_exists_finds_command_on_path() -> None:
+    adapter = LocalExternalLaunchAdapter(
+        system_name_resolver=lambda: "Linux",
+        command_available=lambda cmd: f"/usr/bin/{cmd}" if cmd == "nvim" else None,
+    )
+    assert adapter._command_exists("nvim") is True
+
+
+def test_command_exists_returns_false_for_missing_command() -> None:
+    adapter = LocalExternalLaunchAdapter(
+        system_name_resolver=lambda: "Linux",
+        command_available=lambda _cmd: None,
+    )
+    assert adapter._command_exists("nonexistent-editor") is False
+
+
+def test_command_exists_checks_absolute_path(tmp_path) -> None:
+    script = tmp_path / "my-editor"
+    script.write_text("#!/bin/sh\n")
+    adapter = LocalExternalLaunchAdapter(
+        system_name_resolver=lambda: "Linux",
+        command_available=lambda _cmd: None,
+    )
+    assert adapter._command_exists(str(script)) is True
+
+
+def test_command_exists_returns_false_for_missing_absolute_path() -> None:
+    adapter = LocalExternalLaunchAdapter(
+        system_name_resolver=lambda: "Linux",
+        command_available=lambda _cmd: None,
+    )
+    assert adapter._command_exists("/nonexistent/path/editor") is False

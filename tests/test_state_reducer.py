@@ -11,12 +11,21 @@ from peneo.models import (
     ExtractArchiveRequest,
     ExtractArchiveResult,
     FileMutationResult,
+    PasteAppliedChange,
     PasteConflict,
     PasteRequest,
     PasteSummary,
     RenameRequest,
+    TrashRestoreRecord,
+    UndoDeletePathStep,
+    UndoEntry,
+    UndoMovePathStep,
+    UndoRestoreTrashStep,
+    UndoResult,
 )
 from peneo.state import (
+    ActivateNextTab,
+    ActivatePreviousTab,
     AddBookmark,
     ArchiveExtractCompleted,
     ArchiveExtractConfirmationState,
@@ -54,6 +63,7 @@ from peneo.state import (
     ClipboardPasteCompleted,
     ClipboardPasteFailed,
     ClipboardPasteNeedsResolution,
+    CloseCurrentTab,
     CloseSplitTerminalEffect,
     CommandPaletteState,
     ConfigEditorState,
@@ -106,6 +116,7 @@ from peneo.state import (
     NotificationState,
     OpenFindResultInEditor,
     OpenGrepResultInEditor,
+    OpenNewTab,
     OpenPathInEditor,
     OpenPathWithDefaultApp,
     OpenTerminalAtPath,
@@ -127,6 +138,7 @@ from peneo.state import (
     RunFileMutationEffect,
     RunFileSearchEffect,
     RunGrepSearchEffect,
+    RunUndoEffect,
     RunZipCompressEffect,
     RunZipCompressPreparationEffect,
     SaveConfigEditor,
@@ -152,6 +164,9 @@ from peneo.state import (
     ToggleSelection,
     ToggleSelectionAndAdvance,
     ToggleSplitTerminal,
+    UndoCompleted,
+    UndoFailed,
+    UndoLastOperation,
     WriteSplitTerminalInputEffect,
     ZipCompressCompleted,
     ZipCompressConfirmationState,
@@ -161,6 +176,7 @@ from peneo.state import (
     ZipCompressProgressState,
     build_initial_app_state,
     reduce_app_state,
+    select_browser_tabs,
 )
 from tests.state_test_helpers import reduce_state
 
@@ -1396,7 +1412,7 @@ def test_move_config_editor_cursor_clamps_to_visible_settings() -> None:
     next_state = _reduce_state(state, MoveConfigEditorCursor(delta=99))
 
     assert next_state.config_editor is not None
-    assert next_state.config_editor.cursor_index == 11
+    assert next_state.config_editor.cursor_index == 12
 
 
 def test_cycle_config_editor_editor_command_updates_draft_and_dirty_state() -> None:
@@ -1453,6 +1469,29 @@ def test_cycle_config_editor_theme_updates_draft_and_dirty_state() -> None:
     assert next_state.config_editor.dirty is True
 
 
+def test_cycle_config_editor_theme_supports_all_builtin_themes() -> None:
+    base_state = build_initial_app_state()
+    themed_config = replace(
+        base_state.config,
+        display=replace(base_state.config.display, theme="solarized-light"),
+    )
+    state = replace(
+        base_state,
+        ui_mode="CONFIG",
+        config_editor=ConfigEditorState(
+            path="/tmp/peneo/config.toml",
+            draft=themed_config,
+            cursor_index=2,
+        ),
+    )
+
+    next_state = _reduce_state(state, CycleConfigEditorValue(delta=1))
+
+    assert next_state.config_editor is not None
+    assert next_state.config_editor.draft.display.theme == "textual-ansi"
+    assert next_state.config_editor.dirty is True
+
+
 def test_cycle_config_editor_directory_size_visibility_updates_draft_and_dirty_state() -> None:
     state = replace(
         build_initial_app_state(config_path="/tmp/peneo/config.toml"),
@@ -1486,6 +1525,24 @@ def test_cycle_config_editor_preview_visibility_updates_draft_and_dirty_state() 
 
     assert next_state.config_editor is not None
     assert next_state.config_editor.draft.display.show_preview is False
+    assert next_state.config_editor.dirty is True
+
+
+def test_cycle_config_editor_preview_syntax_theme_updates_draft_and_dirty_state() -> None:
+    state = replace(
+        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        ui_mode="CONFIG",
+        config_editor=ConfigEditorState(
+            path="/tmp/peneo/config.toml",
+            draft=build_initial_app_state().config,
+            cursor_index=5,
+        ),
+    )
+
+    next_state = _reduce_state(state, CycleConfigEditorValue(delta=1))
+
+    assert next_state.config_editor is not None
+    assert next_state.config_editor.draft.display.preview_syntax_theme == "abap"
     assert next_state.config_editor.dirty is True
 
 
@@ -3920,6 +3977,12 @@ def test_paste_clipboard_warns_when_empty() -> None:
     assert next_state.ui_mode == "BROWSING"
 
 
+def test_undo_last_operation_warns_when_stack_is_empty() -> None:
+    next_state = _reduce_state(build_initial_app_state(), UndoLastOperation())
+
+    assert next_state.notification == NotificationState(level="warning", message="Nothing to undo")
+
+
 def test_paste_needs_resolution_enters_confirm_mode() -> None:
     state = _reduce_state(
         build_initial_app_state(),
@@ -4072,10 +4135,27 @@ def test_clipboard_paste_completed_for_cut_clears_clipboard_and_requests_reload(
                 success_count=1,
                 skipped_count=0,
             ),
+            applied_changes=(
+                PasteAppliedChange(
+                    source_path="/tmp/staging/docs",
+                    destination_path="/home/tadashi/develop/peneo/docs",
+                ),
+            ),
         ),
     )
 
     assert result.state.clipboard.mode == "none"
+    assert result.state.undo_stack == (
+        UndoEntry(
+            kind="paste_cut",
+            steps=(
+                UndoMovePathStep(
+                    source_path="/home/tadashi/develop/peneo/docs",
+                    destination_path="/tmp/staging/docs",
+                ),
+            ),
+        ),
+    )
     assert result.state.pending_browser_snapshot_request_id == 1
     assert result.effects == (
         LoadBrowserSnapshotEffect(
@@ -4089,6 +4169,68 @@ def test_clipboard_paste_completed_for_cut_clears_clipboard_and_requests_reload(
                 "/home/tadashi/develop/peneo/docs",
             ),
         ),
+    )
+
+
+def test_clipboard_paste_completed_pushes_copy_undo_entry() -> None:
+    state = replace(build_initial_app_state(), pending_paste_request_id=4)
+
+    next_state = _reduce_state(
+        state,
+        ClipboardPasteCompleted(
+            request_id=4,
+            summary=PasteSummary(
+                mode="copy",
+                destination_dir="/home/tadashi/develop/peneo",
+                total_count=1,
+                success_count=1,
+                skipped_count=0,
+            ),
+            applied_changes=(
+                PasteAppliedChange(
+                    source_path="/tmp/source/docs",
+                    destination_path="/home/tadashi/develop/peneo/docs copy",
+                ),
+            ),
+        ),
+    )
+
+    assert next_state.undo_stack == (
+        UndoEntry(
+            kind="paste_copy",
+            steps=(UndoDeletePathStep(path="/home/tadashi/develop/peneo/docs copy"),),
+        ),
+    )
+
+
+def test_clipboard_paste_completed_skips_undo_for_overwrite() -> None:
+    state = replace(build_initial_app_state(), pending_paste_request_id=4)
+
+    next_state = _reduce_state(
+        state,
+        ClipboardPasteCompleted(
+            request_id=4,
+            summary=PasteSummary(
+                mode="copy",
+                destination_dir="/home/tadashi/develop/peneo",
+                total_count=1,
+                success_count=1,
+                skipped_count=0,
+                overwrote_count=1,
+            ),
+            applied_changes=(
+                PasteAppliedChange(
+                    source_path="/tmp/source/docs",
+                    destination_path="/home/tadashi/develop/peneo/docs",
+                ),
+            ),
+        ),
+    )
+
+    assert next_state.undo_stack == ()
+    assert next_state.post_reload_notification == NotificationState(
+        level="info",
+        message="Copied 1 item(s), undo unavailable for overwritten items",
     )
 
 
@@ -4117,6 +4259,7 @@ def test_file_mutation_completed_requests_reload_with_result_cursor() -> None:
 
     assert result.state.ui_mode == "BROWSING"
     assert result.state.pending_input is None
+    assert result.state.undo_stack == ()
     assert result.state.pending_browser_snapshot_request_id == 1
     assert result.effects == (
         LoadBrowserSnapshotEffect(
@@ -4128,6 +4271,44 @@ def test_file_mutation_completed_requests_reload_with_result_cursor() -> None:
                 "/home/tadashi/develop/peneo",
                 "/home/tadashi/develop",
                 "/home/tadashi/develop/peneo/notes.txt",
+            ),
+        ),
+    )
+
+
+def test_rename_file_mutation_completed_pushes_undo_entry() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="BUSY",
+        pending_file_mutation_request_id=4,
+        pending_input=PendingInputState(
+            prompt="Rename: ",
+            value="manuals",
+            target_path="/home/tadashi/develop/peneo/docs",
+        ),
+    )
+
+    next_state = _reduce_state(
+        state,
+        FileMutationCompleted(
+            request_id=4,
+            result=FileMutationResult(
+                path="/home/tadashi/develop/peneo/manuals",
+                message="Renamed to manuals",
+                operation="rename",
+                source_path="/home/tadashi/develop/peneo/docs",
+            ),
+        ),
+    )
+
+    assert next_state.undo_stack == (
+        UndoEntry(
+            kind="rename",
+            steps=(
+                UndoMovePathStep(
+                    source_path="/home/tadashi/develop/peneo/manuals",
+                    destination_path="/home/tadashi/develop/peneo/docs",
+                ),
             ),
         ),
     )
@@ -4157,6 +4338,7 @@ def test_delete_file_mutation_completed_requests_reload_without_deleted_cursor()
     )
 
     assert result.state.ui_mode == "BROWSING"
+    assert result.state.undo_stack == ()
     assert result.effects == (
         LoadBrowserSnapshotEffect(
             request_id=1,
@@ -4169,6 +4351,126 @@ def test_delete_file_mutation_completed_requests_reload_without_deleted_cursor()
                 "/home/tadashi/develop/peneo/src",
             ),
         ),
+    )
+
+
+def test_trash_file_mutation_completed_pushes_undo_entry() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="BUSY",
+        pending_file_mutation_request_id=7,
+    )
+
+    next_state = _reduce_state(
+        state,
+        FileMutationCompleted(
+            request_id=7,
+            result=FileMutationResult(
+                path=None,
+                message="Trashed 1 item",
+                removed_paths=("/home/tadashi/develop/peneo/docs",),
+                operation="delete",
+                delete_mode="trash",
+                trash_records=(
+                    TrashRestoreRecord(
+                        original_path="/home/tadashi/develop/peneo/docs",
+                        trashed_path="/home/tadashi/.local/share/Trash/files/docs",
+                        metadata_path="/home/tadashi/.local/share/Trash/info/docs.trashinfo",
+                    ),
+                ),
+            ),
+        ),
+    )
+
+    assert next_state.undo_stack == (
+        UndoEntry(
+            kind="trash_delete",
+            steps=(
+                UndoRestoreTrashStep(
+                    record=TrashRestoreRecord(
+                        original_path="/home/tadashi/develop/peneo/docs",
+                        trashed_path="/home/tadashi/.local/share/Trash/files/docs",
+                        metadata_path="/home/tadashi/.local/share/Trash/info/docs.trashinfo",
+                    )
+                ),
+            ),
+        ),
+    )
+
+
+def test_undo_last_operation_runs_effect() -> None:
+    entry = UndoEntry(kind="paste_copy", steps=(UndoDeletePathStep(path="/tmp/copied"),))
+    state = replace(build_initial_app_state(), undo_stack=(entry,), next_request_id=6)
+
+    result = reduce_app_state(state, UndoLastOperation())
+
+    assert result.state.pending_undo_entry == entry
+    assert result.state.pending_undo_request_id == 6
+    assert result.state.ui_mode == "BUSY"
+    assert result.effects == (RunUndoEffect(request_id=6, entry=entry),)
+
+
+def test_undo_completed_pops_stack_and_requests_reload() -> None:
+    entry = UndoEntry(kind="paste_copy", steps=(UndoDeletePathStep(path="/tmp/copied"),))
+    state = replace(
+        build_initial_app_state(),
+        undo_stack=(entry,),
+        pending_undo_entry=entry,
+        pending_undo_request_id=9,
+        next_request_id=4,
+    )
+
+    result = reduce_app_state(
+        state,
+        UndoCompleted(
+            request_id=9,
+            entry=entry,
+            result=UndoResult(
+                path=None,
+                message="Undid copied item",
+                removed_paths=("/tmp/copied",),
+            ),
+        ),
+    )
+
+    assert result.state.undo_stack == ()
+    assert result.state.pending_undo_request_id is None
+    assert result.state.post_reload_notification == NotificationState(
+        level="info",
+        message="Undid copied item",
+    )
+    assert result.effects == (
+        LoadBrowserSnapshotEffect(
+            request_id=4,
+            path="/home/tadashi/develop/peneo",
+            cursor_path="/home/tadashi/develop/peneo/docs",
+            blocking=False,
+            invalidate_paths=(
+                "/home/tadashi/develop/peneo",
+                "/home/tadashi/develop",
+                "/home/tadashi/develop/peneo/docs",
+            ),
+        ),
+    )
+
+
+def test_undo_failed_returns_error_notification() -> None:
+    entry = UndoEntry(kind="paste_copy", steps=(UndoDeletePathStep(path="/tmp/copied"),))
+    state = replace(
+        build_initial_app_state(),
+        undo_stack=(entry,),
+        pending_undo_entry=entry,
+        pending_undo_request_id=9,
+        ui_mode="BUSY",
+    )
+
+    next_state = _reduce_state(state, UndoFailed(request_id=9, message="permission denied"))
+
+    assert next_state.pending_undo_request_id is None
+    assert next_state.undo_stack == (entry,)
+    assert next_state.notification == NotificationState(
+        level="error",
+        message="permission denied",
     )
 
 
@@ -5530,3 +5832,88 @@ def test_move_cursor_by_page_empty_paths() -> None:
 
     assert result.state is state
     assert result.effects == ()
+
+
+def test_open_new_tab_clones_path_but_resets_filter_and_selection() -> None:
+    state = replace(
+        build_initial_app_state(),
+        filter=replace(build_initial_app_state().filter, query="read", active=True),
+        current_pane=replace(
+            build_initial_app_state().current_pane,
+            selected_paths=frozenset({"/home/tadashi/develop/peneo/docs"}),
+            selection_anchor_path="/home/tadashi/develop/peneo/docs",
+        ),
+    )
+
+    next_state = _reduce_state(state, OpenNewTab())
+
+    assert next_state.active_tab_index == 1
+    assert next_state.current_path == state.current_path
+    assert next_state.filter.query == ""
+    assert next_state.filter.active is False
+    assert next_state.current_pane.selected_paths == frozenset()
+    assert len(select_browser_tabs(next_state)) == 2
+    assert select_browser_tabs(next_state)[0].filter.query == "read"
+    assert select_browser_tabs(next_state)[0].current_pane.selected_paths == frozenset(
+        {"/home/tadashi/develop/peneo/docs"}
+    )
+
+
+def test_activate_tabs_restores_per_tab_filter_state() -> None:
+    state = _reduce_state(build_initial_app_state(), OpenNewTab())
+    state = _reduce_state(state, SetFilterQuery("read"))
+
+    state = _reduce_state(state, ActivatePreviousTab())
+    assert state.active_tab_index == 0
+    assert state.filter.query == ""
+
+    state = _reduce_state(state, ActivateNextTab())
+    assert state.active_tab_index == 1
+    assert state.filter.query == "read"
+
+
+def test_close_current_tab_warns_when_only_one_tab_remains() -> None:
+    next_state = _reduce_state(build_initial_app_state(), CloseCurrentTab())
+
+    assert next_state.notification == NotificationState(
+        level="warning",
+        message="Cannot close the last tab",
+    )
+
+
+def test_browser_snapshot_loaded_updates_inactive_tab_only() -> None:
+    state = _reduce_state(build_initial_app_state(), OpenNewTab())
+    result = reduce_app_state(state, RequestBrowserSnapshot("/tmp/project", blocking=True))
+    state = result.state
+    request_id = state.pending_browser_snapshot_request_id
+
+    state = _reduce_state(state, ActivatePreviousTab())
+    base_path = state.current_path
+
+    loaded = reduce_app_state(
+        state,
+        BrowserSnapshotLoaded(
+            request_id=request_id,
+            blocking=True,
+            snapshot=BrowserSnapshot(
+                current_path="/tmp/project",
+                parent_pane=PaneState(
+                    directory_path="/tmp",
+                    entries=(DirectoryEntryState("/tmp/project", "project", "dir"),),
+                    cursor_path="/tmp/project",
+                ),
+                current_pane=PaneState(
+                    directory_path="/tmp/project",
+                    entries=(DirectoryEntryState("/tmp/project/file.txt", "file.txt", "file"),),
+                    cursor_path="/tmp/project/file.txt",
+                ),
+                child_pane=PaneState(directory_path="/tmp/project", entries=()),
+            ),
+        ),
+    ).state
+
+    assert loaded.current_path == base_path
+    assert select_browser_tabs(loaded)[1].current_path == "/tmp/project"
+
+    loaded = _reduce_state(loaded, ActivateNextTab())
+    assert loaded.current_path == "/tmp/project"

@@ -9,6 +9,8 @@ CreateKind = Literal["file", "dir"]
 DeleteMode = Literal["trash", "permanent"]
 MutationResultLevel = Literal["info", "warning", "error"]
 ArchiveFormat = Literal["zip", "tar", "tar.gz", "tar.bz2"]
+FileMutationOperation = Literal["rename", "create", "delete"]
+UndoOperationKind = Literal["rename", "paste_copy", "paste_cut", "trash_delete"]
 
 
 @dataclass(frozen=True)
@@ -39,6 +41,14 @@ class PasteFailure:
 
 
 @dataclass(frozen=True)
+class PasteAppliedChange:
+    """A single source item that was successfully pasted."""
+
+    source_path: str
+    destination_path: str
+
+
+@dataclass(frozen=True)
 class PasteConflictPrompt:
     """A paste request that needs an explicit conflict resolution."""
 
@@ -57,6 +67,7 @@ class PasteSummary:
     skipped_count: int
     failures: tuple[PasteFailure, ...] = ()
     conflict_resolution: ConflictResolution | None = None
+    overwrote_count: int = 0
 
     @property
     def failure_count(self) -> int:
@@ -70,6 +81,16 @@ class PasteExecutionResult:
     """Completed execution payload returned from the clipboard service."""
 
     summary: PasteSummary
+    applied_changes: tuple[PasteAppliedChange, ...] = ()
+
+
+@dataclass(frozen=True)
+class TrashRestoreRecord:
+    """Metadata required to restore a trashed entry back to its original path."""
+
+    original_path: str
+    trashed_path: str
+    metadata_path: str
 
 
 @dataclass(frozen=True)
@@ -169,6 +190,53 @@ class CreateZipArchiveResult:
 @dataclass(frozen=True)
 class FileMutationResult:
     """Completed execution payload returned from the file mutation service."""
+
+    path: str | None
+    message: str
+    level: MutationResultLevel = "info"
+    removed_paths: tuple[str, ...] = ()
+    operation: FileMutationOperation = "create"
+    source_path: str | None = None
+    delete_mode: DeleteMode | None = None
+    trash_records: tuple[TrashRestoreRecord, ...] = ()
+
+
+@dataclass(frozen=True)
+class UndoDeletePathStep:
+    """Undo step that removes a created path."""
+
+    path: str
+
+
+@dataclass(frozen=True)
+class UndoMovePathStep:
+    """Undo step that moves a path back to a previous location."""
+
+    source_path: str
+    destination_path: str
+
+
+@dataclass(frozen=True)
+class UndoRestoreTrashStep:
+    """Undo step that restores an item from trash metadata."""
+
+    record: TrashRestoreRecord
+
+
+UndoStep = UndoDeletePathStep | UndoMovePathStep | UndoRestoreTrashStep
+
+
+@dataclass(frozen=True)
+class UndoEntry:
+    """A single undoable file operation."""
+
+    kind: UndoOperationKind
+    steps: tuple[UndoStep, ...]
+
+
+@dataclass(frozen=True)
+class UndoResult:
+    """Completed execution payload returned from the undo service."""
 
     path: str | None
     message: str

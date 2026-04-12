@@ -11,6 +11,7 @@ from peneo.models import (
     ExtractArchiveRequest,
     PasteRequest,
     RenameRequest,
+    UndoEntry,
 )
 
 from .models import AppState, GrepSearchResultState
@@ -60,6 +61,14 @@ class RunFileMutationEffect:
 
     request_id: int
     request: RenameRequest | CreatePathRequest | DeleteRequest
+
+
+@dataclass(frozen=True)
+class RunUndoEffect:
+    """Execute an undo operation outside the reducer."""
+
+    request_id: int
+    entry: UndoEntry
 
 
 @dataclass(frozen=True)
@@ -178,6 +187,7 @@ Effect = (
     | RunDirectorySizeEffect
     | RunClipboardPasteEffect
     | RunFileMutationEffect
+    | RunUndoEffect
     | RunArchivePreparationEffect
     | RunArchiveExtractEffect
     | RunZipCompressPreparationEffect

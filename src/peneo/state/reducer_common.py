@@ -17,7 +17,9 @@ from peneo.models import (
     PasteRequest,
     PasteSummary,
     RenameRequest,
+    UndoEntry,
 )
+from peneo.theme_support import SUPPORTED_APP_THEMES, SUPPORTED_PREVIEW_SYNTAX_THEMES
 
 from .actions import Action, RequestDirectorySizes
 from .effects import (
@@ -30,6 +32,7 @@ from .effects import (
     RunClipboardPasteEffect,
     RunExternalLaunchEffect,
     RunFileMutationEffect,
+    RunUndoEffect,
     RunZipCompressEffect,
     RunZipCompressPreparationEffect,
 )
@@ -49,7 +52,8 @@ from .selectors import select_target_paths, select_visible_current_entry_states
 ReducerFn = Callable[[AppState, Action], ReduceResult]
 
 CONFIG_SORT_FIELDS = ("name", "modified", "size")
-CONFIG_THEMES = ("textual-dark", "textual-light")
+CONFIG_THEMES = SUPPORTED_APP_THEMES
+CONFIG_PREVIEW_SYNTAX_THEMES = SUPPORTED_PREVIEW_SYNTAX_THEMES
 CONFIG_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 CONFIG_PASTE_ACTIONS = ("prompt", "overwrite", "skip", "rename")
 CONFIG_EDITOR_COMMANDS = (None, "nvim", "vim", "nano", "hx", "micro", "emacs -nw")
@@ -57,7 +61,13 @@ REGEX_FILE_SEARCH_PREFIX = "re:"
 REGEX_GREP_SEARCH_PREFIX = "re:"
 
 
-def done(next_state: AppState, *effects: Effect) -> ReduceResult:
+def finalize(next_state: AppState, *effects: Effect) -> ReduceResult:
+    """Wrap a state transition and optional side effects into a ReduceResult.
+
+    This is the standard way to return from reducer action handlers.
+    The result will be further processed by _finalize_reduce_result in
+    reducer.py (viewport adjustment, tab sync, transient delta clearing).
+    """
     return ReduceResult(state=next_state, effects=effects)
 
 
@@ -263,6 +273,22 @@ def run_file_mutation_request(
     return ReduceResult(
         state=next_state,
         effects=(RunFileMutationEffect(request_id=request_id, request=request),),
+    )
+
+
+def run_undo_request(state: AppState, entry: UndoEntry) -> ReduceResult:
+    request_id = state.next_request_id
+    next_state = replace(
+        state,
+        notification=None,
+        pending_undo_entry=entry,
+        pending_undo_request_id=request_id,
+        next_request_id=request_id + 1,
+        ui_mode="BUSY",
+    )
+    return ReduceResult(
+        state=next_state,
+        effects=(RunUndoEffect(request_id=request_id, entry=entry),),
     )
 
 
@@ -673,6 +699,18 @@ def cycle_config_editor_value(config: AppConfig, cursor_index: int, delta: int) 
                 ),
             ),
         )
+    if field_id == "display.preview_syntax_theme":
+        return replace(
+            config,
+            display=replace(
+                config.display,
+                preview_syntax_theme=cycle_choice(
+                    CONFIG_PREVIEW_SYNTAX_THEMES,
+                    config.display.preview_syntax_theme,
+                    delta,
+                ),
+            ),
+        )
     if field_id == "display.default_sort_field":
         return replace(
             config,
@@ -754,6 +792,7 @@ def config_editor_field_ids() -> tuple[str, ...]:
         "display.theme",
         "display.show_directory_sizes",
         "display.show_preview",
+        "display.preview_syntax_theme",
         "display.show_help_bar",
         "display.default_sort_field",
         "display.default_sort_descending",
@@ -771,6 +810,7 @@ def config_editor_labels() -> tuple[str, ...]:
         "Theme",
         "Show directory sizes",
         "Show preview",
+        "Preview syntax theme",
         "Show help bar",
         "Default sort field",
         "Default sort descending",
@@ -779,6 +819,34 @@ def config_editor_labels() -> tuple[str, ...]:
         "Paste conflict action",
         "Log level",
     )
+
+
+CONFIG_EDITOR_CATEGORIES: tuple[tuple[str, tuple[int, ...]], ...] = (
+    ("External", (0,)),
+    ("Display", (2, 5, 1, 3, 4, 6)),
+    ("Sorting", (7, 8, 9)),
+    ("Behavior", (10, 11)),
+    ("Logging", (12,)),
+)
+
+
+def config_editor_visual_order() -> tuple[int, ...]:
+    """Return field indices in visual display order."""
+    result: list[int] = []
+    for _header, field_indices in CONFIG_EDITOR_CATEGORIES:
+        result.extend(field_indices)
+    return tuple(result)
+
+
+def move_config_cursor_visual(cursor_index: int, delta: int) -> int:
+    """Move cursor by *delta* steps in visual order, returning the new field index."""
+    order = config_editor_visual_order()
+    try:
+        pos = order.index(cursor_index)
+    except ValueError:
+        pos = 0
+    new_pos = max(0, min(len(order) - 1, pos + delta))
+    return order[new_pos]
 
 
 def apply_config_to_runtime_state(state: AppState, config: AppConfig) -> AppState:
@@ -1002,6 +1070,8 @@ def notification_for_paste_summary(summary: PasteSummary) -> NotificationState:
     message = f"{verb} {summary.success_count} item(s)"
     if summary.skipped_count:
         message += f", skipped {summary.skipped_count}"
+    if summary.overwrote_count:
+        message += ", undo unavailable for overwritten items"
     return NotificationState(level="info", message=message)
 
 

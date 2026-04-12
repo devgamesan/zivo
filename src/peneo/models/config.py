@@ -3,8 +3,11 @@
 from dataclasses import dataclass, field
 from typing import Literal
 
+from peneo.theme_support import AUTO_PREVIEW_SYNTAX_THEME, DEFAULT_APP_THEME
+
 ConfigSortField = Literal["name", "modified", "size"]
-ConfigTheme = Literal["textual-dark", "textual-light"]
+ConfigTheme = str
+PreviewSyntaxTheme = str
 ConfigLogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 PasteConflictAction = Literal["overwrite", "skip", "rename", "prompt"]
 
@@ -33,7 +36,8 @@ class DisplayConfig:
     show_directory_sizes: bool = True
     show_preview: bool = True
     show_help_bar: bool = True
-    theme: ConfigTheme = "textual-dark"
+    theme: ConfigTheme = DEFAULT_APP_THEME
+    preview_syntax_theme: PreviewSyntaxTheme = AUTO_PREVIEW_SYNTAX_THEME
     default_sort_field: ConfigSortField = "name"
     default_sort_descending: bool = False
     directories_first: bool = True

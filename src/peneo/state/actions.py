@@ -14,10 +14,13 @@ from peneo.models import (
     ExtractArchiveRequest,
     ExtractArchiveResult,
     FileMutationResult,
+    PasteAppliedChange,
     PasteConflict,
     PasteRequest,
     PasteSummary,
     ShellCommandResult,
+    UndoEntry,
+    UndoResult,
 )
 
 from .models import (
@@ -127,6 +130,26 @@ class BeginGoToPath:
 @dataclass(frozen=True)
 class BeginCommandPalette:
     """Open the command palette."""
+
+
+@dataclass(frozen=True)
+class OpenNewTab:
+    """Create and activate a new browser tab."""
+
+
+@dataclass(frozen=True)
+class ActivateNextTab:
+    """Activate the next browser tab."""
+
+
+@dataclass(frozen=True)
+class ActivatePreviousTab:
+    """Activate the previous browser tab."""
+
+
+@dataclass(frozen=True)
+class CloseCurrentTab:
+    """Close the currently active browser tab."""
 
 
 @dataclass(frozen=True)
@@ -478,6 +501,11 @@ class PasteClipboard:
 
 
 @dataclass(frozen=True)
+class UndoLastOperation:
+    """Undo the most recent reversible file operation."""
+
+
+@dataclass(frozen=True)
 class ResolvePasteConflict:
     """Continue the pending paste with the chosen conflict resolution."""
 
@@ -657,6 +685,7 @@ class ClipboardPasteCompleted:
 
     request_id: int
     summary: PasteSummary
+    applied_changes: tuple[PasteAppliedChange, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -773,6 +802,23 @@ class FileMutationFailed:
 
 
 @dataclass(frozen=True)
+class UndoCompleted:
+    """Apply a completed undo operation."""
+
+    request_id: int
+    entry: UndoEntry
+    result: UndoResult
+
+
+@dataclass(frozen=True)
+class UndoFailed:
+    """Apply a terminal undo operation failure."""
+
+    request_id: int
+    message: str
+
+
+@dataclass(frozen=True)
 class ExternalLaunchCompleted:
     """Apply a completed external launch operation."""
 
@@ -876,6 +922,10 @@ Action = (
     | BeginHistorySearch
     | BeginBookmarkSearch
     | BeginCommandPalette
+    | OpenNewTab
+    | ActivateNextTab
+    | ActivatePreviousTab
+    | CloseCurrentTab
     | BeginShellCommandInput
     | CancelCommandPalette
     | MoveCommandPaletteCursor
@@ -929,6 +979,7 @@ Action = (
     | CopyTargets
     | CutTargets
     | PasteClipboard
+    | UndoLastOperation
     | ResolvePasteConflict
     | CancelPasteConflict
     | ConfirmDeleteTargets
@@ -969,6 +1020,8 @@ Action = (
     | ZipCompressFailed
     | FileMutationCompleted
     | FileMutationFailed
+    | UndoCompleted
+    | UndoFailed
     | ExternalLaunchCompleted
     | ExternalLaunchFailed
     | ShellCommandCompleted

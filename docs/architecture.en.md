@@ -25,7 +25,7 @@ flowchart LR
     subgraph UI["UI (`src/peneo/app.py`, `src/peneo/app_shell.py`, `src/peneo/ui`)"]
         App["PeneoApp"]
         Shell["app_shell.py\nwidget mount / refresh / focus"]
-        Widgets["CurrentPathBar / MainPane / SidePane / CommandPalette / ConflictDialog / AttributeDialog / ConfigDialog / SplitTerminalPane / HelpBar / StatusBar"]
+        Widgets["TabBar / CurrentPathBar / MainPane / SidePane / CommandPalette / ConflictDialog / AttributeDialog / ConfigDialog / SplitTerminalPane / HelpBar / StatusBar"]
     end
 
     subgraph State["State (`src/peneo/state`)"]
@@ -38,7 +38,7 @@ flowchart LR
         TerminalReducer["reducer_terminal_config.py\nterminal / config / external launch"]
         Effects["effects.py\nEffect definitions"]
         Selectors["selectors.py\nselect_shell_data"]
-        Models["models.py\nAppState / PaneState / UiMode"]
+        Models["models.py\nAppState / BrowserTabState / PaneState / UiMode"]
         Palette["command_palette.py\npalette item builder"]
     end
 
@@ -181,7 +181,7 @@ sequenceDiagram
 
 ### `src/peneo/state/reducer_mutations.py`
 
-- Handles selection, copy / cut / paste, rename, create, trash delete, and archive-extract transitions
+- Handles selection, copy / cut / paste, undo, rename, create, trash delete, and archive-extract transitions
 - Owns paste-conflict, name-conflict, archive-confirmation, and extraction-progress state
 
 ### `src/peneo/state/reducer_palette.py`
@@ -239,8 +239,9 @@ sequenceDiagram
 - `file_search.py`: handles recursive file search under the current directory
 - `grep_search.py`: handles recursive content search through `rg`
 - `directory_size.py`: calculates recursive sizes for visible directories
-- `clipboard_operations.py`: executes copy / cut / paste and detects conflicts
-- `file_mutations.py`: handles rename / create / trash delete
+- `clipboard_operations.py`: executes copy / cut / paste, detects conflicts, and records undo metadata
+- `file_mutations.py`: handles rename / create / trash delete and captures trash-restore metadata
+- `undo_operations.py`: executes undo for reversible file operations
 - `archive_extract.py`: handles archive preflight scanning, conflict detection, safe extraction, and progress reporting
 - `config.py`: loads, validates, saves, and renders `config.toml`
 - `external_launcher.py`: handles default-app launch, terminal-editor launch, external-terminal launch, and path copy
@@ -335,7 +336,7 @@ Notes:
 
 ## 7. Areas Still Unimplemented Or Constrained
 
-- File preview, in-app editing, Git integration, tabs, and keybinding customization are not implemented
+- In-app editing, Git integration, tab reordering, and keybinding customization are not implemented
 - Native Windows runtime remains unsupported, even though the config accepts a `windows` terminal key for future compatibility
 - Directory-size calculation and archive extraction grow in cost with visible directory count or archive contents, so runtime cancellation and progress tracking are part of the design
 

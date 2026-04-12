@@ -8,7 +8,6 @@ import shlex
 import tomllib
 from dataclasses import replace
 from pathlib import Path
-from textwrap import dedent
 from typing import Callable, Protocol
 
 from peneo.models import (
@@ -22,6 +21,12 @@ from peneo.models import (
     TerminalConfig,
 )
 from peneo.models.config import BehaviorConfig
+from peneo.theme_support import (
+    SUPPORTED_APP_THEME_DISPLAY,
+    SUPPORTED_APP_THEMES,
+    SUPPORTED_PREVIEW_SYNTAX_THEME_DISPLAY,
+    SUPPORTED_PREVIEW_SYNTAX_THEMES,
+)
 
 SystemNameResolver = Callable[[], str]
 EnvironmentVariableReader = Callable[[str], str | None]
@@ -35,13 +40,28 @@ class ConfigSaveService(Protocol):
     def save(self, *, path: str, config: AppConfig) -> str: ...
 
 _VALID_SORT_FIELDS = frozenset({"name", "modified", "size"})
-_VALID_THEMES = frozenset({"textual-dark", "textual-light"})
+_VALID_THEMES = frozenset(SUPPORTED_APP_THEMES)
+_VALID_PREVIEW_SYNTAX_THEMES = frozenset(SUPPORTED_PREVIEW_SYNTAX_THEMES)
 _VALID_LOG_LEVELS = frozenset({"DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"})
 _VALID_PASTE_ACTIONS = frozenset({"overwrite", "skip", "rename", "prompt"})
 _VALID_TERMINAL_EDITOR_NAMES = frozenset(
     {"emacs", "helix", "hx", "kak", "micro", "nano", "nvim", "vi", "vim"}
 )
 _VALIDATION_PATH = "/tmp/peneo"
+
+
+def _validate_section_dict(
+    section: object,
+    section_name: str,
+    warnings: list[str],
+) -> dict[str, object] | None:
+    """Return the section if it is a dict, otherwise None (with optional warning)."""
+    if section is None:
+        return None
+    if not isinstance(section, dict):
+        warnings.append(f"{section_name} must be a table; using defaults.")
+        return None
+    return section
 
 
 class AppConfigLoader:
@@ -150,91 +170,99 @@ def resolve_config_path(
 
 
 def _load_terminal_config(section: object, warnings: list[str]) -> TerminalConfig:
-    if section is None:
-        return TerminalConfig()
-    if not isinstance(section, dict):
-        warnings.append("terminal must be a table; using defaults.")
+    validated = _validate_section_dict(section, "terminal", warnings)
+    if validated is None:
         return TerminalConfig()
     return TerminalConfig(
-        linux=_load_command_templates(section, "linux", warnings),
-        macos=_load_command_templates(section, "macos", warnings),
-        windows=_load_command_templates(section, "windows", warnings),
+        linux=_load_command_templates(validated, "linux", warnings),
+        macos=_load_command_templates(validated, "macos", warnings),
+        windows=_load_command_templates(validated, "windows", warnings),
     )
 
 
 def _load_display_config(section: object, warnings: list[str]) -> DisplayConfig:
     config = DisplayConfig()
-    if section is None:
-        return config
-    if not isinstance(section, dict):
-        warnings.append("display must be a table; using defaults.")
+    validated = _validate_section_dict(section, "display", warnings)
+    if validated is None:
         return config
 
     config = replace(
         config,
         show_hidden_files=_read_bool(
-            section,
+            validated,
             key="show_hidden_files",
             default=config.show_hidden_files,
             warnings=warnings,
             section_name="display",
         ),
         show_directory_sizes=_read_bool(
-            section,
+            validated,
             key="show_directory_sizes",
             default=config.show_directory_sizes,
             warnings=warnings,
             section_name="display",
         ),
         show_preview=_read_bool(
-            section,
+            validated,
             key="show_preview",
             default=config.show_preview,
             warnings=warnings,
             section_name="display",
         ),
         default_sort_descending=_read_bool(
-            section,
+            validated,
             key="default_sort_descending",
             default=config.default_sort_descending,
             warnings=warnings,
             section_name="display",
         ),
         directories_first=_read_bool(
-            section,
+            validated,
             key="directories_first",
             default=config.directories_first,
             warnings=warnings,
             section_name="display",
         ),
     )
-    theme = section.get("theme", config.theme)
-    if isinstance(theme, str) and theme in _VALID_THEMES:
-        config = replace(config, theme=theme)
-    elif "theme" in section:
-        warnings.append(
-            "display.theme must be one of textual-dark, textual-light; using default."
-        )
-
-    sort_field = section.get("default_sort_field", config.default_sort_field)
-    if isinstance(sort_field, str) and sort_field in _VALID_SORT_FIELDS:
-        return replace(config, default_sort_field=sort_field)
-
-    if "default_sort_field" in section:
-        warnings.append(
-            "display.default_sort_field must be one of name, modified, size; using default."
-        )
+    config = replace(
+        config,
+        theme=_read_enum(
+            validated,
+            key="theme",
+            default=config.theme,
+            valid_values=_VALID_THEMES,
+            valid_display=SUPPORTED_APP_THEME_DISPLAY,
+            section_name="display",
+            warnings=warnings,
+        ),
+        preview_syntax_theme=_read_enum(
+            validated,
+            key="preview_syntax_theme",
+            default=config.preview_syntax_theme,
+            valid_values=_VALID_PREVIEW_SYNTAX_THEMES,
+            valid_display=SUPPORTED_PREVIEW_SYNTAX_THEME_DISPLAY,
+            section_name="display",
+            warnings=warnings,
+        ),
+        default_sort_field=_read_enum(
+            validated,
+            key="default_sort_field",
+            default=config.default_sort_field,
+            valid_values=_VALID_SORT_FIELDS,
+            valid_display="name, modified, size",
+            section_name="display",
+            warnings=warnings,
+        ),
+    )
     return config
 
 
 def _load_editor_config(section: object, warnings: list[str]) -> EditorConfig:
-    if section is None:
-        return EditorConfig()
-    if not isinstance(section, dict):
-        warnings.append("editor must be a table; using defaults.")
+    validated = _validate_section_dict(section, "editor", warnings)
+    if validated is None:
         return EditorConfig()
 
-    command = section.get("command")
+    command = validated.get("command")
     if command is None:
         return EditorConfig()
     if not isinstance(command, str) or not command.strip():
@@ -262,42 +290,38 @@ def _load_editor_config(section: object, warnings: list[str]) -> EditorConfig:
 
 def _load_behavior_config(section: object, warnings: list[str]) -> BehaviorConfig:
     config = BehaviorConfig()
-    if section is None:
-        return config
-    if not isinstance(section, dict):
-        warnings.append("behavior must be a table; using defaults.")
+    validated = _validate_section_dict(section, "behavior", warnings)
+    if validated is None:
         return config
 
     config = replace(
         config,
         confirm_delete=_read_bool(
-            section,
+            validated,
             key="confirm_delete",
             default=config.confirm_delete,
             warnings=warnings,
             section_name="behavior",
         ),
+        paste_conflict_action=_read_enum(
+            validated,
+            key="paste_conflict_action",
+            default=config.paste_conflict_action,
+            valid_values=_VALID_PASTE_ACTIONS,
+            valid_display="overwrite, skip, rename, prompt",
+            section_name="behavior",
+            warnings=warnings,
+        ),
     )
-    paste_action = section.get("paste_conflict_action", config.paste_conflict_action)
-    if isinstance(paste_action, str) and paste_action in _VALID_PASTE_ACTIONS:
-        return replace(config, paste_conflict_action=paste_action)
-
-    if "paste_conflict_action" in section:
-        warnings.append(
-            "behavior.paste_conflict_action must be one of "
-            "overwrite, skip, rename, prompt; using default."
-        )
     return config
 
 
 def _load_bookmark_config(section: object, warnings: list[str]) -> BookmarkConfig:
-    if section is None:
-        return BookmarkConfig()
-    if not isinstance(section, dict):
-        warnings.append("bookmarks must be a table; using defaults.")
+    validated = _validate_section_dict(section, "bookmarks", warnings)
+    if validated is None:
         return BookmarkConfig()
 
-    raw_paths = section.get("paths")
+    raw_paths = validated.get("paths")
     if raw_paths is None:
         return BookmarkConfig()
     if not isinstance(raw_paths, list):
@@ -321,31 +345,29 @@ def _load_bookmark_config(section: object, warnings: list[str]) -> BookmarkConfi
 
 
 def _load_help_bar_config(section: object, warnings: list[str]) -> HelpBarConfig:
-    if section is None:
-        return HelpBarConfig()
-    if not isinstance(section, dict):
-        warnings.append("help_bar must be a table; using defaults.")
+    validated = _validate_section_dict(section, "help_bar", warnings)
+    if validated is None:
         return HelpBarConfig()
 
     return HelpBarConfig(
-        browsing=_load_help_lines(section, "browsing", warnings),
-        filter=_load_help_lines(section, "filter", warnings),
-        rename=_load_help_lines(section, "rename", warnings),
-        create=_load_help_lines(section, "create", warnings),
-        extract=_load_help_lines(section, "extract", warnings),
-        zip=_load_help_lines(section, "zip", warnings),
-        palette=_load_help_lines(section, "palette", warnings),
-        palette_file_search=_load_help_lines(section, "palette_file_search", warnings),
-        palette_grep_search=_load_help_lines(section, "palette_grep_search", warnings),
-        palette_history=_load_help_lines(section, "palette_history", warnings),
-        palette_bookmarks=_load_help_lines(section, "palette_bookmarks", warnings),
-        palette_go_to_path=_load_help_lines(section, "palette_go_to_path", warnings),
-        shell=_load_help_lines(section, "shell", warnings),
-        config=_load_help_lines(section, "config", warnings),
-        confirm_delete=_load_help_lines(section, "confirm_delete", warnings),
-        detail=_load_help_lines(section, "detail", warnings),
-        busy=_load_help_lines(section, "busy", warnings),
-        split_terminal=_load_help_lines(section, "split_terminal", warnings),
+        browsing=_load_help_lines(validated, "browsing", warnings),
+        filter=_load_help_lines(validated, "filter", warnings),
+        rename=_load_help_lines(validated, "rename", warnings),
+        create=_load_help_lines(validated, "create", warnings),
+        extract=_load_help_lines(validated, "extract", warnings),
+        zip=_load_help_lines(validated, "zip", warnings),
+        palette=_load_help_lines(validated, "palette", warnings),
+        palette_file_search=_load_help_lines(validated, "palette_file_search", warnings),
+        palette_grep_search=_load_help_lines(validated, "palette_grep_search", warnings),
+        palette_history=_load_help_lines(validated, "palette_history", warnings),
+        palette_bookmarks=_load_help_lines(validated, "palette_bookmarks", warnings),
+        palette_go_to_path=_load_help_lines(validated, "palette_go_to_path", warnings),
+        shell=_load_help_lines(validated, "shell", warnings),
+        config=_load_help_lines(validated, "config", warnings),
+        confirm_delete=_load_help_lines(validated, "confirm_delete", warnings),
+        detail=_load_help_lines(validated, "detail", warnings),
+        busy=_load_help_lines(validated, "busy", warnings),
+        split_terminal=_load_help_lines(validated, "split_terminal", warnings),
     )
 
 
@@ -371,32 +393,31 @@ def _load_help_lines(section: dict[str, object], key: str, warnings: list[str]) 
 
 def _load_logging_config(section: object, warnings: list[str]) -> LoggingConfig:
     config = LoggingConfig()
-    if section is None:
-        return config
-    if not isinstance(section, dict):
-        warnings.append("logging must be a table; using defaults.")
+    validated = _validate_section_dict(section, "logging", warnings)
+    if validated is None:
         return config
 
     config = replace(
         config,
         enabled=_read_bool(
-            section,
+            validated,
             key="enabled",
             default=config.enabled,
             warnings=warnings,
             section_name="logging",
         ),
+        level=_read_enum(
+            validated,
+            key="level",
+            default=config.level,
+            valid_values=_VALID_LOG_LEVELS,
+            valid_display="DEBUG, INFO, WARNING, ERROR, CRITICAL",
+            section_name="logging",
+            warnings=warnings,
+        ),
     )
 
-    level = section.get("level", config.level)
-    if isinstance(level, str) and level in _VALID_LOG_LEVELS:
-        config = replace(config, level=level)
-    elif "level" in section:
-        warnings.append(
-            "logging.level must be one of DEBUG, INFO, WARNING, ERROR, CRITICAL; using default."
-        )
-
-    path = section.get("path", config.path)
+    path = validated.get("path", config.path)
     if path is None:
         return config
     if not isinstance(path, str):
@@ -459,123 +480,154 @@ def _read_bool(
     return default
 
 
+def _read_enum(
+    section: dict[str, object],
+    *,
+    key: str,
+    default: str,
+    valid_values: frozenset[str],
+    valid_display: str,
+    section_name: str,
+    warnings: list[str],
+) -> str:
+    value = section.get(key, default)
+    if isinstance(value, str) and value in valid_values:
+        return value
+    if key in section:
+        warnings.append(f"{section_name}.{key} must be one of {valid_display}; using default.")
+    return default
+
+
 def _render_default_config() -> str:
     return render_app_config(AppConfig())
 
 
+def _render_terminal_section(config: AppConfig) -> str:
+    linux = _render_command_array(config.terminal.linux)
+    macos = _render_command_array(config.terminal.macos)
+    windows = _render_command_array(config.terminal.windows)
+    return (
+        "[terminal]\n"
+        "# Optional OS-specific terminal launch templates.\n"
+        "# Use {path} for the working directory.\n"
+        "# Examples:\n"
+        '# linux = [\n'
+        '#   "konsole --working-directory {path}",\n'
+        '#   "gnome-terminal --working-directory={path}",\n'
+        '# ]\n'
+        '# macos = ["open -a Terminal {path}"]\n'
+        '# windows = ["wt -d {path}"]\n'
+        f"linux = [{linux}]\n"
+        f"macos = [{macos}]\n"
+        f"windows = [{windows}]"
+    )
+
+
+def _render_editor_section(config: AppConfig) -> str:
+    command = _render_optional_toml_string(config.editor.command)
+    return (
+        "[editor]\n"
+        "# Optional terminal editor command for `e`.\n"
+        "# Use a shell-style command without the file path; Peneo appends it automatically.\n"
+        "# Examples:\n"
+        '# command = "nvim -u NONE"\n'
+        '# command = "emacs -nw"\n'
+        f"command = {command}"
+    )
+
+
+def _render_display_section(config: AppConfig) -> str:
+    return (
+        "[display]\n"
+        f"show_hidden_files = {_render_bool(config.display.show_hidden_files)}\n"
+        f"show_directory_sizes = {_render_bool(config.display.show_directory_sizes)}\n"
+        f"show_preview = {_render_bool(config.display.show_preview)}\n"
+        f'theme = "{config.display.theme}"\n'
+        f'preview_syntax_theme = "{config.display.preview_syntax_theme}"\n'
+        f'default_sort_field = "{config.display.default_sort_field}"\n'
+        f"default_sort_descending = {_render_bool(config.display.default_sort_descending)}\n"
+        f"directories_first = {_render_bool(config.display.directories_first)}"
+    )
+
+
+def _render_behavior_section(config: AppConfig) -> str:
+    return (
+        "[behavior]\n"
+        f"confirm_delete = {_render_bool(config.behavior.confirm_delete)}\n"
+        f'paste_conflict_action = "{config.behavior.paste_conflict_action}"'
+    )
+
+
+def _render_logging_section(config: AppConfig) -> str:
+    path = _render_optional_toml_string(config.logging.path)
+    return (
+        "[logging]\n"
+        "# Optional file output for startup and unhandled exceptions.\n"
+        "# Leave empty to write peneo.log next to config.toml.\n"
+        f"enabled = {_render_bool(config.logging.enabled)}\n"
+        f'level = "{config.logging.level}"\n'
+        f"path = {path}"
+    )
+
+
+def _render_bookmarks_section(config: AppConfig) -> str:
+    paths = _render_command_array(config.bookmarks.paths)
+    return (
+        "[bookmarks]\n"
+        "# Optional bookmarked directories shown in the command palette.\n"
+        "# Use absolute paths.\n"
+        "# Example:\n"
+        '# paths = ["/home/user/src", "/home/user/docs"]\n'
+        f"paths = [{paths}]"
+    )
+
+
+_HELP_BAR_FIELDS = (
+    "browsing",
+    "filter",
+    "rename",
+    "create",
+    "extract",
+    "zip",
+    "palette",
+    "palette_file_search",
+    "palette_grep_search",
+    "palette_history",
+    "palette_bookmarks",
+    "palette_go_to_path",
+    "shell",
+    "config",
+    "confirm_delete",
+    "detail",
+    "busy",
+    "split_terminal",
+)
+
+
+def _render_help_bar_section(config: AppConfig) -> str:
+    lines = [
+        "[help_bar]",
+        "# Optional custom help bar text for each UI mode.",
+        "# Leave empty to use built-in defaults.",
+        "# Example:",
+        '# browsing = ["Custom help line 1", "Custom help line 2"]',
+    ]
+    for field in _HELP_BAR_FIELDS:
+        lines.append(f"{field} = {_render_help_lines(getattr(config.help_bar, field))}")
+    return "\n".join(lines)
+
+
 def render_app_config(config: AppConfig) -> str:
-    return dedent(
-        """
-        [terminal]
-        # Optional OS-specific terminal launch templates.
-        # Use {{path}} for the working directory.
-        # Examples:
-        # linux = [
-        #   "konsole --working-directory {{path}}",
-        #   "gnome-terminal --working-directory={{path}}",
-        # ]
-        # macos = ["open -a Terminal {{path}}"]
-        # windows = ["wt -d {{path}}"]
-        linux = [{linux}]
-        macos = [{macos}]
-        windows = [{windows}]
-
-        [editor]
-        # Optional terminal editor command for `e`.
-        # Use a shell-style command without the file path; Peneo appends it automatically.
-        # Examples:
-        # command = "nvim -u NONE"
-        # command = "emacs -nw"
-        command = {editor_command}
-
-        [display]
-        show_hidden_files = {show_hidden_files}
-        show_directory_sizes = {show_directory_sizes}
-        show_preview = {show_preview}
-        theme = "{theme}"
-        default_sort_field = "{default_sort_field}"
-        default_sort_descending = {default_sort_descending}
-        directories_first = {directories_first}
-
-        [behavior]
-        confirm_delete = {confirm_delete}
-        paste_conflict_action = "{paste_conflict_action}"
-
-        [logging]
-        # Optional file output for startup and unhandled exceptions.
-        # Leave empty to write peneo.log next to config.toml.
-        enabled = {logging_enabled}
-        level = "{logging_level}"
-        path = {logging_path}
-
-        [bookmarks]
-        # Optional bookmarked directories shown in the command palette.
-        # Use absolute paths.
-        # Example:
-        # paths = ["/home/user/src", "/home/user/docs"]
-        paths = [{bookmark_paths}]
-
-        [help_bar]
-        # Optional custom help bar text for each UI mode.
-        # Leave empty to use built-in defaults.
-        # Example:
-        # browsing = ["Custom help line 1", "Custom help line 2"]
-        browsing = {help_bar_browsing}
-        filter = {help_bar_filter}
-        rename = {help_bar_rename}
-        create = {help_bar_create}
-        extract = {help_bar_extract}
-        zip = {help_bar_zip}
-        palette = {help_bar_palette}
-        palette_file_search = {help_bar_palette_file_search}
-        palette_grep_search = {help_bar_palette_grep_search}
-        palette_history = {help_bar_palette_history}
-        palette_bookmarks = {help_bar_palette_bookmarks}
-        palette_go_to_path = {help_bar_palette_go_to_path}
-        shell = {help_bar_shell}
-        config = {help_bar_config}
-        confirm_delete = {help_bar_confirm_delete}
-        detail = {help_bar_detail}
-        busy = {help_bar_busy}
-        split_terminal = {help_bar_split_terminal}
-        """
-    ).format(
-        linux=_render_command_array(config.terminal.linux),
-        macos=_render_command_array(config.terminal.macos),
-        windows=_render_command_array(config.terminal.windows),
-        editor_command=_render_optional_toml_string(config.editor.command),
-        show_hidden_files=_render_bool(config.display.show_hidden_files),
-        show_directory_sizes=_render_bool(config.display.show_directory_sizes),
-        show_preview=_render_bool(config.display.show_preview),
-        theme=config.display.theme,
-        default_sort_field=config.display.default_sort_field,
-        default_sort_descending=_render_bool(config.display.default_sort_descending),
-        directories_first=_render_bool(config.display.directories_first),
-        confirm_delete=_render_bool(config.behavior.confirm_delete),
-        paste_conflict_action=config.behavior.paste_conflict_action,
-        logging_enabled=_render_bool(config.logging.enabled),
-        logging_level=config.logging.level,
-        logging_path=_render_optional_toml_string(config.logging.path),
-        bookmark_paths=_render_command_array(config.bookmarks.paths),
-        help_bar_browsing=_render_help_lines(config.help_bar.browsing),
-        help_bar_filter=_render_help_lines(config.help_bar.filter),
-        help_bar_rename=_render_help_lines(config.help_bar.rename),
-        help_bar_create=_render_help_lines(config.help_bar.create),
-        help_bar_extract=_render_help_lines(config.help_bar.extract),
-        help_bar_zip=_render_help_lines(config.help_bar.zip),
-        help_bar_palette=_render_help_lines(config.help_bar.palette),
-        help_bar_palette_file_search=_render_help_lines(config.help_bar.palette_file_search),
-        help_bar_palette_grep_search=_render_help_lines(config.help_bar.palette_grep_search),
-        help_bar_palette_history=_render_help_lines(config.help_bar.palette_history),
-        help_bar_palette_bookmarks=_render_help_lines(config.help_bar.palette_bookmarks),
-        help_bar_palette_go_to_path=_render_help_lines(config.help_bar.palette_go_to_path),
-        help_bar_shell=_render_help_lines(config.help_bar.shell),
-        help_bar_config=_render_help_lines(config.help_bar.config),
-        help_bar_confirm_delete=_render_help_lines(config.help_bar.confirm_delete),
-        help_bar_detail=_render_help_lines(config.help_bar.detail),
-        help_bar_busy=_render_help_lines(config.help_bar.busy),
-        help_bar_split_terminal=_render_help_lines(config.help_bar.split_terminal),
-    ).lstrip()
+    sections = [
+        _render_terminal_section(config),
+        _render_editor_section(config),
+        _render_display_section(config),
+        _render_behavior_section(config),
+        _render_logging_section(config),
+        _render_bookmarks_section(config),
+        _render_help_bar_section(config),
+    ]
+    return "\n\n".join(sections) + "\n"
 
 
 def _render_command_array(commands: tuple[str, ...]) -> str:

@@ -21,13 +21,14 @@ from peneo.app_runtime import (
     schedule_browser_snapshot,
     schedule_child_pane_snapshot,
     schedule_file_search,
+    schedule_undo,
     start_child_pane_snapshot,
     start_file_search_worker,
     start_grep_search_worker,
     start_split_terminal,
     write_split_terminal_input,
 )
-from peneo.models import AppConfig, ExternalLaunchRequest
+from peneo.models import AppConfig, ExternalLaunchRequest, UndoDeletePathStep, UndoEntry, UndoResult
 from peneo.services import InvalidFileSearchQueryError
 from peneo.state import (
     BrowserSnapshot,
@@ -47,8 +48,10 @@ from peneo.state import (
     RunExternalLaunchEffect,
     RunFileSearchEffect,
     RunGrepSearchEffect,
+    RunUndoEffect,
     SplitTerminalStartFailed,
     StartSplitTerminalEffect,
+    UndoCompleted,
     WriteSplitTerminalInputEffect,
     build_initial_app_state,
 )
@@ -113,6 +116,7 @@ class _RecordingApp:
     _split_terminal_service: Any = field(
         default_factory=lambda: SimpleNamespace(start=lambda cwd, **kwargs: None)
     )
+    _undo_service: Any = field(default_factory=lambda: SimpleNamespace(execute=lambda entry: None))
     _split_terminal_session: Any = None
     suspend_error: BaseException | None = None
     run_worker_calls: list[dict[str, Any]] = field(default_factory=list)
@@ -272,6 +276,35 @@ def test_complete_worker_actions_maps_config_save_result() -> None:
             config=config,
         ),
     )
+
+
+def test_complete_worker_actions_maps_undo_result() -> None:
+    entry = UndoEntry(kind="paste_copy", steps=(UndoDeletePathStep(path="/tmp/copied"),))
+
+    actions = complete_worker_actions(
+        RunUndoEffect(request_id=5, entry=entry),
+        UndoResult(path=None, message="Undid copied item"),
+    )
+
+    assert actions == (
+        UndoCompleted(
+            request_id=5,
+            entry=entry,
+            result=UndoResult(path=None, message="Undid copied item"),
+        ),
+    )
+
+
+def test_schedule_undo_runs_worker() -> None:
+    entry = UndoEntry(kind="paste_copy", steps=(UndoDeletePathStep(path="/tmp/copied"),))
+    app = _RecordingApp()
+    effect = RunUndoEffect(request_id=3, entry=entry)
+
+    schedule_undo(app, effect)
+    worker_fn = app.run_worker_calls[0]["worker_fn"]
+    worker_fn()
+
+    assert app.run_worker_calls[0]["name"] == "undo:3"
 
 
 def test_failed_worker_actions_marks_invalid_file_search_queries() -> None:

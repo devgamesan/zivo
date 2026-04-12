@@ -26,6 +26,12 @@ TERMINAL_EDITOR_NAMES = frozenset(
     {"emacs", "helix", "hx", "kak", "micro", "nano", "nvim", "vi", "vim"}
 )
 
+_PLATFORM_TEMPLATE_KEYS: dict[PlatformKind, tuple[str, ...]] = {
+    "linux": ("linux",),
+    "darwin": ("macos",),
+    "wsl": ("windows", "linux"),
+}
+
 
 class ExternalLaunchAdapter(Protocol):
     """Boundary for external process launches."""
@@ -193,26 +199,39 @@ class LocalExternalLaunchAdapter:
             raise OSError("Windows native is unsupported; run Peneo from WSL")
         raise OSError(f"Unsupported operating system: {system_name}")
 
+    def _platform_candidates(
+        self,
+        platform_kind: PlatformKind,
+        *,
+        linux: tuple[tuple[str, ...], ...] = (),
+        wsl: tuple[tuple[str, ...], ...] = (),
+        darwin: tuple[tuple[str, ...], ...] = (),
+    ) -> tuple[tuple[str, ...], ...]:
+        if platform_kind == "linux":
+            return linux
+        if platform_kind == "wsl":
+            return wsl + linux
+        if platform_kind == "darwin":
+            return darwin
+        raise OSError(f"Unsupported platform kind: {platform_kind}")
+
     def _default_app_candidates(
         self,
         platform_kind: PlatformKind,
         path: str,
     ) -> tuple[tuple[str, ...], ...]:
-        if platform_kind == "linux":
-            return (
+        return self._platform_candidates(
+            platform_kind,
+            linux=(
                 ("xdg-open", path),
                 ("gio", "open", path),
-            )
-        if platform_kind == "wsl":
-            return (
+            ),
+            wsl=(
                 ("wslview", path),
                 ("explorer.exe", path),
-                ("xdg-open", path),
-                ("gio", "open", path),
-            )
-        if platform_kind == "darwin":
-            return (("open", path),)
-        raise OSError(f"Unsupported platform kind: {platform_kind}")
+            ),
+            darwin=(("open", path),),
+        )
 
     def _editor_candidates(
         self,
@@ -237,12 +256,11 @@ class LocalExternalLaunchAdapter:
         commands: list[tuple[str, ...]] = []
         configured_editor_command = self.editor_command_template.command
         if configured_editor_command:
-            parsed_command = tuple(shlex.split(configured_editor_command))
-            if parsed_command and _is_terminal_editor_command(parsed_command[0]):
-                if line_number is not None:
-                    commands.append(parsed_command + (f"+{line_number}", path))
-                else:
-                    commands.append(parsed_command + (path,))
+            candidate = _build_command_candidate(
+                tuple(shlex.split(configured_editor_command)), path, line_number
+            )
+            if candidate is not None:
+                commands.append(candidate)
 
         editor_command = self.environment_variable("EDITOR")
         if editor_command:
@@ -250,11 +268,9 @@ class LocalExternalLaunchAdapter:
                 parsed_command = tuple(shlex.split(editor_command))
             except ValueError as error:
                 raise OSError(f"Invalid EDITOR value: {error}") from error
-            if parsed_command and _is_terminal_editor_command(parsed_command[0]):
-                if line_number is not None:
-                    commands.append(parsed_command + (f"+{line_number}", path))
-                else:
-                    commands.append(parsed_command + (path,))
+            candidate = _build_command_candidate(parsed_command, path, line_number)
+            if candidate is not None:
+                commands.append(candidate)
 
         commands.extend(self._default_terminal_editor_commands(path, line_number))
         return _dedupe_commands(commands)
@@ -264,27 +280,23 @@ class LocalExternalLaunchAdapter:
         path: str,
         line_number: int | None = None,
     ) -> tuple[tuple[str, ...], ...]:
-        platform_kind = self._platform_kind()
-        if platform_kind in {"linux", "wsl", "darwin"}:
-            if line_number is not None:
-                return (
-                    ("nvim", f"+{line_number}", path),
-                    ("vim", f"+{line_number}", path),
-                    ("nano", f"+{line_number}", path),
-                    ("hx", f"+{line_number}", path),
-                    ("micro", f"+{line_number}", path),
-                    ("emacs", "-nw", f"+{line_number}", path),
-                )
-            else:
-                return (
-                    ("nvim", path),
-                    ("vim", path),
-                    ("nano", path),
-                    ("hx", path),
-                    ("micro", path),
-                    ("emacs", "-nw", path),
-                )
-        raise OSError(f"Unsupported platform kind: {platform_kind}")
+        if line_number is not None:
+            return (
+                ("nvim", f"+{line_number}", path),
+                ("vim", f"+{line_number}", path),
+                ("nano", f"+{line_number}", path),
+                ("hx", f"+{line_number}", path),
+                ("micro", f"+{line_number}", path),
+                ("emacs", "-nw", f"+{line_number}", path),
+            )
+        return (
+            ("nvim", path),
+            ("vim", path),
+            ("nano", path),
+            ("hx", path),
+            ("micro", path),
+            ("emacs", "-nw", path),
+        )
 
     def _command_exists(self, command: str) -> bool:
         command_path = Path(command)
@@ -298,8 +310,9 @@ class LocalExternalLaunchAdapter:
         path: str,
     ) -> tuple[tuple[str, ...], ...]:
         configured_commands = self._configured_terminal_commands(platform_kind, path)
-        if platform_kind == "linux":
-            return configured_commands + (
+        return configured_commands + self._platform_candidates(
+            platform_kind,
+            linux=(
                 ("kgx",),
                 ("gnome-console",),
                 ("gnome-terminal",),
@@ -310,39 +323,31 @@ class LocalExternalLaunchAdapter:
                 ("lxterminal",),
                 ("x-terminal-emulator",),
                 ("xterm",),
-            )
-        if platform_kind == "wsl":
-            return configured_commands + (
+            ),
+            wsl=(
                 ("wt.exe", "wsl.exe", "--cd", path),
                 ("cmd.exe", "/c", "start", "", "wsl.exe", "--cd", path),
-                ("kgx",),
-                ("gnome-console",),
-                ("gnome-terminal",),
-                ("xfce4-terminal",),
-                ("mate-terminal",),
-                ("tilix",),
-                ("konsole",),
-                ("lxterminal",),
-                ("x-terminal-emulator",),
-                ("xterm",),
-            )
-        if platform_kind == "darwin":
-            return configured_commands + (("open", "-a", "Terminal", path),)
-        raise OSError(f"Unsupported platform kind: {platform_kind}")
+            ),
+            darwin=(("open", "-a", "Terminal", path),),
+        )
 
     def _configured_terminal_commands(
         self,
         platform_kind: PlatformKind,
         path: str,
     ) -> tuple[tuple[str, ...], ...]:
+        template_keys = _PLATFORM_TEMPLATE_KEYS.get(platform_kind)
+        if template_keys is None:
+            raise OSError(f"Unsupported platform kind: {platform_kind}")
+
+        template_map = {
+            "linux": self.terminal_command_templates.linux,
+            "macos": self.terminal_command_templates.macos,
+            "windows": self.terminal_command_templates.windows,
+        }
         templates: list[str] = []
-        if platform_kind == "linux":
-            templates.extend(self.terminal_command_templates.linux)
-        elif platform_kind == "darwin":
-            templates.extend(self.terminal_command_templates.macos)
-        elif platform_kind == "wsl":
-            templates.extend(self.terminal_command_templates.windows)
-            templates.extend(self.terminal_command_templates.linux)
+        for key in template_keys:
+            templates.extend(template_map[key])
 
         commands: list[tuple[str, ...]] = []
         for template in templates:
@@ -356,43 +361,31 @@ class LocalExternalLaunchAdapter:
         return _dedupe_commands(commands)
 
     def _clipboard_candidates(self, platform_kind: PlatformKind) -> tuple[tuple[str, ...], ...]:
-        if platform_kind == "linux":
-            return (
+        return self._platform_candidates(
+            platform_kind,
+            linux=(
                 ("wl-copy",),
                 ("xclip", "-in", "-selection", "clipboard"),
                 ("xsel", "--clipboard", "--input"),
-            )
-        if platform_kind == "wsl":
-            return (
-                ("clip.exe",),
-                ("wl-copy",),
-                ("xclip", "-in", "-selection", "clipboard"),
-                ("xsel", "--clipboard", "--input"),
-            )
-        if platform_kind == "darwin":
-            return (("pbcopy",),)
-        raise OSError(f"Unsupported platform kind: {platform_kind}")
+            ),
+            wsl=(("clip.exe",),),
+            darwin=(("pbcopy",),),
+        )
 
     def _clipboard_read_candidates(
         self,
         platform_kind: PlatformKind,
     ) -> tuple[tuple[str, ...], ...]:
-        if platform_kind == "linux":
-            return (
+        return self._platform_candidates(
+            platform_kind,
+            linux=(
                 ("wl-paste", "--no-newline"),
                 ("xclip", "-out", "-selection", "clipboard"),
                 ("xsel", "--clipboard", "--output"),
-            )
-        if platform_kind == "wsl":
-            return (
-                ("powershell.exe", "-noprofile", "-command", "Get-Clipboard"),
-                ("wl-paste", "--no-newline"),
-                ("xclip", "-out", "-selection", "clipboard"),
-                ("xsel", "--clipboard", "--output"),
-            )
-        if platform_kind == "darwin":
-            return (("pbpaste",),)
-        raise OSError(f"Unsupported platform kind: {platform_kind}")
+            ),
+            wsl=(("powershell.exe", "-noprofile", "-command", "Get-Clipboard"),),
+            darwin=(("pbpaste",),),
+        )
 
 
 def _run_detached_command(command: Sequence[str], cwd: str | None, input_text: str | None) -> None:
@@ -494,6 +487,19 @@ def _resolve_directory_path(path: str) -> Path:
 
 def _is_terminal_editor_command(command: str) -> bool:
     return Path(command).name.casefold() in TERMINAL_EDITOR_NAMES
+
+
+def _build_command_candidate(
+    parsed_command: tuple[str, ...],
+    path: str,
+    line_number: int | None = None,
+) -> tuple[str, ...] | None:
+    """Build a terminal editor command candidate. Returns None for non-terminal editors."""
+    if not parsed_command or not _is_terminal_editor_command(parsed_command[0]):
+        return None
+    if line_number is not None:
+        return parsed_command + (f"+{line_number}", path)
+    return parsed_command + (path,)
 
 
 def _dedupe_commands(commands: Sequence[tuple[str, ...]]) -> tuple[tuple[str, ...], ...]:

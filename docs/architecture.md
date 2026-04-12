@@ -25,7 +25,7 @@ flowchart LR
     subgraph UI["UI (`src/peneo/app.py`, `src/peneo/app_shell.py`, `src/peneo/ui`)"]
         App["PeneoApp"]
         Shell["app_shell.py\nwidget mount / refresh / focus"]
-        Widgets["CurrentPathBar / MainPane / SidePane / CommandPalette / ConflictDialog / AttributeDialog / ConfigDialog / SplitTerminalPane / HelpBar / StatusBar"]
+        Widgets["TabBar / CurrentPathBar / MainPane / SidePane / CommandPalette / ConflictDialog / AttributeDialog / ConfigDialog / SplitTerminalPane / HelpBar / StatusBar"]
     end
 
     subgraph State["State (`src/peneo/state`)"]
@@ -38,7 +38,7 @@ flowchart LR
         TerminalReducer["reducer_terminal_config.py\nterminal / config / external launch"]
         Effects["effects.py\nEffect 定義"]
         Selectors["selectors.py\nselect_shell_data"]
-        Models["models.py\nAppState / PaneState / UiMode"]
+        Models["models.py\nAppState / BrowserTabState / PaneState / UiMode"]
         Palette["command_palette.py\npalette 候補構築"]
     end
 
@@ -181,7 +181,7 @@ sequenceDiagram
 
 ### `src/peneo/state/reducer_mutations.py`
 
-- 選択、copy / cut / paste、rename、create、trash delete、archive extract の state 遷移を担当する
+- 選択、copy / cut / paste、undo、rename、create、trash delete、archive extract の state 遷移を担当する
 - paste conflict、name conflict、archive extract confirm、進捗表示の各状態を管理する
 
 ### `src/peneo/state/reducer_palette.py`
@@ -239,8 +239,9 @@ sequenceDiagram
 - `file_search.py`: 現在ディレクトリ以下の再帰ファイル検索を担当する
 - `grep_search.py`: `rg` を使った再帰内容検索を担当する
 - `directory_size.py`: 可視ディレクトリの再帰サイズ計算を担当する
-- `clipboard_operations.py`: copy / cut / paste 実処理と競合検出を担当する
-- `file_mutations.py`: rename / create / trash delete を担当する
+- `clipboard_operations.py`: copy / cut / paste 実処理、競合検出、undo 用結果記録を担当する
+- `file_mutations.py`: rename / create / trash delete と trash undo 用 metadata 採取を担当する
+- `undo_operations.py`: reversible file operations の undo 実行を担当する
 - `archive_extract.py`: archive 事前走査、競合検出、安全な展開、進捗通知を担当する
 - `config.py`: `config.toml` の読み込み、検証、保存、既定値レンダリングを担当する
 - `external_launcher.py`: 既定アプリ起動、terminal editor 起動、外部 terminal 起動、パスコピーを担当する
@@ -335,7 +336,7 @@ stateDiagram-v2
 
 ## 7. 現時点で未実装または限定的な範囲
 
-- ファイル内容プレビュー、アプリ内編集、Git 連携、タブ機能、キーバインドカスタマイズは未実装
+- アプリ内編集、Git 連携、タブ並べ替え、キーバインドカスタマイズは未実装
 - Windows ネイティブ実行は依然として非対応で、設定上の `windows` キーは将来互換用
 - directory size 計算や archive 展開は可視対象数やアーカイブ内容に応じてコストが増えるため、runtime 側で cancel と進捗管理を前提にしている
 

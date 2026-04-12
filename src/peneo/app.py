@@ -47,10 +47,12 @@ from peneo.services import (
     LiveGrepSearchService,
     LiveShellCommandService,
     LiveSplitTerminalService,
+    LiveUndoService,
     LiveZipCompressService,
     ShellCommandService,
     SplitTerminalService,
     SplitTerminalSession,
+    UndoService,
     ZipCompressService,
     resolve_config_path,
 )
@@ -113,284 +115,7 @@ class PeneoApp(App[None]):
           for key in iter_bound_keys()
         ]
     ]
-    CSS = """
-    Screen {
-        layout: vertical;
-    }
-
-    #body {
-        height: 1fr;
-        layout: vertical;
-    }
-
-    #browser-row {
-        height: 1fr;
-        layout: horizontal;
-    }
-
-    .pane {
-        height: 1fr;
-        min-width: 20;
-        border: round $surface;
-        background: $boost;
-    }
-
-    .side-pane {
-        width: 0.6fr;
-    }
-
-    .main-pane {
-        width: 2.2fr;
-        min-width: 44;
-    }
-
-    #child-pane {
-        width: 2.2fr;
-    }
-
-    .pane-title {
-        height: 1;
-        padding: 0 1;
-        background: $surface;
-        color: $text-muted;
-        text-style: bold;
-    }
-
-    .pane-list,
-    .pane-preview,
-    .pane-table {
-        height: 1fr;
-    }
-
-    .pane-table {
-        scrollbar-size: 0 0;
-    }
-
-    .pane-preview {
-        overflow: hidden hidden;
-    }
-
-    .pane-entry {
-        padding: 0 1;
-    }
-
-    .pane-summary {
-        height: 1;
-        padding: 0 1;
-        background: $surface;
-        color: $text;
-    }
-
-    #current-path-bar,
-    #status-bar {
-        height: 1;
-        padding: 0 1;
-    }
-
-    #help-bar {
-        height: auto;
-        min-height: 1;
-        padding: 0 1;
-    }
-
-    #current-path-bar {
-        background: $boost;
-        color: $text;
-        text-style: bold;
-    }
-
-    #help-bar {
-        background: $panel;
-        color: $text-muted;
-    }
-
-    #command-palette {
-        display: none;
-        height: auto;
-        min-height: 8;
-        max-height: 1fr;
-        margin: 0 2;
-        padding: 0 1;
-        border: round $accent;
-        background: $surface;
-    }
-
-    #command-palette.-expanded {
-        height: 1fr;
-    }
-
-    #command-palette-title {
-        color: $accent;
-        text-style: bold;
-    }
-
-    #command-palette-query {
-        margin: 0 0 1 0;
-    }
-
-    #command-palette-items {
-        height: auto;
-        max-height: 1fr;
-    }
-
-    #command-palette.-expanded #command-palette-items {
-        height: 1fr;
-    }
-
-    #status-bar {
-        background: $surface;
-        color: $text;
-    }
-
-    .pane-context-input {
-        height: 1;
-        padding: 0 1;
-        background: $panel;
-        color: $text;
-        text-style: bold;
-    }
-
-    .overlay-layer {
-        display: none;
-        overlay: screen;
-        position: absolute;
-        offset: 0 0;
-        width: 1fr;
-        height: 1fr;
-    }
-
-    #command-palette-layer {
-        align-horizontal: center;
-    }
-
-    .dialog-layer {
-        align: center middle;
-    }
-
-    #conflict-dialog {
-        display: none;
-        height: auto;
-        min-height: 6;
-        margin: 0 2;
-        padding: 1 2;
-        border: round $warning;
-        background: $surface;
-    }
-
-    #conflict-dialog-title {
-        text-style: bold;
-        color: $warning;
-    }
-
-    #conflict-dialog-message {
-        margin: 0 0 1 0;
-    }
-
-    #conflict-dialog-options {
-        padding: 0 1;
-        background: $boost;
-        color: $warning;
-        text-style: bold;
-    }
-
-    #attribute-dialog {
-        display: none;
-        height: auto;
-        min-height: 8;
-        margin: 0 2;
-        padding: 1 2;
-        border: round $accent;
-        background: $surface;
-    }
-
-    #attribute-dialog-title {
-        text-style: bold;
-        color: $accent;
-    }
-
-    #attribute-dialog-lines {
-        margin: 0 0 1 0;
-    }
-
-    #attribute-dialog-options {
-        padding: 0 1;
-        background: $boost;
-        color: $accent;
-        text-style: bold;
-    }
-
-    #config-dialog {
-        display: none;
-        height: auto;
-        min-height: 10;
-        margin: 0 2;
-        padding: 1 2;
-        border: round $accent;
-        background: $surface;
-    }
-
-    #config-dialog-title {
-        text-style: bold;
-        color: $accent;
-    }
-
-    #config-dialog-lines {
-        margin: 0 0 1 0;
-    }
-
-    #config-dialog-options {
-        padding: 0 1;
-        background: $boost;
-        color: $accent;
-        text-style: bold;
-    }
-
-    #shell-command-dialog {
-        display: none;
-        height: auto;
-        min-height: 8;
-        margin: 0 2;
-        padding: 1 2;
-        border: round $accent;
-        background: $surface;
-    }
-
-    #shell-command-dialog-title {
-        text-style: bold;
-        color: $accent;
-    }
-
-    #shell-command-dialog-cwd {
-        color: $text-muted;
-    }
-
-    #shell-command-dialog-input {
-        margin: 1 0;
-    }
-
-    #shell-command-dialog-options {
-        padding: 0 1;
-        background: $boost;
-        color: $accent;
-        text-style: bold;
-    }
-
-    #split-terminal {
-        display: none;
-        height: 1fr;
-        min-height: 6;
-        border: round $accent;
-        background: $surface;
-    }
-
-    #split-terminal.-visible {
-        display: block;
-    }
-
-    #split-terminal.-focused {
-        border: round $success;
-    }
-    """
+    CSS_PATH = "app.tcss"
 
     def __init__(
         self,
@@ -406,6 +131,7 @@ class PeneoApp(App[None]):
         grep_search_service: GrepSearchService | None = None,
         shell_command_service: ShellCommandService | None = None,
         split_terminal_service: SplitTerminalService | None = None,
+        undo_service: UndoService | None = None,
         *,
         app_config: AppConfig | None = None,
         config_path: str | None = None,
@@ -444,6 +170,7 @@ class PeneoApp(App[None]):
         self._grep_search_service = grep_search_service or LiveGrepSearchService()
         self._shell_command_service = shell_command_service or LiveShellCommandService()
         self._split_terminal_service = split_terminal_service or LiveSplitTerminalService()
+        self._undo_service = undo_service or LiveUndoService()
         self._pending_workers: dict[str, Effect] = {}
         self._split_terminal_session: SplitTerminalSession | None = None
         self._child_pane_timer: Timer | None = None
@@ -590,12 +317,15 @@ class PeneoApp(App[None]):
         previous_state = self._app_state
         changed, effects = self._apply_actions(actions)
         sync_runtime_state(self, previous_state, self._app_state)
-        if previous_state.config.display.theme != self._app_state.config.display.theme:
+        theme_changed = (
+            previous_state.config.display.theme != self._app_state.config.display.theme
+        )
+        if theme_changed:
             self.theme = self._app_state.config.display.theme
         if previous_state.config != self._app_state.config:
             self._sync_external_launch_service()
-        if changed:
-            await self._refresh_shell()
+        if changed or theme_changed:
+            await self._refresh_shell(theme_changed=theme_changed)
         schedule_effects(self, effects)
 
     def _build_external_launch_service(self, app_config: AppConfig) -> LiveExternalLaunchService:
@@ -673,13 +403,14 @@ class PeneoApp(App[None]):
             return
         self.call_after_refresh(self._resize_split_terminal_session)
 
-    async def _refresh_shell(self) -> None:
+    async def _refresh_shell(self, *, theme_changed: bool = False) -> None:
         try:
             await refresh_shell(
                 self,
                 self._app_state,
                 select_shell_data(self._app_state),
                 self._split_terminal_session,
+                theme_changed=theme_changed,
             )
             self.call_after_refresh(self._sync_overlay_layout)
         except ScreenStackError:
@@ -712,6 +443,7 @@ def create_app(
     grep_search_service: GrepSearchService | None = None,
     shell_command_service: ShellCommandService | None = None,
     split_terminal_service: SplitTerminalService | None = None,
+    undo_service: UndoService | None = None,
     *,
     app_config: AppConfig | None = None,
     config_path: str | None = None,
@@ -738,6 +470,7 @@ def create_app(
         grep_search_service=grep_search_service,
         shell_command_service=shell_command_service,
         split_terminal_service=split_terminal_service,
+        undo_service=undo_service,
         app_config=app_config,
         config_path=config_path,
         startup_notification=startup_notification,
