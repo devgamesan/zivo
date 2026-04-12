@@ -63,6 +63,12 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 
   ![](docs/resources/screen-terminal-editor.png)
 
+- Multiple themes are available so you can choose your preferred look.
+
+  ![](docs/resources/screen-theme1.png)
+
+  ![](docs/resources/screen-theme2.png)
+
 - Files and directories can be opened with the OS default application. For example, you can open the current directory in the OS file manager, open a file in VS Code if it is associated on the OS side, or launch an external terminal window rooted at the current directory.
 
 ## Keybindings

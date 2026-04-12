@@ -63,6 +63,12 @@ Peneo は、操作を覚えなくてもすぐに使える TUI ファイルマネ
 
   ![](docs/resources/screen-terminal-editor.png)
 
+- 複数のテーマからお好みの見た目を選択することが可能です。
+
+  ![](docs/resources/screen-theme1.png)
+
+  ![](docs/resources/screen-theme2.png)
+
 - ファイルやディレクトリは OS の既定アプリで開けます。例えば、カレントディレクトリを OS のファイルマネージャで開いたり、OS 側の関連付けに応じてファイルを VS Code などで開いたりできます。また、既定のターミナルを別ウィンドウで起動することもできます。
 
 ## キーバインディング
