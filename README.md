@@ -71,6 +71,123 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 
 - Files and directories can be opened with the OS default application. For example, you can open the current directory in the OS file manager, open a file in VS Code if it is associated on the OS side, or launch an external terminal window rooted at the current directory.
 
+## Supported OS
+
+| OS | Support Status | Notes |
+| --- | --- | --- |
+| Ubuntu | Supported | Primary verified environment at the moment. |
+| Ubuntu (WSL) | Supported | WSL running Ubuntu is part of the verified environments. |
+| macOS | Not supported at this time | Some fallback implementations exist, but it is not a formally verified target yet. |
+| Windows | Not supported at this time | Native Windows runtime is not supported. |
+
+## Installation
+
+### Prerequisites: Install uv
+
+Peneo uses [uv](https://docs.astral.sh/uv/) as the package manager. If you don't have it yet, install it first:
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+For other installation methods, see the [uv official documentation](https://docs.astral.sh/uv/getting-started/installation/).
+
+### Install from PyPI
+
+With `uv` installed, install Peneo directly from PyPI.
+
+```bash
+uv tool install peneo
+```
+
+### Install from repository
+
+Alternatively, clone the repository and install Peneo as a tool.
+
+```bash
+git clone https://github.com/devgamesan/peneo.git
+cd peneo
+uv tool install --from . peneo
+```
+
+To update, pull the latest changes and run the same install command again.
+
+### Dependencies
+
+Peneo itself can be installed and started with `uv`, but some features depend on external commands being available on `PATH`. The required tools vary by OS or environment.
+
+#### Ubuntu / Debian
+
+- For grep search (`g`): `ripgrep` (`rg`)
+- For copy path (`C`):
+  - X11: `xclip`
+  - Wayland: `wl-copy`
+
+Install example:
+
+```bash
+sudo apt install ripgrep xclip
+```
+
+Wayland example:
+
+```bash
+sudo apt install ripgrep wl-clipboard
+```
+
+#### Ubuntu (WSL)
+
+- For grep search (`g`): `ripgrep` (`rg`)
+- For copy path (`C`):
+  - `clip.exe` is usually available
+  - Linux-side `xclip` / `wl-copy` can also be used when needed
+- `wslu` is recommended for GUI bridge commands such as `wslview`
+
+Install example:
+
+```bash
+sudo apt install ripgrep wslu
+```
+
+#### macOS
+
+- For grep search (`g`): `ripgrep` (`rg`)
+- For copy path (`C`): the built-in `pbcopy`
+
+Install example:
+
+```bash
+brew install ripgrep
+```
+
+#### Windows
+
+- Not supported at this time
+- Dependency guidance for native Windows runtime is out of scope
+
+## Run
+
+```bash
+peneo
+```
+
+`peneo` itself cannot change the current directory of the parent shell. If you want your shell to follow the last directory you visited after quitting Peneo, add shell integration first:
+
+```bash
+eval "$(peneo init bash)"  # for bash
+eval "$(peneo init zsh)"   # for zsh
+```
+
+This defines a shell function named `peneo-cd`. Start Peneo with `peneo-cd` when you want the parent shell to `cd` into the last directory on exit:
+
+```bash
+peneo-cd
+```
+
+Use plain `peneo` when you only want to browse without changing the shell's working directory.
+
+When a file is focused, press `e` to switch into a terminal editor in the current terminal session. Peneo prefers `config.toml` `editor.command` when set, then falls back to `$EDITOR`, then built-in defaults such as `nvim`, `vim`, or `nano`.
+
 ## Keybindings
 
 ### Normal Mode
@@ -195,112 +312,45 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 | `Enter` / `Esc` | Confirm or cancel trash / permanent delete |
 | `o` / `s` / `r` / `Esc` | Resolve a paste conflict with overwrite / skip / rename / cancel |
 
-## Supported OS
+## Command Palette
 
-| OS | Support Status | Notes |
+Less frequent actions are grouped in the command palette opened with `:`.
+The tab strip is only shown when two or more browser tabs are open.
+
+| Command | Shown when | Behavior / Notes |
 | --- | --- | --- |
-| Ubuntu | Supported | Primary verified environment at the moment. |
-| Ubuntu (WSL) | Supported | WSL running Ubuntu is part of the verified environments. |
-| macOS | Not supported at this time | Some fallback implementations exist, but it is not a formally verified target yet. |
-| Windows | Not supported at this time | Native Windows runtime is not supported. |
-
-## Installation
-
-### Install from PyPI
-
-With `uv` installed, install Peneo directly from PyPI.
-
-```bash
-uv tool install peneo
-```
-
-### Install from repository
-
-Alternatively, clone the repository and install Peneo as a tool.
-
-```bash
-git clone https://github.com/devgamesan/peneo.git
-cd peneo
-uv tool install --from . peneo
-```
-
-### Dependencies
-
-Peneo itself can be installed and started with `uv`, but some features depend on external commands being available on `PATH`. The required tools vary by OS or environment.
-
-#### Ubuntu / Debian
-
-- For grep search (`g`): `ripgrep` (`rg`)
-- For copy path (`C`):
-  - X11: `xclip`
-  - Wayland: `wl-copy`
-
-Install example:
-
-```bash
-sudo apt install ripgrep xclip
-```
-
-Wayland example:
-
-```bash
-sudo apt install ripgrep wl-clipboard
-```
-
-#### Ubuntu (WSL)
-
-- For grep search (`g`): `ripgrep` (`rg`)
-- For copy path (`C`):
-  - `clip.exe` is usually available
-  - Linux-side `xclip` / `wl-copy` can also be used when needed
-- `wslu` is recommended for GUI bridge commands such as `wslview`
-
-Install example:
-
-```bash
-sudo apt install ripgrep wslu
-```
-
-#### macOS
-
-- For grep search (`g`): `ripgrep` (`rg`)
-- For copy path (`C`): the built-in `pbcopy`
-
-Install example:
-
-```bash
-brew install ripgrep
-```
-
-#### Windows
-
-- Not supported at this time
-- Dependency guidance for native Windows runtime is out of scope
-
-To update, pull the latest changes and run the same install command again.
-
-## Run
-
-```bash
-peneo
-```
-
-`peneo` itself cannot change the current directory of the parent shell. If you want your shell to follow the last directory you visited after quitting Peneo, add shell integration first:
-
-```bash
-eval "$(peneo init bash)"  # for bash
-eval "$(peneo init zsh)"   # for zsh
-```
-
-This defines a shell function named `peneo-cd`. Start Peneo with `peneo-cd` when you want the parent shell to `cd` into the last directory on exit:
-
-```bash
-peneo-cd
-```
-
-Use plain `peneo` when you only want to browse without changing the shell's working directory.
-
-When a file is focused, press `e` to switch into a terminal editor in the current terminal session. Peneo prefers `config.toml` `editor.command` when set, then falls back to `$EDITOR`, then built-in defaults such as `nvim`, `vim`, or `nano`.
+| `New tab` | Always | Opens a new browser tab initialized from the current directory. Also available with `o`. |
+| `Next tab` | Two or more tabs are open | Activates the next browser tab. Also available with `tab`. |
+| `Previous tab` | Two or more tabs are open | Activates the previous browser tab. Also available with `shift+tab`. |
+| `Close current tab` | Two or more tabs are open | Closes the active browser tab. The last remaining tab cannot be closed. Also available with `w`. |
+| `Find files` | Always | Opens recursive file search. |
+| `Grep search` | Always | Opens recursive grep search (`ripgrep` / `rg` required on `PATH`). |
+| `History search` | Always | Opens directory history list and jump to a selected directory. |
+| `Show bookmarks` | Always | Opens the saved bookmark list and jumps to the selected directory. |
+| `Go back` | Directory history has a previous entry | Moves to the previous directory in history. |
+| `Go forward` | Directory history has a forward entry | Moves to the next directory in history. |
+| `Go to path` | Always | Opens go-to-path input to navigate to a specific path, shows matching directories, and supports `Tab` completion for the selected candidate. |
+| `Go to home directory` | Always | Navigates to the home directory. |
+| `Reload directory` | Always | Reloads the current directory. |
+| `Undo last file operation` | Undo history is not empty | Reverses the most recent undoable rename, paste, or trash operation. Also available with `z`. Trash restore is currently Linux-only. |
+| `Toggle split terminal` | Always | Opens or closes the embedded split terminal. |
+| `Select all` | Current directory has at least one visible entry | Selects every currently visible entry in the current directory, respecting hidden-file visibility and any active filter. |
+| `Show attributes` | Exactly one target is selected or focused | Opens the read-only attribute dialog for the selected item. Also available with `i`. |
+| `Rename` | Exactly one target is selected or focused | Starts rename input for a single target. |
+| `Compress as zip` | At least one target is selected or focused | Starts zip compression for the selected items, or the focused item when nothing is selected. The destination input accepts absolute and relative paths resolved from the current directory, defaults to a `.zip` path next to the selected content, and asks for confirmation before overwriting an existing zip file. |
+| `Extract archive` | Exactly one supported archive file is selected or focused | Starts archive extraction for `.zip`, `.tar`, `.tar.gz`, or `.tar.bz2`. The destination input accepts absolute and relative paths. Relative paths are resolved from the archive file's parent directory, and the default value is a same-name directory next to the archive. Existing destination paths are confirmed before extraction, and the status bar shows entry-count progress while the extraction runs. |
+| `Open in editor` | Exactly one file is selected or focused | Opens the focused file in a terminal editor, using `editor.command` -> `$EDITOR` -> built-in defaults. |
+| `Copy path` | At least one target is selected or focused | Copies the selected path list, or the focused path when nothing is selected, to the system clipboard. Also available with `C`. |
+| `Move to trash` | At least one target is selected or focused | Moves the selected items, or the focused item, to trash (confirmation is enabled by default and can be configured). |
+| `Empty trash` | Always (Linux/macOS only) | Permanently deletes all items from the trash. Shows a confirmation dialog before emptying. Not available on Windows. |
+| `Open in file manager` | Always | Opens the current directory in the OS file manager. Also available with `m`. |
+| `Open terminal` | Always | Launches an external terminal rooted at the current directory, using `config.toml` templates before built-in fallbacks. Also available with `T`. |
+| `Run shell command` | Always | Opens a one-line shell command dialog, runs the command in the current directory in the background, and returns the first output line or failure summary in the status bar. Also available with `!`. |
+| `Bookmark this directory` / `Remove bookmark` | Always | Saves or removes the current directory in `[bookmarks].paths`. The label reflects whether the current directory is already bookmarked. Also available with `B`. |
+| `Show hidden files` / `Hide hidden files` | Always | Toggles hidden-file visibility for the browser panes. The label reflects the current visibility state. Also available with `.`. |
+| `Edit config` | Always | Opens the settings overlay for startup defaults. You can edit the preferred terminal editor, hidden-file visibility, directory-size visibility, text preview visibility, theme, sorting, default paste-conflict behavior, and delete confirmation. Theme changes are previewed immediately. Use `↑` / `↓` or `Ctrl+n` / `Ctrl+p` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
+| `Create file` | Always | Starts the inline create-file flow in the current directory. |
+| `Create directory` | Always | Starts the inline create-directory flow in the current directory. |
 
 ## Configuration File
 
@@ -374,46 +424,6 @@ Invalid config values do not stop startup. Peneo falls back to built-in defaults
 When logging is enabled, startup failures and unhandled exceptions are appended to the configured log file for later investigation.
 The accepted `display.theme` values come from the built-in themes shipped with the installed Textual version.
 The accepted `display.preview_syntax_theme` values are `auto` plus the Pygments styles available in the installed environment.
-
-## Command Palette
-
-Less frequent actions are grouped in the command palette opened with `:`.
-The tab strip is only shown when two or more browser tabs are open.
-
-| Command | Shown when | Behavior / Notes |
-| --- | --- | --- |
-| `New tab` | Always | Opens a new browser tab initialized from the current directory. Also available with `o`. |
-| `Next tab` | Two or more tabs are open | Activates the next browser tab. Also available with `tab`. |
-| `Previous tab` | Two or more tabs are open | Activates the previous browser tab. Also available with `shift+tab`. |
-| `Close current tab` | Two or more tabs are open | Closes the active browser tab. The last remaining tab cannot be closed. Also available with `w`. |
-| `Find files` | Always | Opens recursive file search. |
-| `Grep search` | Always | Opens recursive grep search (`ripgrep` / `rg` required on `PATH`). |
-| `History search` | Always | Opens directory history list and jump to a selected directory. |
-| `Show bookmarks` | Always | Opens the saved bookmark list and jumps to the selected directory. |
-| `Go back` | Directory history has a previous entry | Moves to the previous directory in history. |
-| `Go forward` | Directory history has a forward entry | Moves to the next directory in history. |
-| `Go to path` | Always | Opens go-to-path input to navigate to a specific path, shows matching directories, and supports `Tab` completion for the selected candidate. |
-| `Go to home directory` | Always | Navigates to the home directory. |
-| `Reload directory` | Always | Reloads the current directory. |
-| `Undo last file operation` | Undo history is not empty | Reverses the most recent undoable rename, paste, or trash operation. Also available with `z`. Trash restore is currently Linux-only. |
-| `Toggle split terminal` | Always | Opens or closes the embedded split terminal. |
-| `Select all` | Current directory has at least one visible entry | Selects every currently visible entry in the current directory, respecting hidden-file visibility and any active filter. |
-| `Show attributes` | Exactly one target is selected or focused | Opens the read-only attribute dialog for the selected item. Also available with `i`. |
-| `Rename` | Exactly one target is selected or focused | Starts rename input for a single target. |
-| `Compress as zip` | At least one target is selected or focused | Starts zip compression for the selected items, or the focused item when nothing is selected. The destination input accepts absolute and relative paths resolved from the current directory, defaults to a `.zip` path next to the selected content, and asks for confirmation before overwriting an existing zip file. |
-| `Extract archive` | Exactly one supported archive file is selected or focused | Starts archive extraction for `.zip`, `.tar`, `.tar.gz`, or `.tar.bz2`. The destination input accepts absolute and relative paths. Relative paths are resolved from the archive file's parent directory, and the default value is a same-name directory next to the archive. Existing destination paths are confirmed before extraction, and the status bar shows entry-count progress while the extraction runs. |
-| `Open in editor` | Exactly one file is selected or focused | Opens the focused file in a terminal editor, using `editor.command` -> `$EDITOR` -> built-in defaults. |
-| `Copy path` | At least one target is selected or focused | Copies the selected path list, or the focused path when nothing is selected, to the system clipboard. Also available with `C`. |
-| `Move to trash` | At least one target is selected or focused | Moves the selected items, or the focused item, to trash (confirmation is enabled by default and can be configured). |
-| `Empty trash` | Always (Linux/macOS only) | Permanently deletes all items from the trash. Shows a confirmation dialog before emptying. Not available on Windows. |
-| `Open in file manager` | Always | Opens the current directory in the OS file manager. Also available with `m`. |
-| `Open terminal` | Always | Launches an external terminal rooted at the current directory, using `config.toml` templates before built-in fallbacks. Also available with `T`. |
-| `Run shell command` | Always | Opens a one-line shell command dialog, runs the command in the current directory in the background, and returns the first output line or failure summary in the status bar. Also available with `!`. |
-| `Bookmark this directory` / `Remove bookmark` | Always | Saves or removes the current directory in `[bookmarks].paths`. The label reflects whether the current directory is already bookmarked. Also available with `B`. |
-| `Show hidden files` / `Hide hidden files` | Always | Toggles hidden-file visibility for the browser panes. The label reflects the current visibility state. Also available with `.`. |
-| `Edit config` | Always | Opens the settings overlay for startup defaults. You can edit the preferred terminal editor, hidden-file visibility, directory-size visibility, text preview visibility, theme, sorting, default paste-conflict behavior, and delete confirmation. Theme changes are previewed immediately. Use `↑` / `↓` or `Ctrl+n` / `Ctrl+p` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
-| `Create file` | Always | Starts the inline create-file flow in the current directory. |
-| `Create directory` | Always | Starts the inline create-directory flow in the current directory. |
 
 ## Notes
 
