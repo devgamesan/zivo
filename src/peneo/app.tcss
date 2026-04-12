@@ -153,6 +153,10 @@ Screen {
     align-horizontal: center;
 }
 
+#config-dialog-layer {
+    align-horizontal: center;
+}
+
 .dialog-layer {
     align: center middle;
 }

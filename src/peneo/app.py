@@ -261,6 +261,23 @@ class PeneoApp(App[None]):
         command_palette_layer.styles.height = region.height
         command_palette_layer.styles.offset = (region.x, max(0, region.y - 1))
 
+    def _update_config_dialog_geometry(self) -> None:
+        """Constrain the config dialog overlay to the current pane."""
+
+        try:
+            config_dialog_layer = self.query_one("#config-dialog-layer", Container)
+            current_pane = self.query_one("#current-pane", MainPane)
+        except NoMatches:
+            return
+
+        region = current_pane.region
+        if region.width <= 0 or region.height <= 0:
+            return
+
+        config_dialog_layer.styles.width = region.width
+        config_dialog_layer.styles.height = region.height
+        config_dialog_layer.styles.offset = (region.x, max(0, region.y - 1))
+
     async def on_mount(self) -> None:
         """Load the initial directory snapshot after the UI mounts."""
 
@@ -421,6 +438,7 @@ class PeneoApp(App[None]):
 
         self._update_pane_visibility(self.size.width if width is None else width)
         self._update_command_palette_geometry()
+        self._update_config_dialog_geometry()
 
     def _resize_split_terminal_session(self) -> None:
         resize_split_terminal_session(
