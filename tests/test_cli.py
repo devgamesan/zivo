@@ -35,7 +35,7 @@ class DummyTextStream(io.StringIO):
         return self._isatty
 
 
-def test_render_shell_init_outputs_peneo_cd_function() -> None:
+def test_render_shell_init_outputs_zivo_cd_function() -> None:
     output = cli.render_shell_init("bash")
 
     assert "zivo-cd()" in output
@@ -198,7 +198,7 @@ def test_main_passes_loaded_config_and_warnings_to_create_app(monkeypatch) -> No
     app = DummyApp()
     loaded_config = AppConfig(
         behavior=BehaviorConfig(confirm_delete=False),
-        logging=LoggingConfig(path="/tmp/custom-peneo.log"),
+        logging=LoggingConfig(path="/tmp/custom-zivo.log"),
     )
     captured_kwargs: dict[str, object] = {}
     captured_logging_kwargs: dict[str, object] = {}
@@ -214,7 +214,7 @@ def test_main_passes_loaded_config_and_warnings_to_create_app(monkeypatch) -> No
 
     def fake_configure_file_logging(**kwargs):
         captured_logging_kwargs.update(kwargs)
-        return LoggingSetupResult(enabled=True, path="/tmp/custom-peneo.log")
+        return LoggingSetupResult(enabled=True, path="/tmp/custom-zivo.log")
 
     monkeypatch.setattr(cli, "configure_file_logging", fake_configure_file_logging)
 

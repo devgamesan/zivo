@@ -57,7 +57,7 @@ def test_live_browser_snapshot_loader_uses_cursor_path_for_child_pane(tmp_path) 
     docs.mkdir()
     src = project / "src"
     src.mkdir()
-    (src / "main.py").write_text("print('peneo')\n", encoding="utf-8")
+    (src / "main.py").write_text("print('zivo')\n", encoding="utf-8")
 
     loader = LiveBrowserSnapshotLoader()
 

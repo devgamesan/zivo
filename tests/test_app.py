@@ -672,7 +672,7 @@ async def _wait_for_child_pane_runtime_idle(app, timeout: float = 0.5) -> None:
         await asyncio.sleep(0.01)
 
 
-def test_create_app_returns_peneo_app() -> None:
+def test_create_app_returns_zivo_app() -> None:
     app = create_app()
 
     assert app.title == "zivo"
@@ -928,11 +928,25 @@ async def test_app_renders_loaded_three_pane_shell() -> None:
     child_entries = (DirectoryEntryState(f"{path}/docs/spec.md", "spec.md", "file"),)
     loader = FakeBrowserSnapshotLoader(
         snapshots={
-            path: _build_snapshot(
-                path,
-                current_entries,
-                child_path=f"{path}/docs",
-                child_entries=child_entries,
+            path: BrowserSnapshot(
+                current_path=path,
+                parent_pane=PaneState(
+                    directory_path="/tmp",
+                    entries=(
+                        DirectoryEntryState(path, "zivo-app", "dir"),
+                        DirectoryEntryState("/tmp/sibling", "sibling", "dir"),
+                    ),
+                    cursor_path=path,
+                ),
+                current_pane=PaneState(
+                    directory_path=path,
+                    entries=current_entries,
+                    cursor_path=current_entries[0].path,
+                ),
+                child_pane=PaneState(
+                    directory_path=f"{path}/docs",
+                    entries=child_entries,
+                ),
             )
         }
     )
@@ -1007,7 +1021,7 @@ async def test_app_renders_text_preview_in_child_pane_for_file_cursor() -> None:
                 parent_pane=PaneState(
                     directory_path="/tmp",
                     entries=(
-                        DirectoryEntryState(path, "peneo-preview", "dir"),
+                        DirectoryEntryState(path, "zivo-preview", "dir"),
                         DirectoryEntryState("/tmp/sibling", "sibling", "dir"),
                     ),
                     cursor_path=path,
@@ -1052,7 +1066,7 @@ async def test_app_hides_text_preview_in_child_pane_when_preview_disabled() -> N
                 parent_pane=PaneState(
                     directory_path="/tmp",
                     entries=(
-                        DirectoryEntryState(path, "peneo-preview-disabled", "dir"),
+                        DirectoryEntryState(path, "zivo-preview-disabled", "dir"),
                         DirectoryEntryState("/tmp/sibling", "sibling", "dir"),
                     ),
                     cursor_path=path,
@@ -1101,7 +1115,7 @@ async def test_app_updates_child_preview_when_cursor_moves_between_files() -> No
                 parent_pane=PaneState(
                     directory_path="/tmp",
                     entries=(
-                        DirectoryEntryState(path, "peneo-preview-switch", "dir"),
+                        DirectoryEntryState(path, "zivo-preview-switch", "dir"),
                         DirectoryEntryState("/tmp/sibling", "sibling", "dir"),
                     ),
                     cursor_path=path,
@@ -1168,7 +1182,7 @@ async def test_app_renders_preview_message_for_unsupported_file_cursor() -> None
                 parent_pane=PaneState(
                     directory_path="/tmp",
                     entries=(
-                        DirectoryEntryState(path, "peneo-preview-unsupported", "dir"),
+                        DirectoryEntryState(path, "zivo-preview-unsupported", "dir"),
                         DirectoryEntryState("/tmp/sibling", "sibling", "dir"),
                     ),
                     cursor_path=path,
@@ -1211,7 +1225,7 @@ async def test_app_renders_preview_message_for_permission_denied_file_cursor() -
                 parent_pane=PaneState(
                     directory_path="/tmp",
                     entries=(
-                        DirectoryEntryState(path, "peneo-preview-permission-denied", "dir"),
+                        DirectoryEntryState(path, "zivo-preview-permission-denied", "dir"),
                         DirectoryEntryState("/tmp/sibling", "sibling", "dir"),
                     ),
                     cursor_path=path,
@@ -1780,7 +1794,7 @@ async def test_app_left_can_move_above_initial_directory() -> None:
         DirectoryEntryState(f"{parent_path}/sibling", "sibling", "dir"),
     )
     grandparent_entries = (
-        DirectoryEntryState(parent_path, "peneo-nav", "dir"),
+        DirectoryEntryState(parent_path, "zivo-nav", "dir"),
         DirectoryEntryState("/tmp/other", "other", "dir"),
     )
     loader = FakeBrowserSnapshotLoader(
@@ -4655,7 +4669,7 @@ async def test_app_sort_shortcuts_keep_side_panes_fixed_and_update_status_bar() 
             entries=(
                 DirectoryEntryState(f"{parent_path}/beta.txt", "beta.txt", "file"),
                 DirectoryEntryState(f"{parent_path}/alpha", "alpha", "dir"),
-                DirectoryEntryState(path, "peneo-sort-shortcuts", "dir"),
+                DirectoryEntryState(path, "zivo-sort-shortcuts", "dir"),
             ),
             cursor_path=path,
         ),
@@ -4696,7 +4710,7 @@ async def test_app_sort_shortcuts_keep_side_panes_fixed_and_update_status_bar() 
         assert app.app_state.sort.directories_first is False
         assert _side_pane_lines(parent_list) == [
             "alpha",
-            "peneo-sort-shortcuts",
+            "zivo-sort-shortcuts",
             "beta.txt",
         ]
         assert _side_pane_lines(child_list) == [
