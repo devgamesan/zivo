@@ -22,10 +22,10 @@ jobs:
         run: uv sync --dev
 
       - name: Prepare temp directory
-        run: mkdir -p "$RUNNER_TEMP/peneo-tmp"
+        run: mkdir -p "$RUNNER_TEMP/zivo-tmp"
 
       - name: Lint
         run: uv run ruff check .
 
       - name: Test
-        run: TMPDIR="$RUNNER_TEMP/peneo-tmp" uv run pytest
+        run: TMPDIR="$RUNNER_TEMP/zivo-tmp" uv run pytest

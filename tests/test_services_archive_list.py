@@ -4,7 +4,7 @@ from io import BytesIO
 
 import pytest
 
-from peneo.services import LiveArchiveListService
+from zivo.services import LiveArchiveListService
 
 
 def _create_zip_archive(path) -> None:

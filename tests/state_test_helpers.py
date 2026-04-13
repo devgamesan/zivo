@@ -2,7 +2,7 @@ from collections.abc import Iterable
 from dataclasses import replace
 from pathlib import Path
 
-from peneo.state import DirectoryEntryState, PaneState, reduce_app_state
+from zivo.state import DirectoryEntryState, PaneState, reduce_app_state
 
 
 def reduce_state(state, action):

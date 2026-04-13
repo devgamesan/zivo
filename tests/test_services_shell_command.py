@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from peneo.services import LiveShellCommandService
+from zivo.services import LiveShellCommandService
 
 
 def test_live_shell_command_service_executes_in_cwd(tmp_path: Path) -> None:

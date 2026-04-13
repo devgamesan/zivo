@@ -2,7 +2,7 @@ import shutil
 
 import pytest
 
-from peneo.services import InvalidGrepSearchQueryError, LiveGrepSearchService
+from zivo.services import InvalidGrepSearchQueryError, LiveGrepSearchService
 
 skip_if_no_rg = pytest.mark.skipif(
     shutil.which("rg") is None,

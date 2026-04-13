@@ -8,7 +8,7 @@ from typing import Any
 from textual.app import SuspendNotSupported
 from textual.worker import WorkerState
 
-from peneo.app_runtime import (
+from zivo.app_runtime import (
     cancel_pending_child_pane,
     cancel_pending_directory_size,
     cancel_pending_file_search,
@@ -28,9 +28,9 @@ from peneo.app_runtime import (
     start_split_terminal,
     write_split_terminal_input,
 )
-from peneo.models import AppConfig, ExternalLaunchRequest, UndoDeletePathStep, UndoEntry, UndoResult
-from peneo.services import InvalidFileSearchQueryError
-from peneo.state import (
+from zivo.models import AppConfig, ExternalLaunchRequest, UndoDeletePathStep, UndoEntry, UndoResult
+from zivo.services import InvalidFileSearchQueryError
+from zivo.state import (
     BrowserSnapshot,
     BrowserSnapshotLoaded,
     ChildPaneSnapshotLoaded,

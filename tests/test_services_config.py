@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from peneo.models import (
+from zivo.models import (
     AppConfig,
     BehaviorConfig,
     BookmarkConfig,
@@ -9,8 +9,8 @@ from peneo.models import (
     LoggingConfig,
     TerminalConfig,
 )
-from peneo.services.config import AppConfigLoader, LiveConfigSaveService, resolve_config_path
-from peneo.theme_support import SUPPORTED_APP_THEMES, SUPPORTED_PREVIEW_SYNTAX_THEMES
+from zivo.services.config import AppConfigLoader, LiveConfigSaveService, resolve_config_path
+from zivo.theme_support import SUPPORTED_APP_THEMES, SUPPORTED_PREVIEW_SYNTAX_THEMES
 
 
 def test_resolve_config_path_uses_xdg_directory(tmp_path) -> None:
@@ -20,7 +20,7 @@ def test_resolve_config_path_uses_xdg_directory(tmp_path) -> None:
         home_directory_resolver=lambda: Path("/unused-home"),
     )
 
-    assert path == tmp_path / "peneo" / "config.toml"
+    assert path == tmp_path / "zivo" / "config.toml"
 
 
 def test_loader_creates_default_config_when_missing(tmp_path) -> None:
@@ -75,7 +75,7 @@ def test_loader_reads_valid_config_values(tmp_path) -> None:
 
         [logging]
         enabled = false
-        path = "~/logs/peneo.log"
+        path = "~/logs/zivo.log"
 
         [bookmarks]
         paths = ["/tmp/project", "~/notes", "/tmp/project"]
@@ -101,7 +101,7 @@ def test_loader_reads_valid_config_values(tmp_path) -> None:
     assert result.config.behavior.confirm_delete is False
     assert result.config.behavior.paste_conflict_action == "rename"
     assert result.config.logging.enabled is False
-    assert result.config.logging.path == "~/logs/peneo.log"
+    assert result.config.logging.path == "~/logs/zivo.log"
     assert result.config.bookmarks.paths == ("/tmp/project", str((Path.home() / "notes").resolve()))
 
 
@@ -175,7 +175,7 @@ def test_loader_warns_for_invalid_editor_command_syntax(tmp_path) -> None:
 
 
 def test_config_save_service_writes_normalized_config_file(tmp_path) -> None:
-    config_path = tmp_path / "peneo" / "config.toml"
+    config_path = tmp_path / "zivo" / "config.toml"
     service = LiveConfigSaveService()
 
     saved_path = service.save(
@@ -200,7 +200,7 @@ def test_config_save_service_writes_normalized_config_file(tmp_path) -> None:
             ),
             logging=LoggingConfig(
                 enabled=False,
-                path="/tmp/peneo-errors.log",
+                path="/tmp/zivo-errors.log",
             ),
             bookmarks=BookmarkConfig(paths=("/tmp/project", "/tmp/docs")),
         ),
@@ -221,7 +221,7 @@ def test_config_save_service_writes_normalized_config_file(tmp_path) -> None:
     assert "confirm_delete = false" in written
     assert 'paste_conflict_action = "rename"' in written
     assert "enabled = false" in written
-    assert 'path = "/tmp/peneo-errors.log"' in written
+    assert 'path = "/tmp/zivo-errors.log"' in written
     assert 'paths = ["/tmp/project", "/tmp/docs"]' in written
     assert "grep_preview_context_lines = 7" in written
 

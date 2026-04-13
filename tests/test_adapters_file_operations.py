@@ -1,7 +1,7 @@
 import pytest
 
-from peneo.adapters import LocalFileOperationAdapter
-from peneo.adapters import file_operations as file_operations_module
+from zivo.adapters import LocalFileOperationAdapter
+from zivo.adapters import file_operations as file_operations_module
 
 
 def test_local_file_operation_adapter_copies_file_contents(tmp_path) -> None:

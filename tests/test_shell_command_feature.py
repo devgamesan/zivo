@@ -1,8 +1,8 @@
 from dataclasses import replace
 
-from peneo.app_runtime import complete_worker_actions, failed_worker_actions
-from peneo.models import ShellCommandResult
-from peneo.state import (
+from zivo.app_runtime import complete_worker_actions, failed_worker_actions
+from zivo.models import ShellCommandResult
+from zivo.state import (
     BeginCommandPalette,
     BeginShellCommandInput,
     CancelShellCommandInput,
@@ -64,7 +64,7 @@ def test_submit_command_palette_opens_shell_command_dialog() -> None:
 
     assert result.state.ui_mode == "SHELL"
     assert result.state.shell_command == ShellCommandState(
-        cwd="/home/tadashi/develop/peneo",
+        cwd="/home/tadashi/develop/zivo",
         command="",
     )
 
@@ -92,7 +92,7 @@ def test_submit_shell_command_emits_worker_effect() -> None:
     assert result.effects == (
         RunShellCommandEffect(
             request_id=1,
-            cwd="/home/tadashi/develop/peneo",
+            cwd="/home/tadashi/develop/zivo",
             command="pwd",
         ),
     )

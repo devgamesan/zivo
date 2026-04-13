@@ -4,8 +4,8 @@ from io import BytesIO
 
 import pytest
 
-from peneo.models import ExtractArchiveRequest
-from peneo.services import LiveArchiveExtractService
+from zivo.models import ExtractArchiveRequest
+from zivo.services import LiveArchiveExtractService
 
 
 def _create_zip_archive(path) -> None:

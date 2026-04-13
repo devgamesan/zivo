@@ -1,7 +1,7 @@
 import zipfile
 
-from peneo.models import CreateZipArchiveRequest
-from peneo.services import LiveZipCompressService
+from zivo.models import CreateZipArchiveRequest
+from zivo.services import LiveZipCompressService
 
 
 def test_zip_compress_service_creates_archive_for_selected_targets(tmp_path) -> None:

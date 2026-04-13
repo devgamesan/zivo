@@ -2,14 +2,14 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from peneo.models import (
+from zivo.models import (
     TrashRestoreRecord,
     UndoDeletePathStep,
     UndoEntry,
     UndoMovePathStep,
     UndoRestoreTrashStep,
 )
-from peneo.services.undo_operations import LiveUndoService
+from zivo.services.undo_operations import LiveUndoService
 
 
 @dataclass

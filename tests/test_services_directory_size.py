@@ -1,4 +1,4 @@
-from peneo.services.directory_size import FakeDirectorySizeService, LiveDirectorySizeService
+from zivo.services.directory_size import FakeDirectorySizeService, LiveDirectorySizeService
 
 
 class StubDirectorySizeReader:
