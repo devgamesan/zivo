@@ -3,7 +3,7 @@ import time
 
 import pytest
 
-from peneo.services import LiveSplitTerminalService
+from zivo.services import LiveSplitTerminalService
 
 
 def test_live_split_terminal_service_starts_and_echoes_input(tmp_path) -> None:

@@ -1,14 +1,14 @@
 import logging
 from pathlib import Path
 
-from peneo.models import LoggingConfig
-from peneo.services.logging import configure_file_logging, resolve_default_log_path
+from zivo.models import LoggingConfig
+from zivo.services.logging import configure_file_logging, resolve_default_log_path
 
 
 def test_resolve_default_log_path_uses_config_directory() -> None:
-    path = resolve_default_log_path("/tmp/peneo/config.toml")
+    path = resolve_default_log_path("/tmp/zivo/config.toml")
 
-    assert path == Path("/tmp/peneo/peneo.log")
+    assert path == Path("/tmp/zivo/zivo.log")
 
 
 def test_configure_file_logging_writes_error_entries(tmp_path) -> None:
@@ -16,10 +16,10 @@ def test_configure_file_logging_writes_error_entries(tmp_path) -> None:
     result = configure_file_logging(
         config=config,
         config_path=str(tmp_path / "config.toml"),
-        logger_name="peneo.test.logging",
+        logger_name="zivo.test..logging",
     )
 
-    logger = logging.getLogger("peneo.test.logging")
+    logger = logging.getLogger("zivo.test..logging")
     logger.error("test failure")
     for handler in logger.handlers:
         handler.flush()
@@ -34,7 +34,7 @@ def test_configure_file_logging_uses_explicit_path(tmp_path) -> None:
     result = configure_file_logging(
         config=LoggingConfig(enabled=True, path=str(explicit_path)),
         config_path=str(tmp_path / "config.toml"),
-        logger_name="peneo.test.explicit",
+        logger_name="zivo.test..explicit",
     )
 
     assert result.enabled is True
@@ -54,7 +54,7 @@ def test_configure_file_logging_returns_warning_when_file_setup_fails(
     result = configure_file_logging(
         config=LoggingConfig(enabled=True),
         config_path=str(tmp_path / "config.toml"),
-        logger_name="peneo.test.failure",
+        logger_name="zivo.test..failure",
     )
 
     assert result.enabled is False

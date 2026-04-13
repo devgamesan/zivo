@@ -5,10 +5,10 @@ from types import SimpleNamespace
 
 import pytest
 
-from peneo.adapters import LocalExternalLaunchAdapter
-from peneo.adapters.external_launcher import _build_command_candidate, _run_foreground_command
-from peneo.models import EditorConfig, ExternalLaunchRequest, TerminalConfig
-from peneo.services import LiveExternalLaunchService
+from zivo.adapters import LocalExternalLaunchAdapter
+from zivo.adapters.external_launcher import _build_command_candidate, _run_foreground_command
+from zivo.models import EditorConfig, ExternalLaunchRequest, TerminalConfig
+from zivo.services import LiveExternalLaunchService
 
 
 @dataclass
@@ -293,10 +293,10 @@ def test_local_external_launch_adapter_copies_to_clipboard_on_linux() -> None:
         command_runner=runner,
     )
 
-    adapter.copy_to_clipboard("/tmp/peneo/docs\n/tmp/peneo/README.md")
+    adapter.copy_to_clipboard("/tmp/zivo/docs\n/tmp/zivo/README.md")
 
     assert runner.executed == [
-        (("wl-copy",), None, "/tmp/peneo/docs\n/tmp/peneo/README.md")
+        (("wl-copy",), None, "/tmp/zivo/docs\n/tmp/zivo/README.md")
     ]
 
 
@@ -309,10 +309,10 @@ def test_local_external_launch_adapter_uses_clip_exe_on_wsl() -> None:
         environment_variable=lambda name: "Ubuntu" if name == "WSL_DISTRO_NAME" else None,
     )
 
-    adapter.copy_to_clipboard("/tmp/peneo/docs\n/tmp/peneo/README.md")
+    adapter.copy_to_clipboard("/tmp/zivo/docs\n/tmp/zivo/README.md")
 
     assert runner.executed == [
-        (("clip.exe",), None, "/tmp/peneo/docs\n/tmp/peneo/README.md")
+        (("clip.exe",), None, "/tmp/zivo/docs\n/tmp/zivo/README.md")
     ]
 
 
@@ -397,9 +397,9 @@ def test_local_external_launch_adapter_uses_clipboard_fallback_when_commands_mis
         clipboard_fallbacks=(copied.append,),
     )
 
-    adapter.copy_to_clipboard("/tmp/peneo/docs")
+    adapter.copy_to_clipboard("/tmp/zivo/docs")
 
-    assert copied == ["/tmp/peneo/docs"]
+    assert copied == ["/tmp/zivo/docs"]
 
 
 def test_live_external_launch_service_formats_open_error(tmp_path) -> None:
@@ -419,18 +419,18 @@ def test_live_external_launch_service_opens_file_with_adapter() -> None:
     adapter = StubExternalLaunchAdapter()
     service = LiveExternalLaunchService(adapter=adapter)
 
-    service.execute(ExternalLaunchRequest(kind="open_file", path="/tmp/peneo/README.md"))
+    service.execute(ExternalLaunchRequest(kind="open_file", path="/tmp/zivo/README.md"))
 
-    assert adapter.opened_paths == ["/tmp/peneo/README.md"]
+    assert adapter.opened_paths == ["/tmp/zivo/README.md"]
 
 
 def test_live_external_launch_service_opens_terminal_with_adapter() -> None:
     adapter = StubExternalLaunchAdapter()
     service = LiveExternalLaunchService(adapter=adapter)
 
-    service.execute(ExternalLaunchRequest(kind="open_terminal", path="/tmp/peneo"))
+    service.execute(ExternalLaunchRequest(kind="open_terminal", path="/tmp/zivo"))
 
-    assert adapter.terminal_paths == ["/tmp/peneo"]
+    assert adapter.terminal_paths == ["/tmp/zivo"]
 
 
 def test_live_external_launch_service_copies_paths_with_expected_payload() -> None:
@@ -440,11 +440,11 @@ def test_live_external_launch_service_copies_paths_with_expected_payload() -> No
     service.execute(
         ExternalLaunchRequest(
             kind="copy_paths",
-            paths=("/tmp/peneo/docs", "/tmp/peneo/README.md"),
+            paths=("/tmp/zivo/docs", "/tmp/zivo/README.md"),
         )
     )
 
-    assert adapter.clipboard_payloads == ["/tmp/peneo/docs\n/tmp/peneo/README.md"]
+    assert adapter.clipboard_payloads == ["/tmp/zivo/docs\n/tmp/zivo/README.md"]
 
 
 def test_live_external_launch_service_formats_editor_error(tmp_path) -> None:
@@ -495,7 +495,7 @@ def test_live_external_launch_service_formats_windows_native_error(tmp_path) -> 
         OSError,
         match=(
             f"Failed to open {readme.resolve()}: "
-            "Windows native is unsupported; run Peneo from WSL"
+            "Windows native is unsupported; run zivo from WSL"
         ),
     ):
         service.execute(ExternalLaunchRequest(kind="open_file", path=str(readme)))
@@ -520,7 +520,7 @@ def test_live_external_launch_service_formats_copy_error() -> None:
         service.execute(
             ExternalLaunchRequest(
                 kind="copy_paths",
-                paths=("/tmp/peneo/docs", "/tmp/peneo/README.md"),
+                paths=("/tmp/zivo/docs", "/tmp/zivo/README.md"),
             )
         )
 
@@ -612,7 +612,7 @@ def test_run_foreground_command_uses_current_standard_streams(monkeypatch) -> No
     monkeypatch.setattr(sys, "stdin", stdin)
     monkeypatch.setattr(sys, "stdout", stdout)
     monkeypatch.setattr(sys, "stderr", stderr)
-    monkeypatch.setattr("peneo.adapters.external_launcher.subprocess.run", fake_run)
+    monkeypatch.setattr("zivo.adapters.external_launcher.subprocess.run", fake_run)
 
     _run_foreground_command(("nvim", "README.md"), "/tmp/project")
 

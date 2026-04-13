@@ -1,0 +1,138 @@
+"""Filesystem adapter for reading local directory entries."""
+
+import grp
+import os
+import pwd
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Protocol
+
+from zivo.state.models import DirectoryEntryState
+
+
+class DirectoryReader(Protocol):
+    """Boundary for reading directory entries from an external filesystem."""
+
+    def list_directory(self, path: str) -> tuple[DirectoryEntryState, ...]: ...
+
+
+class DirectorySizeReader(Protocol):
+    """Boundary for recursive directory-size calculations."""
+
+    def calculate_directory_size(
+        self,
+        path: str,
+        *,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> int: ...
+
+
+@dataclass(frozen=True)
+class LocalFilesystemAdapter:
+    """Read and normalize directory contents from the local filesystem."""
+
+    def list_directory(self, path: str) -> tuple[DirectoryEntryState, ...]:
+        directory = Path(path).expanduser().resolve()
+        entries: list[DirectoryEntryState] = []
+        with os.scandir(directory) as iterator:
+            for child in iterator:
+                entry = _build_directory_entry(child)
+                if entry is not None:
+                    entries.append(entry)
+        entries.sort(key=lambda entry: (entry.kind != "dir", entry.name.casefold()))
+        return tuple(entries)
+
+    def calculate_directory_size(
+        self,
+        path: str,
+        *,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> int:
+        directory = Path(path).expanduser().resolve()
+        if not directory.exists():
+            raise FileNotFoundError(path)
+        if not directory.is_dir():
+            raise NotADirectoryError(path)
+        return _calculate_directory_size(directory, is_cancelled=is_cancelled)
+
+
+def _build_directory_entry(entry: os.DirEntry[str]) -> DirectoryEntryState | None:
+    is_symlink = entry.is_symlink()
+    try:
+        stat_result = entry.stat()
+    except FileNotFoundError:
+        if is_symlink:
+            return DirectoryEntryState(
+                path=entry.path,
+                name=entry.name,
+                kind="file",
+                hidden=entry.name.startswith("."),
+                symlink=True,
+            )
+        return None
+    kind = "dir" if entry.is_dir() else "file"
+    owner = _resolve_user_name(stat_result.st_uid)
+    group = _resolve_group_name(stat_result.st_gid)
+    return DirectoryEntryState(
+        path=entry.path,
+        name=entry.name,
+        kind=kind,
+        size_bytes=None if kind == "dir" else stat_result.st_size,
+        modified_at=datetime.fromtimestamp(stat_result.st_mtime),
+        hidden=entry.name.startswith("."),
+        permissions_mode=stat_result.st_mode,
+        owner=owner,
+        group=group,
+        symlink=is_symlink,
+    )
+
+
+def _calculate_directory_size(
+    directory: Path,
+    *,
+    is_cancelled: Callable[[], bool] | None = None,
+) -> int:
+    if is_cancelled is not None and is_cancelled():
+        raise DirectorySizeCancelled()
+
+    total_size = 0
+    try:
+        with os.scandir(directory) as iterator:
+            for child in iterator:
+                if is_cancelled is not None and is_cancelled():
+                    raise DirectorySizeCancelled()
+                try:
+                    if child.is_symlink():
+                        continue
+                    if child.is_dir(follow_symlinks=False):
+                        total_size += _calculate_directory_size(
+                            Path(child.path),
+                            is_cancelled=is_cancelled,
+                        )
+                        continue
+                    total_size += child.stat(follow_symlinks=False).st_size
+                except (FileNotFoundError, PermissionError):
+                    continue
+    except PermissionError:
+        return 0
+    return total_size
+
+
+class DirectorySizeCancelled(RuntimeError):
+    """Raised internally to abort a recursive size walk."""
+
+
+def _resolve_user_name(uid: int) -> str | None:
+    try:
+        return pwd.getpwuid(uid).pw_name
+    except (KeyError, OSError):
+        return None
+
+
+def _resolve_group_name(gid: int) -> str | None:
+    try:
+        return grp.getgrgid(gid).gr_name
+    except (KeyError, OSError):
+        return None

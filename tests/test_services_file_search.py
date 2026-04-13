@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from peneo.services import InvalidFileSearchQueryError, LiveFileSearchService
+from zivo.services import InvalidFileSearchQueryError, LiveFileSearchService
 
 
 def test_live_file_search_service_matches_files_recursively(tmp_path) -> None:

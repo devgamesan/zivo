@@ -1,8 +1,9 @@
 from dataclasses import replace
 from stat import S_IFREG
 
-import peneo.state.selectors as selectors_module
-from peneo.models import (
+import zivo.state.selectors as selectors_module
+from tests.state_test_helpers import entry, pane, reduce_state
+from zivo.models import (
     AppConfig,
     BookmarkConfig,
     CreateZipArchiveRequest,
@@ -13,7 +14,7 @@ from peneo.models import (
     UndoDeletePathStep,
     UndoEntry,
 )
-from peneo.state import (
+from zivo.state import (
     ArchiveExtractConfirmationState,
     AttributeInspectionState,
     BeginCommandPalette,
@@ -62,15 +63,14 @@ from peneo.state import (
     select_target_paths,
     select_visible_current_entry_states,
 )
-from peneo.state import command_palette as command_palette_module
-from peneo.state.command_palette import CommandPaletteItem
-from peneo.state.reducer_common import directory_size_target_paths
-from peneo.state.selectors import (
+from zivo.state import command_palette as command_palette_module
+from zivo.state.command_palette import CommandPaletteItem
+from zivo.state.reducer_common import directory_size_target_paths
+from zivo.state.selectors import (
     _has_execute_permission,
     _select_command_palette_window,
     compute_current_pane_visible_window,
 )
-from tests.state_test_helpers import entry, pane, reduce_state
 
 
 def _reduce_state(state, action):
@@ -98,17 +98,17 @@ def test_select_current_entries_hides_hidden_by_default() -> None:
     state = replace(
         build_initial_app_state(),
         current_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(
                 DirectoryEntryState(
-                    "/home/tadashi/develop/peneo/.env",
+                    "/home/tadashi/develop/zivo/.env",
                     ".env",
                     "file",
                     hidden=True,
                 ),
-                DirectoryEntryState("/home/tadashi/develop/peneo/docs", "docs", "dir"),
+                DirectoryEntryState("/home/tadashi/develop/zivo/docs", "docs", "dir"),
             ),
-            cursor_path="/home/tadashi/develop/peneo/docs",
+            cursor_path="/home/tadashi/develop/zivo/docs",
         ),
     )
 
@@ -130,22 +130,22 @@ def test_select_visible_current_entries_sorts_by_modified_with_missing_values_la
     state = replace(
         build_initial_app_state(),
         current_pane=pane(
-            "/home/tadashi/develop/peneo",
+            "/home/tadashi/develop/zivo",
             (
                 entry(
-                    "/home/tadashi/develop/peneo/alpha.txt",
+                    "/home/tadashi/develop/zivo/alpha.txt",
                     modified_at=None,
                 ),
                 entry(
-                    "/home/tadashi/develop/peneo/beta.txt",
+                    "/home/tadashi/develop/zivo/beta.txt",
                     modified_at=build_initial_app_state().current_pane.entries[3].modified_at,
                 ),
                 entry(
-                    "/home/tadashi/develop/peneo/gamma.txt",
+                    "/home/tadashi/develop/zivo/gamma.txt",
                     modified_at=build_initial_app_state().current_pane.entries[4].modified_at,
                 ),
             ),
-            cursor_path="/home/tadashi/develop/peneo/alpha.txt",
+            cursor_path="/home/tadashi/develop/zivo/alpha.txt",
         ),
         sort=replace(build_initial_app_state().sort, field="modified", descending=True),
     )
@@ -159,13 +159,13 @@ def test_select_visible_current_entries_sorts_by_size_without_directories_first(
     state = replace(
         build_initial_app_state(),
         current_pane=pane(
-            "/home/tadashi/develop/peneo",
+            "/home/tadashi/develop/zivo",
             (
-                entry("/home/tadashi/develop/peneo/docs", kind="dir"),
-                entry("/home/tadashi/develop/peneo/alpha.txt", size_bytes=500),
-                entry("/home/tadashi/develop/peneo/beta.txt", size_bytes=2_000),
+                entry("/home/tadashi/develop/zivo/docs", kind="dir"),
+                entry("/home/tadashi/develop/zivo/alpha.txt", size_bytes=500),
+                entry("/home/tadashi/develop/zivo/beta.txt", size_bytes=2_000),
             ),
-            cursor_path="/home/tadashi/develop/peneo/docs",
+            cursor_path="/home/tadashi/develop/zivo/docs",
         ),
         sort=replace(
             build_initial_app_state().sort,
@@ -183,7 +183,7 @@ def test_select_visible_current_entries_sorts_by_size_without_directories_first(
 def test_has_execute_permission_returns_true_for_executable_files() -> None:
     """0o755 (rwxr-xr-x) の場合に True を返すこと"""
     entry_state = DirectoryEntryState(
-        "/home/tadashi/develop/peneo/test.sh",
+        "/home/tadashi/develop/zivo/test.sh",
         "test.sh",
         "file",
         permissions_mode=0o755,
@@ -195,7 +195,7 @@ def test_has_execute_permission_returns_true_for_executable_files() -> None:
 def test_has_execute_permission_returns_false_for_non_executable_files() -> None:
     """0o644 (rw-r--r--) の場合に False を返すこと"""
     entry_state = DirectoryEntryState(
-        "/home/tadashi/develop/peneo/README.md",
+        "/home/tadashi/develop/zivo/README.md",
         "README.md",
         "file",
         permissions_mode=0o644,
@@ -207,7 +207,7 @@ def test_has_execute_permission_returns_false_for_non_executable_files() -> None
 def test_has_execute_permission_returns_true_for_execute_only_files() -> None:
     """0o111 (--x--x--x) の場合に True を返すこと"""
     entry_state = DirectoryEntryState(
-        "/home/tadashi/develop/peneo/script",
+        "/home/tadashi/develop/zivo/script",
         "script",
         "file",
         permissions_mode=0o111,
@@ -219,7 +219,7 @@ def test_has_execute_permission_returns_true_for_execute_only_files() -> None:
 def test_has_execute_permission_returns_false_for_no_permissions() -> None:
     """0o000 (---------) の場合に False を返すこと"""
     entry_state = DirectoryEntryState(
-        "/home/tadashi/develop/peneo/locked",
+        "/home/tadashi/develop/zivo/locked",
         "locked",
         "file",
         permissions_mode=0o000,
@@ -231,7 +231,7 @@ def test_has_execute_permission_returns_false_for_no_permissions() -> None:
 def test_has_execute_permission_returns_false_for_none_permissions() -> None:
     """permissions_mode が None の場合に False を返すこと"""
     entry_state = DirectoryEntryState(
-        "/home/tadashi/develop/peneo/unknown",
+        "/home/tadashi/develop/zivo/unknown",
         "unknown",
         "file",
         permissions_mode=None,
@@ -247,26 +247,26 @@ def test_select_parent_and_child_entries_hide_hidden_unless_enabled() -> None:
             directory_path="/tmp",
             entries=(
                 DirectoryEntryState("/tmp/.cache", ".cache", "dir", hidden=True),
-                DirectoryEntryState("/tmp/peneo", "peneo", "dir"),
+                DirectoryEntryState("/tmp/zivo", "zivo", "dir"),
             ),
-            cursor_path="/tmp/peneo",
+            cursor_path="/tmp/zivo",
         ),
         current_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
-            entries=(DirectoryEntryState("/home/tadashi/develop/peneo/docs", "docs", "dir"),),
-            cursor_path="/home/tadashi/develop/peneo/docs",
+            directory_path="/home/tadashi/develop/zivo",
+            entries=(DirectoryEntryState("/home/tadashi/develop/zivo/docs", "docs", "dir"),),
+            cursor_path="/home/tadashi/develop/zivo/docs",
         ),
         child_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo/docs",
+            directory_path="/home/tadashi/develop/zivo/docs",
             entries=(
                 DirectoryEntryState(
-                    "/home/tadashi/develop/peneo/docs/.draft.md",
+                    "/home/tadashi/develop/zivo/docs/.draft.md",
                     ".draft.md",
                     "file",
                     hidden=True,
                 ),
                 DirectoryEntryState(
-                    "/home/tadashi/develop/peneo/docs/spec.md",
+                    "/home/tadashi/develop/zivo/docs/spec.md",
                     "spec.md",
                     "file",
                 ),
@@ -274,12 +274,12 @@ def test_select_parent_and_child_entries_hide_hidden_unless_enabled() -> None:
         ),
     )
 
-    assert [entry.name for entry in select_parent_entries(state)] == ["peneo"]
+    assert [entry.name for entry in select_parent_entries(state)] == ["zivo"]
     assert [entry.name for entry in select_child_entries(state)] == ["spec.md"]
 
     visible_state = replace(state, show_hidden=True)
 
-    assert [entry.name for entry in select_parent_entries(visible_state)] == [".cache", "peneo"]
+    assert [entry.name for entry in select_parent_entries(visible_state)] == [".cache", "zivo"]
     assert [entry.name for entry in select_child_entries(visible_state)] == [
         ".draft.md",
         "spec.md",
@@ -293,15 +293,15 @@ def test_select_parent_entries_marks_current_directory_selected() -> None:
             directory_path="/tmp",
             entries=(
                 DirectoryEntryState("/tmp/alpha", "alpha", "dir"),
-                DirectoryEntryState("/tmp/peneo", "peneo", "dir"),
+                DirectoryEntryState("/tmp/zivo", "zivo", "dir"),
             ),
-            cursor_path="/tmp/peneo",
+            cursor_path="/tmp/zivo",
         ),
     )
 
     entries = select_parent_entries(state)
 
-    assert [entry.name for entry in entries] == ["alpha", "peneo"]
+    assert [entry.name for entry in entries] == ["alpha", "zivo"]
     assert entries[0].selected is False
     assert entries[1].selected is True
 
@@ -310,18 +310,18 @@ def test_select_child_entries_clears_stale_snapshot_while_request_is_pending() -
     state = replace(
         build_initial_app_state(),
         current_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(
-                DirectoryEntryState("/home/tadashi/develop/peneo/docs", "docs", "dir"),
-                DirectoryEntryState("/home/tadashi/develop/peneo/src", "src", "dir"),
+                DirectoryEntryState("/home/tadashi/develop/zivo/docs", "docs", "dir"),
+                DirectoryEntryState("/home/tadashi/develop/zivo/src", "src", "dir"),
             ),
-            cursor_path="/home/tadashi/develop/peneo/src",
+            cursor_path="/home/tadashi/develop/zivo/src",
         ),
         child_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo/docs",
+            directory_path="/home/tadashi/develop/zivo/docs",
             entries=(
                 DirectoryEntryState(
-                    "/home/tadashi/develop/peneo/docs/spec.md",
+                    "/home/tadashi/develop/zivo/docs/spec.md",
                     "spec.md",
                     "file",
                 ),
@@ -334,7 +334,7 @@ def test_select_child_entries_clears_stale_snapshot_while_request_is_pending() -
 
 
 def test_select_shell_data_hides_stale_preview_while_request_is_pending() -> None:
-    current_path = "/home/tadashi/develop/peneo"
+    current_path = "/home/tadashi/develop/zivo"
     previous_preview_path = f"{current_path}/README.md"
     requested_preview_path = f"{current_path}/pyproject.toml"
     state = replace(
@@ -375,38 +375,38 @@ def test_select_pane_entries_show_directory_sizes_from_cache() -> None:
         ),
         parent_pane=PaneState(
             directory_path="/tmp",
-            entries=(DirectoryEntryState("/tmp/peneo", "peneo", "dir"),),
-            cursor_path="/tmp/peneo",
+            entries=(DirectoryEntryState("/tmp/zivo", "zivo", "dir"),),
+            cursor_path="/tmp/zivo",
         ),
         current_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(
-                DirectoryEntryState("/home/tadashi/develop/peneo/docs", "docs", "dir"),
+                DirectoryEntryState("/home/tadashi/develop/zivo/docs", "docs", "dir"),
                 DirectoryEntryState(
-                    "/home/tadashi/develop/peneo/README.md",
+                    "/home/tadashi/develop/zivo/README.md",
                     "README.md",
                     "file",
                     size_bytes=2_150,
                 ),
             ),
-            cursor_path="/home/tadashi/develop/peneo/docs",
+            cursor_path="/home/tadashi/develop/zivo/docs",
         ),
         child_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo/docs",
-            entries=(DirectoryEntryState("/home/tadashi/develop/peneo/docs/api", "api", "dir"),),
+            directory_path="/home/tadashi/develop/zivo/docs",
+            entries=(DirectoryEntryState("/home/tadashi/develop/zivo/docs/api", "api", "dir"),),
         ),
         directory_size_cache=(
             DirectorySizeCacheEntry(
-                "/tmp/peneo",
+                "/tmp/zivo",
                 "ready",
                 size_bytes=3_400_000,
             ),
             DirectorySizeCacheEntry(
-                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/zivo/docs",
                 "pending",
             ),
             DirectorySizeCacheEntry(
-                "/home/tadashi/develop/peneo/docs/api",
+                "/home/tadashi/develop/zivo/docs/api",
                 "ready",
                 size_bytes=8_200,
             ),
@@ -434,34 +434,34 @@ def test_directory_size_target_paths_only_uses_current_pane_directories() -> Non
         ),
         parent_pane=PaneState(
             directory_path="/tmp",
-            entries=(DirectoryEntryState("/tmp/peneo", "peneo", "dir"),),
-            cursor_path="/tmp/peneo",
+            entries=(DirectoryEntryState("/tmp/zivo", "zivo", "dir"),),
+            cursor_path="/tmp/zivo",
         ),
         current_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(
-                DirectoryEntryState("/home/tadashi/develop/peneo/docs", "docs", "dir"),
+                DirectoryEntryState("/home/tadashi/develop/zivo/docs", "docs", "dir"),
                 DirectoryEntryState(
-                    "/home/tadashi/develop/peneo/.cache",
+                    "/home/tadashi/develop/zivo/.cache",
                     ".cache",
                     "dir",
                     hidden=True,
                 ),
                 DirectoryEntryState(
-                    "/home/tadashi/develop/peneo/README.md",
+                    "/home/tadashi/develop/zivo/README.md",
                     "README.md",
                     "file",
                 ),
             ),
-            cursor_path="/home/tadashi/develop/peneo/docs",
+            cursor_path="/home/tadashi/develop/zivo/docs",
         ),
         child_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo/docs",
-            entries=(DirectoryEntryState("/home/tadashi/develop/peneo/docs/api", "api", "dir"),),
+            directory_path="/home/tadashi/develop/zivo/docs",
+            entries=(DirectoryEntryState("/home/tadashi/develop/zivo/docs/api", "api", "dir"),),
         ),
     )
 
-    assert directory_size_target_paths(state) == ("/home/tadashi/develop/peneo/docs",)
+    assert directory_size_target_paths(state) == ("/home/tadashi/develop/zivo/docs",)
 
 
 def test_directory_size_target_paths_respects_current_hidden_visibility() -> None:
@@ -475,24 +475,24 @@ def test_directory_size_target_paths_respects_current_hidden_visibility() -> Non
             )
         ),
         current_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(
-                DirectoryEntryState("/home/tadashi/develop/peneo/docs", "docs", "dir"),
+                DirectoryEntryState("/home/tadashi/develop/zivo/docs", "docs", "dir"),
                 DirectoryEntryState(
-                    "/home/tadashi/develop/peneo/.cache",
+                    "/home/tadashi/develop/zivo/.cache",
                     ".cache",
                     "dir",
                     hidden=True,
                 ),
             ),
-            cursor_path="/home/tadashi/develop/peneo/docs",
+            cursor_path="/home/tadashi/develop/zivo/docs",
         ),
     )
 
-    assert directory_size_target_paths(state) == ("/home/tadashi/develop/peneo/docs",)
+    assert directory_size_target_paths(state) == ("/home/tadashi/develop/zivo/docs",)
     assert directory_size_target_paths(replace(state, show_hidden=True)) == (
-        "/home/tadashi/develop/peneo/.cache",
-        "/home/tadashi/develop/peneo/docs",
+        "/home/tadashi/develop/zivo/.cache",
+        "/home/tadashi/develop/zivo/docs",
     )
 
 
@@ -504,9 +504,9 @@ def test_directory_size_target_paths_returns_empty_when_directory_sizes_are_disa
             display=replace(build_initial_app_state().config.display, show_directory_sizes=False),
         ),
         current_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
-            entries=(DirectoryEntryState("/home/tadashi/develop/peneo/docs", "docs", "dir"),),
-            cursor_path="/home/tadashi/develop/peneo/docs",
+            directory_path="/home/tadashi/develop/zivo",
+            entries=(DirectoryEntryState("/home/tadashi/develop/zivo/docs", "docs", "dir"),),
+            cursor_path="/home/tadashi/develop/zivo/docs",
         ),
     )
 
@@ -517,24 +517,24 @@ def test_directory_size_target_paths_uses_current_pane_for_size_sort() -> None:
     state = replace(
         build_initial_app_state(),
         current_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(
-                DirectoryEntryState("/home/tadashi/develop/peneo/docs", "docs", "dir"),
-                DirectoryEntryState("/home/tadashi/develop/peneo/src", "src", "dir"),
+                DirectoryEntryState("/home/tadashi/develop/zivo/docs", "docs", "dir"),
+                DirectoryEntryState("/home/tadashi/develop/zivo/src", "src", "dir"),
                 DirectoryEntryState(
-                    "/home/tadashi/develop/peneo/README.md",
+                    "/home/tadashi/develop/zivo/README.md",
                     "README.md",
                     "file",
                 ),
             ),
-            cursor_path="/home/tadashi/develop/peneo/docs",
+            cursor_path="/home/tadashi/develop/zivo/docs",
         ),
         sort=replace(build_initial_app_state().sort, field="size"),
     )
 
     assert directory_size_target_paths(state) == (
-        "/home/tadashi/develop/peneo/docs",
-        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/zivo/docs",
+        "/home/tadashi/develop/zivo/src",
     )
 
 
@@ -543,7 +543,7 @@ def test_select_visible_current_entries_skip_size_overlay_when_not_sorting_by_si
         build_initial_app_state(),
         directory_size_cache=(
             DirectorySizeCacheEntry(
-                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/zivo/docs",
                 "ready",
                 size_bytes=4_200,
             ),
@@ -552,7 +552,7 @@ def test_select_visible_current_entries_skip_size_overlay_when_not_sorting_by_si
 
     visible_entries = select_visible_current_entry_states(state)
 
-    assert visible_entries[0].path == "/home/tadashi/develop/peneo/docs"
+    assert visible_entries[0].path == "/home/tadashi/develop/zivo/docs"
     assert visible_entries[0].size_bytes is None
 
 
@@ -568,13 +568,13 @@ def test_select_shell_data_emits_size_delta_updates_for_directory_size_changes()
         ),
         directory_size_cache=(
             DirectorySizeCacheEntry(
-                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/zivo/docs",
                 "ready",
                 size_bytes=4_200,
             ),
         ),
         directory_size_delta=DirectorySizeDeltaState(
-            changed_paths=("/home/tadashi/develop/peneo/docs",),
+            changed_paths=("/home/tadashi/develop/zivo/docs",),
             revision=3,
         ),
     )
@@ -588,12 +588,12 @@ def test_select_shell_data_emits_size_delta_updates_for_directory_size_changes()
         (update.path, update.size_label)
         for update in shell.current_pane_update.size_updates
     ] == [
-        ("/home/tadashi/develop/peneo/docs", "4.1KiB")
+        ("/home/tadashi/develop/zivo/docs", "4.1KiB")
     ]
 
 
 def test_select_shell_data_emits_row_delta_updates_for_selection_changes() -> None:
-    path = "/home/tadashi/develop/peneo/README.md"
+    path = "/home/tadashi/develop/zivo/README.md"
     state = replace(
         build_initial_app_state(),
         current_pane=replace(
@@ -620,7 +620,7 @@ def test_select_shell_data_emits_row_delta_updates_for_selection_changes() -> No
 
 
 def test_select_shell_data_emits_row_delta_updates_for_cut_changes() -> None:
-    path = "/home/tadashi/develop/peneo/docs"
+    path = "/home/tadashi/develop/zivo/docs"
     state = replace(
         build_initial_app_state(),
         clipboard=replace(build_initial_app_state().clipboard, mode="cut", paths=(path,)),
@@ -648,18 +648,18 @@ def test_select_shell_data_keeps_full_refresh_when_sorting_by_size() -> None:
         build_initial_app_state(),
         sort=replace(build_initial_app_state().sort, field="size"),
         current_pane_delta=CurrentPaneDeltaState(
-            changed_paths=("/home/tadashi/develop/peneo/docs",),
+            changed_paths=("/home/tadashi/develop/zivo/docs",),
             revision=7,
         ),
         directory_size_cache=(
             DirectorySizeCacheEntry(
-                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/zivo/docs",
                 "ready",
                 size_bytes=4_200,
             ),
         ),
         directory_size_delta=DirectorySizeDeltaState(
-            changed_paths=("/home/tadashi/develop/peneo/docs",),
+            changed_paths=("/home/tadashi/develop/zivo/docs",),
             revision=2,
         ),
     )
@@ -672,8 +672,8 @@ def test_select_shell_data_keeps_full_refresh_when_sorting_by_size() -> None:
 
 def test_select_current_summary_counts_selected_absolute_paths() -> None:
     state = build_initial_app_state()
-    state = _reduce_state(state, ToggleSelection("/home/tadashi/develop/peneo/README.md"))
-    state = _reduce_state(state, ToggleSelection("/home/tadashi/develop/peneo/tests"))
+    state = _reduce_state(state, ToggleSelection("/home/tadashi/develop/zivo/README.md"))
+    state = _reduce_state(state, ToggleSelection("/home/tadashi/develop/zivo/tests"))
 
     summary = select_current_summary_state(state)
 
@@ -683,22 +683,22 @@ def test_select_current_summary_counts_selected_absolute_paths() -> None:
 
 def test_select_target_paths_prefers_selection_in_entry_order() -> None:
     state = build_initial_app_state()
-    state = _reduce_state(state, ToggleSelection("/home/tadashi/develop/peneo/README.md"))
-    state = _reduce_state(state, ToggleSelection("/home/tadashi/develop/peneo/docs"))
+    state = _reduce_state(state, ToggleSelection("/home/tadashi/develop/zivo/README.md"))
+    state = _reduce_state(state, ToggleSelection("/home/tadashi/develop/zivo/docs"))
 
     assert select_target_paths(state) == (
-        "/home/tadashi/develop/peneo/docs",
-        "/home/tadashi/develop/peneo/README.md",
+        "/home/tadashi/develop/zivo/docs",
+        "/home/tadashi/develop/zivo/README.md",
     )
 
 
 def test_select_target_paths_ignores_hidden_selected_entries_when_hidden_files_are_off() -> None:
-    hidden_path = "/home/tadashi/develop/peneo/.env"
-    visible_path = "/home/tadashi/develop/peneo/docs"
+    hidden_path = "/home/tadashi/develop/zivo/.env"
+    visible_path = "/home/tadashi/develop/zivo/docs"
     state = replace(
         build_initial_app_state(),
         current_pane=pane(
-            "/home/tadashi/develop/peneo",
+            "/home/tadashi/develop/zivo",
             (
                 entry(hidden_path, hidden=True),
                 entry(visible_path, kind="dir"),
@@ -713,9 +713,9 @@ def test_select_target_paths_ignores_hidden_selected_entries_when_hidden_files_a
 
 def test_select_target_paths_falls_back_to_cursor() -> None:
     state = build_initial_app_state()
-    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/tests"))
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/zivo/tests"))
 
-    assert select_target_paths(state) == ("/home/tadashi/develop/peneo/tests",)
+    assert select_target_paths(state) == ("/home/tadashi/develop/zivo/tests",)
 
 
 def test_select_target_paths_returns_empty_tuple_for_empty_directory() -> None:
@@ -730,7 +730,7 @@ def test_select_target_paths_returns_empty_tuple_for_empty_directory() -> None:
 
 def test_select_current_entries_marks_selected_rows() -> None:
     state = build_initial_app_state()
-    state = _reduce_state(state, ToggleSelection("/home/tadashi/develop/peneo/README.md"))
+    state = _reduce_state(state, ToggleSelection("/home/tadashi/develop/zivo/README.md"))
 
     entries = select_current_entries(state)
 
@@ -742,7 +742,7 @@ def test_select_current_entries_marks_selected_rows() -> None:
 
 def test_select_current_entries_marks_cut_rows() -> None:
     state = build_initial_app_state()
-    state = _reduce_state(state, CutTargets(("/home/tadashi/develop/peneo/docs",)))
+    state = _reduce_state(state, CutTargets(("/home/tadashi/develop/zivo/docs",)))
 
     entries = select_current_entries(state)
 
@@ -753,19 +753,19 @@ def test_select_current_entries_marks_cut_rows() -> None:
 
 def test_select_child_entries_is_empty_when_cursor_is_file() -> None:
     state = build_initial_app_state()
-    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/README.md"))
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/zivo/README.md"))
 
     assert select_child_entries(state) == ()
 
 
 def test_select_shell_data_builds_child_preview_for_text_file() -> None:
     initial_state = build_initial_app_state()
-    path = "/home/tadashi/develop/peneo/README.md"
+    path = "/home/tadashi/develop/zivo/README.md"
     state = replace(
         initial_state,
         current_pane=replace(initial_state.current_pane, cursor_path=path),
         child_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(),
             mode="preview",
             preview_path=path,
@@ -785,7 +785,7 @@ def test_select_shell_data_builds_child_preview_for_text_file() -> None:
 
 def test_select_shell_data_builds_child_preview_message_for_unavailable_file() -> None:
     initial_state = build_initial_app_state()
-    path = "/home/tadashi/develop/peneo/archive.bin"
+    path = "/home/tadashi/develop/zivo/archive.bin"
     state = replace(
         initial_state,
         current_pane=replace(
@@ -795,7 +795,7 @@ def test_select_shell_data_builds_child_preview_message_for_unavailable_file() -
             cursor_path=path,
         ),
         child_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(),
             mode="preview",
             preview_path=path,
@@ -814,7 +814,7 @@ def test_select_shell_data_builds_child_preview_message_for_unavailable_file() -
 
 def test_select_shell_data_builds_grep_preview_for_palette_selection() -> None:
     initial_state = build_initial_app_state()
-    path = "/home/tadashi/develop/peneo/README.md"
+    path = "/home/tadashi/develop/zivo/README.md"
     grep_result = GrepSearchResultState(
         path=path,
         display_path="README.md",
@@ -830,7 +830,7 @@ def test_select_shell_data_builds_grep_preview_for_palette_selection() -> None:
             grep_search_results=(grep_result,),
         ),
         child_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(),
             mode="preview",
             preview_path=path,
@@ -864,20 +864,20 @@ def test_select_parent_and_child_entries_keep_fixed_name_sort() -> None:
             cursor_path="/tmp/alpha",
         ),
         current_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=state.current_pane.entries,
-            cursor_path="/home/tadashi/develop/peneo/docs",
+            cursor_path="/home/tadashi/develop/zivo/docs",
         ),
         child_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo/docs",
+            directory_path="/home/tadashi/develop/zivo/docs",
             entries=(
                 DirectoryEntryState(
-                    "/home/tadashi/develop/peneo/docs/readme.txt",
+                    "/home/tadashi/develop/zivo/docs/readme.txt",
                     "readme.txt",
                     "file",
                 ),
                 DirectoryEntryState(
-                    "/home/tadashi/develop/peneo/docs/archive",
+                    "/home/tadashi/develop/zivo/docs/archive",
                     "archive",
                     "dir",
                 ),
@@ -899,11 +899,11 @@ def test_select_parent_and_child_entries_keep_fixed_name_sort() -> None:
 
 def test_select_shell_data_exposes_visible_cursor_index() -> None:
     state = build_initial_app_state()
-    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/tests"))
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/zivo/tests"))
 
     shell = select_shell_data(state)
 
-    assert shell.current_path == "/home/tadashi/develop/peneo"
+    assert shell.current_path == "/home/tadashi/develop/zivo"
     assert shell.current_cursor_index == 2
     assert shell.current_cursor_visible is True
 
@@ -970,7 +970,7 @@ def test_select_shell_data_reuses_current_entries_when_only_cursor_changes() -> 
     moved_shell = select_shell_data(
         _reduce_state(
             state,
-            SetCursorPath("/home/tadashi/develop/peneo/tests"),
+            SetCursorPath("/home/tadashi/develop/zivo/tests"),
         )
     )
 
@@ -980,7 +980,7 @@ def test_select_shell_data_reuses_current_entries_when_only_cursor_changes() -> 
 
 
 def test_select_shell_data_viewport_projection_limits_rendered_entries() -> None:
-    path = "/tmp/peneo-viewport-selector"
+    path = "/tmp/zivo-viewport-selector"
     current_entries = tuple(
         entry(f"{path}/item_{index:02d}", name=f"item_{index:02d}")
         for index in range(12)
@@ -1004,7 +1004,7 @@ def test_select_shell_data_viewport_projection_limits_rendered_entries() -> None
 
 def test_select_shell_data_viewport_projection_reuses_window_for_cursor_move_inside_window(
 ) -> None:
-    path = "/tmp/peneo-viewport-selector"
+    path = "/tmp/zivo-viewport-selector"
     current_entries = tuple(
         entry(f"{path}/item_{index:02d}", name=f"item_{index:02d}")
         for index in range(12)
@@ -1023,7 +1023,7 @@ def test_select_shell_data_viewport_projection_reuses_window_for_cursor_move_ins
 
 
 def test_select_shell_data_viewport_projection_shifts_window_after_cursor_crosses_edge() -> None:
-    path = "/tmp/peneo-viewport-selector"
+    path = "/tmp/zivo-viewport-selector"
     current_entries = tuple(
         entry(f"{path}/item_{index:02d}", name=f"item_{index:02d}")
         for index in range(12)
@@ -1049,7 +1049,7 @@ def test_select_shell_data_viewport_projection_shifts_window_after_cursor_crosse
 
 
 def test_select_shell_data_viewport_projection_skips_offscreen_row_delta_updates() -> None:
-    path = "/tmp/peneo-viewport-selector"
+    path = "/tmp/zivo-viewport-selector"
     current_entries = tuple(
         entry(f"{path}/item_{index:02d}", name=f"item_{index:02d}")
         for index in range(12)
@@ -1075,7 +1075,7 @@ def test_select_shell_data_viewport_projection_skips_offscreen_row_delta_updates
 
 
 def test_select_shell_data_viewport_projection_skips_offscreen_size_delta_updates() -> None:
-    path = "/tmp/peneo-viewport-selector"
+    path = "/tmp/zivo-viewport-selector"
     current_entries = tuple(
         entry(f"{path}/item_{index:02d}", name=f"item_{index:02d}", kind="dir")
         for index in range(12)
@@ -1118,7 +1118,7 @@ def test_select_shell_data_rebuilds_only_current_entries_when_selection_changes(
     updated_shell = select_shell_data(
         _reduce_state(
             state,
-            ToggleSelection("/home/tadashi/develop/peneo/README.md"),
+            ToggleSelection("/home/tadashi/develop/zivo/README.md"),
         )
     )
 
@@ -1130,9 +1130,9 @@ def test_select_shell_data_rebuilds_only_current_entries_when_selection_changes(
 def test_select_shell_data_includes_selected_cut_and_contextual_models() -> None:
     state = _reduce_state(
         build_initial_app_state(),
-        ToggleSelection("/home/tadashi/develop/peneo/README.md"),
+        ToggleSelection("/home/tadashi/develop/zivo/README.md"),
     )
-    state = _reduce_state(state, CutTargets(("/home/tadashi/develop/peneo/docs",)))
+    state = _reduce_state(state, CutTargets(("/home/tadashi/develop/zivo/docs",)))
     state = replace(
         state,
         filter=replace(state.filter, query="read", active=True),
@@ -1439,10 +1439,10 @@ def test_select_help_bar_state_for_command_palette() -> None:
 
 def test_select_help_bar_state_for_config_editor() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
         ),
     )
@@ -1554,7 +1554,7 @@ def test_select_command_palette_state_switches_bookmark_command_label() -> None:
     bookmarked_state = build_initial_app_state(
         config=AppConfig(
             bookmarks=BookmarkConfig(
-                paths=("/home/tadashi/develop/peneo",)
+                paths=("/home/tadashi/develop/zivo",)
             )
         )
     )
@@ -1577,10 +1577,10 @@ def test_select_command_palette_state_disables_select_all_without_visible_entrie
     state = replace(
         build_initial_app_state(),
         current_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(
                 DirectoryEntryState(
-                    "/home/tadashi/develop/peneo/.env",
+                    "/home/tadashi/develop/zivo/.env",
                     ".env",
                     "file",
                     hidden=True,
@@ -1616,11 +1616,11 @@ def test_select_command_palette_state_enables_select_all_with_visible_entries() 
 
 
 def test_select_command_palette_state_shows_extract_archive_for_supported_file() -> None:
-    archive_path = "/home/tadashi/develop/peneo/archive.tar.gz"
+    archive_path = "/home/tadashi/develop/zivo/archive.tar.gz"
     state = replace(
         build_initial_app_state(),
         current_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(
                 DirectoryEntryState(archive_path, "archive.tar.gz", "file"),
             ),
@@ -1671,8 +1671,8 @@ def test_select_command_palette_state_shows_compress_as_zip_for_multiple_targets
             build_initial_app_state().current_pane,
             selected_paths=frozenset(
                 {
-                    "/home/tadashi/develop/peneo/docs",
-                    "/home/tadashi/develop/peneo/src",
+                    "/home/tadashi/develop/zivo/docs",
+                    "/home/tadashi/develop/zivo/src",
                 }
             ),
         ),
@@ -1695,7 +1695,7 @@ def test_select_input_bar_state_formats_extract_mode() -> None:
         pending_input=PendingInputState(
             prompt="Extract to: ",
             value="/tmp/output/archive",
-            extract_source_path="/home/tadashi/develop/peneo/archive.zip",
+            extract_source_path="/home/tadashi/develop/zivo/archive.zip",
         ),
     )
 
@@ -1714,7 +1714,7 @@ def test_select_input_bar_state_formats_zip_mode() -> None:
         pending_input=PendingInputState(
             prompt="Compress to: ",
             value="/tmp/output.zip",
-            zip_source_paths=("/home/tadashi/develop/peneo/docs",),
+            zip_source_paths=("/home/tadashi/develop/zivo/docs",),
         ),
     )
 
@@ -1732,7 +1732,7 @@ def test_select_attribute_dialog_state_formats_selected_entry() -> None:
         attribute_inspection=AttributeInspectionState(
             name="README.md",
             kind="file",
-            path="/home/tadashi/develop/peneo/README.md",
+            path="/home/tadashi/develop/zivo/README.md",
             size_bytes=2_150,
             modified_at=build_initial_app_state().current_pane.entries[3].modified_at,
             hidden=False,
@@ -1746,7 +1746,7 @@ def test_select_attribute_dialog_state_formats_selected_entry() -> None:
     assert dialog.title == "Attributes: README.md"
     assert "Name: README.md" in dialog.lines
     assert "Type: File" in dialog.lines
-    assert "Path: /home/tadashi/develop/peneo/README.md" in dialog.lines
+    assert "Path: /home/tadashi/develop/zivo/README.md" in dialog.lines
     assert "Size: 2.1KiB" in dialog.lines
     assert "Hidden: No" in dialog.lines
     assert "Permissions: -rw-r--r-- (644)" in dialog.lines
@@ -1755,10 +1755,10 @@ def test_select_attribute_dialog_state_formats_selected_entry() -> None:
 
 def test_select_config_dialog_state_formats_editor_lines() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
             cursor_index=2,
             dirty=True,
@@ -1769,7 +1769,7 @@ def test_select_config_dialog_state_formats_editor_lines() -> None:
 
     assert dialog is not None
     assert dialog.title == "Config Editor*"
-    assert "Path: /tmp/peneo/config.toml" in dialog.lines
+    assert "Path: /tmp/zivo/config.toml" in dialog.lines
     assert "  ── External ──" in dialog.lines
     assert "  Editor command: system default" in dialog.lines
     assert "  ── Display ──" in dialog.lines
@@ -1802,10 +1802,10 @@ def test_select_child_syntax_theme_prefers_explicit_preview_style() -> None:
 
 def test_select_config_dialog_state_shows_custom_editor_command_hint() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=AppConfig(editor=EditorConfig(command="nvim -u NONE")),
         ),
     )
@@ -1826,7 +1826,7 @@ def test_select_command_palette_state_for_file_search_results() -> None:
             query="read",
             file_search_results=(
                 FileSearchResultState(
-                    path="/home/tadashi/develop/peneo/README.md",
+                    path="/home/tadashi/develop/zivo/README.md",
                     display_path="README.md",
                 ),
             ),
@@ -1884,7 +1884,7 @@ def test_select_command_palette_state_shows_regex_error_message() -> None:
 def test_select_command_palette_state_windows_large_file_search_results() -> None:
     results = tuple(
         FileSearchResultState(
-            path=f"/home/tadashi/develop/peneo/src/module_{index}.py",
+            path=f"/home/tadashi/develop/zivo/src/module_{index}.py",
             display_path=f"src/module_{index}.py",
         )
         for index in range(20)
@@ -1933,8 +1933,8 @@ def test_select_command_palette_state_for_grep_search_results() -> None:
             query="todo",
             grep_search_results=(
                 GrepSearchResultState(
-                    path="/home/tadashi/develop/peneo/src/peneo/app.py",
-                    display_path="src/peneo/app.py",
+                    path="/home/tadashi/develop/zivo/src/zivo/app.py",
+                    display_path="src/zivo/app.py",
                     line_number=42,
                     line_text="TODO: update palette",
                 ),
@@ -1947,14 +1947,14 @@ def test_select_command_palette_state_for_grep_search_results() -> None:
     assert palette_state is not None
     assert palette_state.title == "Grep (1-1 / 1)"
     assert [item.label for item in palette_state.items] == [
-        "src/peneo/app.py:42: TODO: update palette"
+        "src/zivo/app.py:42: TODO: update palette"
     ]
 
 
 def test_select_command_palette_state_windows_large_grep_search_results() -> None:
     results = tuple(
         GrepSearchResultState(
-            path=f"/home/tadashi/develop/peneo/src/module_{index}.py",
+            path=f"/home/tadashi/develop/zivo/src/module_{index}.py",
             display_path=f"src/module_{index}.py",
             line_number=index + 1,
             line_text="TODO: update palette",
@@ -2053,16 +2053,16 @@ def test_select_help_bar_state_for_filter_mode() -> None:
 
 def test_select_conflict_dialog_state_formats_first_conflict() -> None:
     conflict = PasteConflict(
-        source_path="/home/tadashi/develop/peneo/docs",
-        destination_path="/home/tadashi/develop/peneo/docs",
+        source_path="/home/tadashi/develop/zivo/docs",
+        destination_path="/home/tadashi/develop/zivo/docs",
     )
     state = replace(
         build_initial_app_state(),
         paste_conflict=PasteConflictState(
             request=PasteRequest(
                 mode="copy",
-                source_paths=("/home/tadashi/develop/peneo/docs",),
-                destination_dir="/home/tadashi/develop/peneo",
+                source_paths=("/home/tadashi/develop/zivo/docs",),
+                destination_dir="/home/tadashi/develop/zivo",
             ),
             conflicts=(conflict,),
             first_conflict=conflict,
@@ -2081,8 +2081,8 @@ def test_select_conflict_dialog_state_formats_delete_confirmation() -> None:
         build_initial_app_state(),
         delete_confirmation=DeleteConfirmationState(
             paths=(
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
             )
         ),
     )
@@ -2098,7 +2098,7 @@ def test_select_conflict_dialog_state_formats_permanent_delete_confirmation() ->
     state = replace(
         build_initial_app_state(),
         delete_confirmation=DeleteConfirmationState(
-            paths=("/home/tadashi/develop/peneo/docs",),
+            paths=("/home/tadashi/develop/zivo/docs",),
             mode="permanent",
         ),
     )
@@ -2116,7 +2116,7 @@ def test_select_conflict_dialog_state_formats_extract_confirmation() -> None:
         build_initial_app_state(),
         archive_extract_confirmation=ArchiveExtractConfirmationState(
             request=ExtractArchiveRequest(
-                source_path="/home/tadashi/develop/peneo/archive.zip",
+                source_path="/home/tadashi/develop/zivo/archive.zip",
                 destination_path="/tmp/output/archive",
             ),
             conflict_count=2,
@@ -2138,9 +2138,9 @@ def test_select_conflict_dialog_state_formats_zip_confirmation() -> None:
         build_initial_app_state(),
         zip_compress_confirmation=ZipCompressConfirmationState(
             request=CreateZipArchiveRequest(
-                source_paths=("/home/tadashi/develop/peneo/docs",),
-                destination_path="/home/tadashi/develop/peneo/docs.zip",
-                root_dir="/home/tadashi/develop/peneo",
+                source_paths=("/home/tadashi/develop/zivo/docs",),
+                destination_path="/home/tadashi/develop/zivo/docs.zip",
+                root_dir="/home/tadashi/develop/zivo",
             ),
             total_entries=4,
         ),
@@ -2182,8 +2182,8 @@ def test_select_conflict_dialog_state_formats_create_directory_conflict() -> Non
 
 def test_select_help_bar_for_paste_conflict_uses_generic_guidance() -> None:
     conflict = PasteConflict(
-        source_path="/home/tadashi/develop/peneo/docs",
-        destination_path="/home/tadashi/develop/peneo/docs",
+        source_path="/home/tadashi/develop/zivo/docs",
+        destination_path="/home/tadashi/develop/zivo/docs",
     )
     state = replace(
         build_initial_app_state(),
@@ -2191,8 +2191,8 @@ def test_select_help_bar_for_paste_conflict_uses_generic_guidance() -> None:
         paste_conflict=PasteConflictState(
             request=PasteRequest(
                 mode="copy",
-                source_paths=("/home/tadashi/develop/peneo/docs",),
-                destination_dir="/home/tadashi/develop/peneo",
+                source_paths=("/home/tadashi/develop/zivo/docs",),
+                destination_dir="/home/tadashi/develop/zivo",
             ),
             conflicts=(conflict,),
             first_conflict=conflict,
@@ -2221,7 +2221,7 @@ def test_select_help_bar_for_delete_confirmation() -> None:
         build_initial_app_state(),
         ui_mode="CONFIRM",
         delete_confirmation=DeleteConfirmationState(
-            paths=("/home/tadashi/develop/peneo/docs",),
+            paths=("/home/tadashi/develop/zivo/docs",),
         ),
     )
 
@@ -2235,7 +2235,7 @@ def test_select_help_bar_for_permanent_delete_confirmation() -> None:
         build_initial_app_state(),
         ui_mode="CONFIRM",
         delete_confirmation=DeleteConfirmationState(
-            paths=("/home/tadashi/develop/peneo/docs",),
+            paths=("/home/tadashi/develop/zivo/docs",),
             mode="permanent",
         ),
     )
@@ -2281,7 +2281,7 @@ class TestSelectSearchWindowWithDynamicSize:
     def test_large_terminal_shows_more_items(self) -> None:
         results = tuple(
             FileSearchResultState(
-                path=f"/home/tadashi/develop/peneo/src/module_{index}.py",
+                path=f"/home/tadashi/develop/zivo/src/module_{index}.py",
                 display_path=f"src/module_{index}.py",
             )
             for index in range(30)
@@ -2517,7 +2517,7 @@ def test_select_tab_bar_state_marks_active_tab() -> None:
 
     tab_bar = select_tab_bar_state(state)
 
-    assert [tab.label for tab in tab_bar.tabs] == ["peneo", "peneo"]
+    assert [tab.label for tab in tab_bar.tabs] == ["zivo", "zivo"]
     assert [tab.active for tab in tab_bar.tabs] == [False, True]
 
 

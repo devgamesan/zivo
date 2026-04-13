@@ -2,8 +2,8 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from peneo.models import CreatePathRequest, DeleteRequest, RenameRequest
-from peneo.services import LiveFileMutationService
+from zivo.models import CreatePathRequest, DeleteRequest, RenameRequest
+from zivo.services import LiveFileMutationService
 
 
 @dataclass
@@ -58,12 +58,12 @@ def test_file_mutation_service_trashes_single_path() -> None:
     service = LiveFileMutationService(adapter=adapter)
 
     result = service.execute(
-        DeleteRequest(paths=("/tmp/peneo/docs",), mode="trash")
+        DeleteRequest(paths=("/tmp/zivo/docs",), mode="trash")
     )
 
-    assert adapter.trashed_paths == ["/tmp/peneo/docs"]
+    assert adapter.trashed_paths == ["/tmp/zivo/docs"]
     assert result.message == "Trashed 1 item"
-    assert result.removed_paths == ("/tmp/peneo/docs",)
+    assert result.removed_paths == ("/tmp/zivo/docs",)
 
 
 def test_file_mutation_service_renames_single_path() -> None:
@@ -71,11 +71,11 @@ def test_file_mutation_service_renames_single_path() -> None:
     service = LiveFileMutationService(adapter=adapter)
 
     result = service.execute(
-        RenameRequest(source_path="/tmp/peneo/docs", new_name="docs-old")
+        RenameRequest(source_path="/tmp/zivo/docs", new_name="docs-old")
     )
 
-    assert adapter.moved_paths == [("/tmp/peneo/docs", "/tmp/peneo/docs-old")]
-    assert result.path == "/tmp/peneo/docs-old"
+    assert adapter.moved_paths == [("/tmp/zivo/docs", "/tmp/zivo/docs-old")]
+    assert result.path == "/tmp/zivo/docs-old"
     assert result.message == "Renamed to docs-old"
 
 
@@ -99,11 +99,11 @@ def test_file_mutation_service_renames_symlink_without_following_target(tmp_path
 
 
 def test_file_mutation_service_raises_rename_error() -> None:
-    adapter = StubFileOperationAdapter(failing_paths={"/tmp/peneo/docs-old"})
+    adapter = StubFileOperationAdapter(failing_paths={"/tmp/zivo/docs-old"})
     service = LiveFileMutationService(adapter=adapter)
 
     with pytest.raises(OSError, match="rename failed"):
-        service.execute(RenameRequest(source_path="/tmp/peneo/docs", new_name="docs-old"))
+        service.execute(RenameRequest(source_path="/tmp/zivo/docs", new_name="docs-old"))
 
 
 def test_file_mutation_service_creates_file() -> None:
@@ -111,11 +111,11 @@ def test_file_mutation_service_creates_file() -> None:
     service = LiveFileMutationService(adapter=adapter)
 
     result = service.execute(
-        CreatePathRequest(parent_dir="/tmp/peneo", name="README.md", kind="file")
+        CreatePathRequest(parent_dir="/tmp/zivo", name="README.md", kind="file")
     )
 
-    assert adapter.created_files == ["/tmp/peneo/README.md"]
-    assert result.path == "/tmp/peneo/README.md"
+    assert adapter.created_files == ["/tmp/zivo/README.md"]
+    assert result.path == "/tmp/zivo/README.md"
     assert result.message == "Created file README.md"
 
 
@@ -123,48 +123,48 @@ def test_file_mutation_service_creates_directory() -> None:
     adapter = StubFileOperationAdapter()
     service = LiveFileMutationService(adapter=adapter)
 
-    result = service.execute(CreatePathRequest(parent_dir="/tmp/peneo", name="docs", kind="dir"))
+    result = service.execute(CreatePathRequest(parent_dir="/tmp/zivo", name="docs", kind="dir"))
 
-    assert adapter.created_directories == ["/tmp/peneo/docs"]
-    assert result.path == "/tmp/peneo/docs"
+    assert adapter.created_directories == ["/tmp/zivo/docs"]
+    assert result.path == "/tmp/zivo/docs"
     assert result.message == "Created directory docs"
 
 
 def test_file_mutation_service_raises_create_file_error() -> None:
-    adapter = StubFileOperationAdapter(failing_paths={"/tmp/peneo/README.md"})
+    adapter = StubFileOperationAdapter(failing_paths={"/tmp/zivo/README.md"})
     service = LiveFileMutationService(adapter=adapter)
 
     with pytest.raises(OSError, match="file creation failed"):
-        service.execute(CreatePathRequest(parent_dir="/tmp/peneo", name="README.md", kind="file"))
+        service.execute(CreatePathRequest(parent_dir="/tmp/zivo", name="README.md", kind="file"))
 
 
 def test_file_mutation_service_raises_create_directory_error() -> None:
-    adapter = StubFileOperationAdapter(failing_paths={"/tmp/peneo/docs"})
+    adapter = StubFileOperationAdapter(failing_paths={"/tmp/zivo/docs"})
     service = LiveFileMutationService(adapter=adapter)
 
     with pytest.raises(OSError, match="directory creation failed"):
-        service.execute(CreatePathRequest(parent_dir="/tmp/peneo", name="docs", kind="dir"))
+        service.execute(CreatePathRequest(parent_dir="/tmp/zivo", name="docs", kind="dir"))
 
 
 def test_file_mutation_service_reports_partial_delete_failures() -> None:
-    adapter = StubFileOperationAdapter(failing_paths={"/tmp/peneo/src"})
+    adapter = StubFileOperationAdapter(failing_paths={"/tmp/zivo/src"})
     service = LiveFileMutationService(adapter=adapter)
 
     result = service.execute(
-        DeleteRequest(paths=("/tmp/peneo/docs", "/tmp/peneo/src"), mode="trash")
+        DeleteRequest(paths=("/tmp/zivo/docs", "/tmp/zivo/src"), mode="trash")
     )
 
-    assert adapter.trashed_paths == ["/tmp/peneo/docs"]
+    assert adapter.trashed_paths == ["/tmp/zivo/docs"]
     assert result.level == "warning"
-    assert result.removed_paths == ("/tmp/peneo/docs",)
+    assert result.removed_paths == ("/tmp/zivo/docs",)
 
 
 def test_file_mutation_service_raises_when_all_deletes_fail() -> None:
-    adapter = StubFileOperationAdapter(failing_paths={"/tmp/peneo/docs"})
+    adapter = StubFileOperationAdapter(failing_paths={"/tmp/zivo/docs"})
     service = LiveFileMutationService(adapter=adapter)
 
     with pytest.raises(OSError, match="Failed to trash docs"):
-        service.execute(DeleteRequest(paths=("/tmp/peneo/docs",), mode="trash"))
+        service.execute(DeleteRequest(paths=("/tmp/zivo/docs",), mode="trash"))
 
 
 def test_file_mutation_service_trashes_symlink_without_following_target(tmp_path) -> None:
@@ -185,34 +185,34 @@ def test_file_mutation_service_permanently_deletes_single_path() -> None:
     adapter = StubFileOperationAdapter()
     service = LiveFileMutationService(adapter=adapter)
 
-    result = service.execute(DeleteRequest(paths=("/tmp/peneo/docs",), mode="permanent"))
+    result = service.execute(DeleteRequest(paths=("/tmp/zivo/docs",), mode="permanent"))
 
-    assert adapter.deleted_paths == ["/tmp/peneo/docs"]
+    assert adapter.deleted_paths == ["/tmp/zivo/docs"]
     assert adapter.trashed_paths == []
     assert result.message == "Deleted 1 item permanently"
-    assert result.removed_paths == ("/tmp/peneo/docs",)
+    assert result.removed_paths == ("/tmp/zivo/docs",)
 
 
 def test_file_mutation_service_reports_partial_permanent_delete_failures() -> None:
-    adapter = StubFileOperationAdapter(failing_paths={"/tmp/peneo/src"})
+    adapter = StubFileOperationAdapter(failing_paths={"/tmp/zivo/src"})
     service = LiveFileMutationService(adapter=adapter)
 
     result = service.execute(
-        DeleteRequest(paths=("/tmp/peneo/docs", "/tmp/peneo/src"), mode="permanent")
+        DeleteRequest(paths=("/tmp/zivo/docs", "/tmp/zivo/src"), mode="permanent")
     )
 
-    assert adapter.deleted_paths == ["/tmp/peneo/docs"]
+    assert adapter.deleted_paths == ["/tmp/zivo/docs"]
     assert result.level == "warning"
     assert result.message == "Deleted 1/2 items permanently with 1 failure(s)"
-    assert result.removed_paths == ("/tmp/peneo/docs",)
+    assert result.removed_paths == ("/tmp/zivo/docs",)
 
 
 def test_file_mutation_service_raises_when_all_permanent_deletes_fail() -> None:
-    adapter = StubFileOperationAdapter(failing_paths={"/tmp/peneo/docs"})
+    adapter = StubFileOperationAdapter(failing_paths={"/tmp/zivo/docs"})
     service = LiveFileMutationService(adapter=adapter)
 
     with pytest.raises(OSError, match="Failed to permanently delete docs"):
-        service.execute(DeleteRequest(paths=("/tmp/peneo/docs",), mode="permanent"))
+        service.execute(DeleteRequest(paths=("/tmp/zivo/docs",), mode="permanent"))
 
 
 def test_file_mutation_service_permanently_deletes_symlink_without_following_target(

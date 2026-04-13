@@ -1,5 +1,5 @@
-from peneo.models import TrashRestoreRecord
-from peneo.services.trash_operations import LinuxTrashService
+from zivo.models import TrashRestoreRecord
+from zivo.services.trash_operations import LinuxTrashService
 
 
 def test_linux_trash_service_captures_restorable_metadata(tmp_path, monkeypatch) -> None:

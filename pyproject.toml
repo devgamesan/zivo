@@ -3,9 +3,9 @@ requires = ["hatchling>=1.24.0"]
 build-backend = "hatchling.build"
 
 [project]
-name = "peneo"
-version = "0.11.0"
-description = "A simple TUI file manager with a three-pane layout. Peneo shows parent, current, and child directories side by side, aiming to feel closer to a GUI file explorer than to a keyboard-heavy power-user tool."
+name = "zivo"
+version = "0.12.0"
+description = "zivo is a simple and intuitive TUI file manager that lets you browse, search, and operate files without memorizing commands — a Zero-friction Interface for Viewing & Operations."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.12"
@@ -35,13 +35,13 @@ classifiers = [
 ]
 
 [project.urls]
-Repository = "https://github.com/devgamesan/peneo"
-Documentation = "https://github.com/devgamesan/peneo#readme"
-Issues = "https://github.com/devgamesan/peneo/issues"
-CI = "https://github.com/devgamesan/peneo/actions"
+Repository = "https://github.com/devgamesan/zivo"
+Documentation = "https://github.com/devgamesan/zivo#readme"
+Issues = "https://github.com/devgamesan/zivo/issues"
+CI = "https://github.com/devgamesan/zivo/actions"
 
 [project.scripts]
-peneo = "peneo.__main__:main"
+zivo = "zivo.__main__:main"
 
 [dependency-groups]
 dev = [
@@ -66,5 +66,5 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/peneo"]
-artifacts = ["src/peneo/**/*.tcss"]
+packages = ["src/zivo"]
+artifacts = ["src/zivo/**/*.tcss"]

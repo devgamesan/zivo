@@ -1,7 +1,7 @@
 from rich.style import Style
 
-from peneo.models import PaneEntry
-from peneo.ui.panes import (
+from zivo.models import PaneEntry
+from zivo.ui.panes import (
     MainPane,
     _ft_resolve_style,
     _render_file_label,

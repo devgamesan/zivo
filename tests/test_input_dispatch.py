@@ -1,7 +1,7 @@
 from dataclasses import replace
 
-from peneo.models import AppConfig, BookmarkConfig, CreateZipArchiveRequest
-from peneo.state import (
+from zivo.models import AppConfig, BookmarkConfig, CreateZipArchiveRequest
+from zivo.state import (
     ActivateNextTab,
     ActivatePreviousTab,
     AddBookmark,
@@ -128,11 +128,11 @@ def test_browsing_down_dispatches_move_cursor() -> None:
     assert actions[1] == MoveCursor(
         delta=1,
         visible_paths=(
-            "/home/tadashi/develop/peneo/docs",
-            "/home/tadashi/develop/peneo/src",
-            "/home/tadashi/develop/peneo/tests",
-            "/home/tadashi/develop/peneo/pyproject.toml",
-            "/home/tadashi/develop/peneo/README.md",
+            "/home/tadashi/develop/zivo/docs",
+            "/home/tadashi/develop/zivo/src",
+            "/home/tadashi/develop/zivo/tests",
+            "/home/tadashi/develop/zivo/pyproject.toml",
+            "/home/tadashi/develop/zivo/README.md",
         ),
     )
 
@@ -164,11 +164,11 @@ def test_browsing_j_dispatches_move_cursor() -> None:
     assert actions[1] == MoveCursor(
         delta=1,
         visible_paths=(
-            "/home/tadashi/develop/peneo/docs",
-            "/home/tadashi/develop/peneo/src",
-            "/home/tadashi/develop/peneo/tests",
-            "/home/tadashi/develop/peneo/pyproject.toml",
-            "/home/tadashi/develop/peneo/README.md",
+            "/home/tadashi/develop/zivo/docs",
+            "/home/tadashi/develop/zivo/src",
+            "/home/tadashi/develop/zivo/tests",
+            "/home/tadashi/develop/zivo/pyproject.toml",
+            "/home/tadashi/develop/zivo/README.md",
         ),
     )
 
@@ -182,11 +182,11 @@ def test_browsing_k_dispatches_move_cursor() -> None:
     assert actions[1] == MoveCursor(
         delta=-1,
         visible_paths=(
-            "/home/tadashi/develop/peneo/docs",
-            "/home/tadashi/develop/peneo/src",
-            "/home/tadashi/develop/peneo/tests",
-            "/home/tadashi/develop/peneo/pyproject.toml",
-            "/home/tadashi/develop/peneo/README.md",
+            "/home/tadashi/develop/zivo/docs",
+            "/home/tadashi/develop/zivo/src",
+            "/home/tadashi/develop/zivo/tests",
+            "/home/tadashi/develop/zivo/pyproject.toml",
+            "/home/tadashi/develop/zivo/README.md",
         ),
     )
 
@@ -200,11 +200,11 @@ def test_browsing_shift_down_dispatches_range_selection_move() -> None:
     assert actions[1] == MoveCursorAndSelectRange(
         delta=1,
         visible_paths=(
-            "/home/tadashi/develop/peneo/docs",
-            "/home/tadashi/develop/peneo/src",
-            "/home/tadashi/develop/peneo/tests",
-            "/home/tadashi/develop/peneo/pyproject.toml",
-            "/home/tadashi/develop/peneo/README.md",
+            "/home/tadashi/develop/zivo/docs",
+            "/home/tadashi/develop/zivo/src",
+            "/home/tadashi/develop/zivo/tests",
+            "/home/tadashi/develop/zivo/pyproject.toml",
+            "/home/tadashi/develop/zivo/README.md",
         ),
     )
 
@@ -217,11 +217,11 @@ def test_browsing_down_clears_range_selection_before_moving_cursor() -> None:
             state.current_pane,
             selected_paths=frozenset(
                 {
-                    "/home/tadashi/develop/peneo/docs",
-                    "/home/tadashi/develop/peneo/src",
+                    "/home/tadashi/develop/zivo/docs",
+                    "/home/tadashi/develop/zivo/src",
                 }
             ),
-            selection_anchor_path="/home/tadashi/develop/peneo/docs",
+            selection_anchor_path="/home/tadashi/develop/zivo/docs",
         ),
     )
 
@@ -233,11 +233,11 @@ def test_browsing_down_clears_range_selection_before_moving_cursor() -> None:
         MoveCursor(
             delta=1,
             visible_paths=(
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
-                "/home/tadashi/develop/peneo/tests",
-                "/home/tadashi/develop/peneo/pyproject.toml",
-                "/home/tadashi/develop/peneo/README.md",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
+                "/home/tadashi/develop/zivo/tests",
+                "/home/tadashi/develop/zivo/pyproject.toml",
+                "/home/tadashi/develop/zivo/README.md",
             ),
         ),
     )
@@ -250,13 +250,13 @@ def test_browsing_space_toggles_selection_and_advances_cursor() -> None:
 
     assert actions[0] == SetNotification(None)
     assert actions[1] == ToggleSelectionAndAdvance(
-        path="/home/tadashi/develop/peneo/docs",
+        path="/home/tadashi/develop/zivo/docs",
         visible_paths=(
-            "/home/tadashi/develop/peneo/docs",
-            "/home/tadashi/develop/peneo/src",
-            "/home/tadashi/develop/peneo/tests",
-            "/home/tadashi/develop/peneo/pyproject.toml",
-            "/home/tadashi/develop/peneo/README.md",
+            "/home/tadashi/develop/zivo/docs",
+            "/home/tadashi/develop/zivo/src",
+            "/home/tadashi/develop/zivo/tests",
+            "/home/tadashi/develop/zivo/pyproject.toml",
+            "/home/tadashi/develop/zivo/README.md",
         ),
     )
 
@@ -359,20 +359,20 @@ def test_browsing_capital_B_adds_bookmark_for_current_directory() -> None:
 
     assert actions == (
         SetNotification(None),
-        AddBookmark(path="/home/tadashi/develop/peneo"),
+        AddBookmark(path="/home/tadashi/develop/zivo"),
     )
 
 
 def test_browsing_capital_B_removes_bookmark_for_current_directory() -> None:
     state = build_initial_app_state(
-        config=AppConfig(bookmarks=BookmarkConfig(paths=("/home/tadashi/develop/peneo",)))
+        config=AppConfig(bookmarks=BookmarkConfig(paths=("/home/tadashi/develop/zivo",)))
     )
 
     actions = dispatch_key_input(state, key="B")
 
     assert actions == (
         SetNotification(None),
-        RemoveBookmark(path="/home/tadashi/develop/peneo"),
+        RemoveBookmark(path="/home/tadashi/develop/zivo"),
     )
 
 
@@ -410,7 +410,7 @@ def test_browsing_lowercase_c_dispatches_copy_targets() -> None:
 
     assert actions == (
         SetNotification(None),
-        CopyTargets(("/home/tadashi/develop/peneo/docs",)),
+        CopyTargets(("/home/tadashi/develop/zivo/docs",)),
     )
 
 
@@ -421,7 +421,7 @@ def test_browsing_x_dispatches_cut_targets() -> None:
 
     assert actions == (
         SetNotification(None),
-        CutTargets(("/home/tadashi/develop/peneo/docs",)),
+        CutTargets(("/home/tadashi/develop/zivo/docs",)),
     )
 
 
@@ -495,7 +495,7 @@ def test_browsing_right_on_file_does_nothing() -> None:
         state,
         current_pane=replace(
             state.current_pane,
-            cursor_path="/home/tadashi/develop/peneo/README.md",
+            cursor_path="/home/tadashi/develop/zivo/README.md",
         ),
     )
 
@@ -510,7 +510,7 @@ def test_browsing_enter_on_file_dispatches_open_with_default_app() -> None:
         state,
         current_pane=replace(
             state.current_pane,
-            cursor_path="/home/tadashi/develop/peneo/README.md",
+            cursor_path="/home/tadashi/develop/zivo/README.md",
         ),
     )
 
@@ -518,7 +518,7 @@ def test_browsing_enter_on_file_dispatches_open_with_default_app() -> None:
 
     assert actions == (
         SetNotification(None),
-        OpenPathWithDefaultApp("/home/tadashi/develop/peneo/README.md"),
+        OpenPathWithDefaultApp("/home/tadashi/develop/zivo/README.md"),
     )
 
 
@@ -528,7 +528,7 @@ def test_browsing_e_on_file_dispatches_open_in_editor() -> None:
         state,
         current_pane=replace(
             state.current_pane,
-            cursor_path="/home/tadashi/develop/peneo/README.md",
+            cursor_path="/home/tadashi/develop/zivo/README.md",
         ),
     )
 
@@ -536,7 +536,7 @@ def test_browsing_e_on_file_dispatches_open_in_editor() -> None:
 
     assert actions == (
         SetNotification(None),
-        OpenPathInEditor("/home/tadashi/develop/peneo/README.md"),
+        OpenPathInEditor("/home/tadashi/develop/zivo/README.md"),
     )
 
 
@@ -567,7 +567,7 @@ def test_browsing_lowercase_r_begins_rename_for_single_target() -> None:
 
     assert actions == (
         SetNotification(None),
-        BeginRenameInput("/home/tadashi/develop/peneo/docs"),
+        BeginRenameInput("/home/tadashi/develop/zivo/docs"),
     )
 
 
@@ -579,8 +579,8 @@ def test_browsing_lowercase_r_warns_for_multiple_targets() -> None:
             state.current_pane,
             selected_paths=frozenset(
                 {
-                    "/home/tadashi/develop/peneo/docs",
-                    "/home/tadashi/develop/peneo/src",
+                    "/home/tadashi/develop/zivo/docs",
+                    "/home/tadashi/develop/zivo/src",
                 }
             ),
         ),
@@ -766,7 +766,7 @@ def test_search_palette_down_moves_cursor() -> None:
 
 
 def test_palette_ctrl_e_opens_grep_result_in_editor() -> None:
-    from peneo.state.models import CommandPaletteState
+    from zivo.state.models import CommandPaletteState
     state = replace(
         build_initial_app_state(),
         ui_mode="PALETTE",
@@ -782,7 +782,7 @@ def test_palette_ctrl_e_opens_grep_result_in_editor() -> None:
 
 
 def test_palette_ctrl_e_opens_find_result_in_editor() -> None:
-    from peneo.state.models import CommandPaletteState
+    from zivo.state.models import CommandPaletteState
     state = replace(
         build_initial_app_state(),
         ui_mode="PALETTE",
@@ -798,7 +798,7 @@ def test_palette_ctrl_e_opens_find_result_in_editor() -> None:
 
 
 def test_palette_e_key_does_not_open_editor_for_other_sources() -> None:
-    from peneo.state.models import CommandPaletteState
+    from zivo.state.models import CommandPaletteState
     state = replace(
         build_initial_app_state(),
         ui_mode="PALETTE",
@@ -815,7 +815,7 @@ def test_palette_e_key_does_not_open_editor_for_other_sources() -> None:
 
 
 def test_palette_ctrl_n_moves_cursor_down_in_grep_palette() -> None:
-    from peneo.state.models import CommandPaletteState
+    from zivo.state.models import CommandPaletteState
     state = replace(
         build_initial_app_state(),
         ui_mode="PALETTE",
@@ -831,7 +831,7 @@ def test_palette_ctrl_n_moves_cursor_down_in_grep_palette() -> None:
 
 
 def test_palette_ctrl_p_moves_cursor_up_in_grep_palette() -> None:
-    from peneo.state.models import CommandPaletteState
+    from zivo.state.models import CommandPaletteState
     state = replace(
         build_initial_app_state(),
         ui_mode="PALETTE",
@@ -847,7 +847,7 @@ def test_palette_ctrl_p_moves_cursor_up_in_grep_palette() -> None:
 
 
 def test_palette_ctrl_n_moves_cursor_down_in_file_search_palette() -> None:
-    from peneo.state.models import CommandPaletteState
+    from zivo.state.models import CommandPaletteState
     state = replace(
         build_initial_app_state(),
         ui_mode="PALETTE",
@@ -863,7 +863,7 @@ def test_palette_ctrl_n_moves_cursor_down_in_file_search_palette() -> None:
 
 
 def test_palette_ctrl_p_moves_cursor_up_in_file_search_palette() -> None:
-    from peneo.state.models import CommandPaletteState
+    from zivo.state.models import CommandPaletteState
     state = replace(
         build_initial_app_state(),
         ui_mode="PALETTE",
@@ -1121,7 +1121,7 @@ def test_browsing_delete_dispatches_delete_targets() -> None:
 
     assert actions == (
         SetNotification(None),
-        BeginDeleteTargets(("/home/tadashi/develop/peneo/docs",)),
+        BeginDeleteTargets(("/home/tadashi/develop/zivo/docs",)),
     )
 
 
@@ -1146,7 +1146,7 @@ def test_browsing_shift_delete_dispatches_permanent_delete_targets() -> None:
 
     assert actions == (
         SetNotification(None),
-        BeginDeleteTargets(("/home/tadashi/develop/peneo/docs",), mode="permanent"),
+        BeginDeleteTargets(("/home/tadashi/develop/zivo/docs",), mode="permanent"),
     )
 
 
@@ -1175,11 +1175,11 @@ def test_browsing_lowercase_a_selects_all_visible_entries() -> None:
         SetNotification(None),
         SelectAllVisibleEntries(
             (
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
-                "/home/tadashi/develop/peneo/tests",
-                "/home/tadashi/develop/peneo/pyproject.toml",
-                "/home/tadashi/develop/peneo/README.md",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
+                "/home/tadashi/develop/zivo/tests",
+                "/home/tadashi/develop/zivo/pyproject.toml",
+                "/home/tadashi/develop/zivo/README.md",
             )
         ),
     )
@@ -1293,10 +1293,10 @@ def test_detail_enter_closes_attribute_dialog() -> None:
 
 def test_config_down_moves_cursor() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
         ),
     )
@@ -1308,10 +1308,10 @@ def test_config_down_moves_cursor() -> None:
 
 def test_config_ctrl_n_moves_cursor() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
         ),
     )
@@ -1323,10 +1323,10 @@ def test_config_ctrl_n_moves_cursor() -> None:
 
 def test_config_ctrl_p_moves_cursor() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
         ),
     )
@@ -1338,10 +1338,10 @@ def test_config_ctrl_p_moves_cursor() -> None:
 
 def test_config_enter_cycles_selected_value() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
         ),
     )
@@ -1353,10 +1353,10 @@ def test_config_enter_cycles_selected_value() -> None:
 
 def test_config_s_saves_editor() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
         ),
     )
@@ -1368,25 +1368,25 @@ def test_config_s_saves_editor() -> None:
 
 def test_config_e_opens_config_file_in_editor() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
         ),
     )
 
     actions = dispatch_key_input(state, key="e", character="e")
 
-    assert actions == (SetNotification(None), OpenPathInEditor("/tmp/peneo/config.toml"))
+    assert actions == (SetNotification(None), OpenPathInEditor("/tmp/zivo/config.toml"))
 
 
 def test_config_escape_closes_editor() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
         ),
     )
@@ -1398,10 +1398,10 @@ def test_config_escape_closes_editor() -> None:
 
 def test_config_unbound_key_shows_guidance() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
         ),
     )
@@ -1435,8 +1435,8 @@ def test_delete_confirm_enter_dispatches_confirmation() -> None:
         ui_mode="CONFIRM",
         delete_confirmation=DeleteConfirmationState(
             paths=(
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
             )
         ),
     )
@@ -1451,7 +1451,7 @@ def test_delete_confirm_escape_cancels_confirmation() -> None:
         build_initial_app_state(),
         ui_mode="CONFIRM",
         delete_confirmation=DeleteConfirmationState(
-            paths=("/home/tadashi/develop/peneo/docs",),
+            paths=("/home/tadashi/develop/zivo/docs",),
         ),
     )
 
@@ -1466,9 +1466,9 @@ def test_zip_compress_confirm_enter_dispatches_confirmation() -> None:
         ui_mode="CONFIRM",
         zip_compress_confirmation=ZipCompressConfirmationState(
             request=CreateZipArchiveRequest(
-                source_paths=("/home/tadashi/develop/peneo/docs",),
-                destination_path="/home/tadashi/develop/peneo/docs.zip",
-                root_dir="/home/tadashi/develop/peneo",
+                source_paths=("/home/tadashi/develop/zivo/docs",),
+                destination_path="/home/tadashi/develop/zivo/docs.zip",
+                root_dir="/home/tadashi/develop/zivo",
             ),
             total_entries=3,
         ),
@@ -1485,9 +1485,9 @@ def test_zip_compress_confirm_escape_cancels_confirmation() -> None:
         ui_mode="CONFIRM",
         zip_compress_confirmation=ZipCompressConfirmationState(
             request=CreateZipArchiveRequest(
-                source_paths=("/home/tadashi/develop/peneo/docs",),
-                destination_path="/home/tadashi/develop/peneo/docs.zip",
-                root_dir="/home/tadashi/develop/peneo",
+                source_paths=("/home/tadashi/develop/zivo/docs",),
+                destination_path="/home/tadashi/develop/zivo/docs.zip",
+                root_dir="/home/tadashi/develop/zivo",
             ),
             total_entries=3,
         ),
@@ -1531,7 +1531,7 @@ def test_zip_enter_dispatches_submit_pending_input() -> None:
         pending_input=PendingInputState(
             prompt="Compress to: ",
             value="/tmp/output.zip",
-            zip_source_paths=("/home/tadashi/develop/peneo/docs",),
+            zip_source_paths=("/home/tadashi/develop/zivo/docs",),
         ),
     )
 
@@ -1547,7 +1547,7 @@ def test_zip_printable_character_dispatches_input_update() -> None:
         pending_input=PendingInputState(
             prompt="Compress to: ",
             value="/tmp/output",
-            zip_source_paths=("/home/tadashi/develop/peneo/docs",),
+            zip_source_paths=("/home/tadashi/develop/zivo/docs",),
         ),
     )
 

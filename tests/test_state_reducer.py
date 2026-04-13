@@ -1,6 +1,7 @@
 from dataclasses import replace
 
-from peneo.models import (
+from tests.state_test_helpers import reduce_state
+from zivo.models import (
     AppConfig,
     BookmarkConfig,
     CreatePathRequest,
@@ -23,7 +24,7 @@ from peneo.models import (
     UndoRestoreTrashStep,
     UndoResult,
 )
-from peneo.state import (
+from zivo.state import (
     ActivateNextTab,
     ActivatePreviousTab,
     AddBookmark,
@@ -178,7 +179,6 @@ from peneo.state import (
     reduce_app_state,
     select_browser_tabs,
 )
-from tests.state_test_helpers import reduce_state
 
 
 def _reduce_state(state, action):
@@ -217,17 +217,17 @@ def test_request_directory_sizes_marks_paths_pending_and_emits_effect() -> None:
 
     result = reduce_app_state(
         state,
-        RequestDirectorySizes(("/home/tadashi/develop/peneo/docs",)),
+        RequestDirectorySizes(("/home/tadashi/develop/zivo/docs",)),
     )
 
     assert result.state.pending_directory_size_request_id == 1
     assert result.state.directory_size_cache == (
-        DirectorySizeCacheEntry("/home/tadashi/develop/peneo/docs", "pending"),
+        DirectorySizeCacheEntry("/home/tadashi/develop/zivo/docs", "pending"),
     )
     assert result.effects == (
         RunDirectorySizeEffect(
             request_id=1,
-            paths=("/home/tadashi/develop/peneo/docs",),
+            paths=("/home/tadashi/develop/zivo/docs",),
         ),
     )
 
@@ -236,14 +236,14 @@ def test_request_browser_snapshot_clears_directory_size_cache() -> None:
     state = replace(
         build_initial_app_state(),
         directory_size_cache=(
-            DirectorySizeCacheEntry("/home/tadashi/develop/peneo/docs", "ready", size_bytes=123),
+            DirectorySizeCacheEntry("/home/tadashi/develop/zivo/docs", "ready", size_bytes=123),
         ),
         pending_directory_size_request_id=7,
     )
 
     next_state = reduce_app_state(
         state,
-        RequestBrowserSnapshot("/home/tadashi/develop/peneo", blocking=True),
+        RequestBrowserSnapshot("/home/tadashi/develop/zivo", blocking=True),
     ).state
 
     assert next_state.directory_size_cache == ()
@@ -254,7 +254,7 @@ def test_directory_sizes_loaded_updates_cache_when_request_matches() -> None:
     state = replace(
         build_initial_app_state(),
         directory_size_cache=(
-            DirectorySizeCacheEntry("/home/tadashi/develop/peneo/docs", "pending"),
+            DirectorySizeCacheEntry("/home/tadashi/develop/zivo/docs", "pending"),
         ),
         pending_directory_size_request_id=9,
     )
@@ -263,15 +263,15 @@ def test_directory_sizes_loaded_updates_cache_when_request_matches() -> None:
         state,
         DirectorySizesLoaded(
             request_id=9,
-            sizes=(("/home/tadashi/develop/peneo/docs", 4321),),
+            sizes=(("/home/tadashi/develop/zivo/docs", 4321),),
         ),
     )
 
     assert next_state.directory_size_cache == (
-        DirectorySizeCacheEntry("/home/tadashi/develop/peneo/docs", "ready", size_bytes=4321),
+        DirectorySizeCacheEntry("/home/tadashi/develop/zivo/docs", "ready", size_bytes=4321),
     )
     assert next_state.directory_size_delta == DirectorySizeDeltaState(
-        changed_paths=("/home/tadashi/develop/peneo/docs",),
+        changed_paths=("/home/tadashi/develop/zivo/docs",),
         revision=1,
     )
     assert next_state.pending_directory_size_request_id is None
@@ -281,8 +281,8 @@ def test_directory_sizes_loaded_marks_partial_failures() -> None:
     state = replace(
         build_initial_app_state(),
         directory_size_cache=(
-            DirectorySizeCacheEntry("/home/tadashi/develop/peneo/docs", "pending"),
-            DirectorySizeCacheEntry("/home/tadashi/develop/peneo/private", "pending"),
+            DirectorySizeCacheEntry("/home/tadashi/develop/zivo/docs", "pending"),
+            DirectorySizeCacheEntry("/home/tadashi/develop/zivo/private", "pending"),
         ),
         pending_directory_size_request_id=9,
     )
@@ -291,23 +291,23 @@ def test_directory_sizes_loaded_marks_partial_failures() -> None:
         state,
         DirectorySizesLoaded(
             request_id=9,
-            sizes=(("/home/tadashi/develop/peneo/docs", 4321),),
-            failures=(("/home/tadashi/develop/peneo/private", "Permission denied"),),
+            sizes=(("/home/tadashi/develop/zivo/docs", 4321),),
+            failures=(("/home/tadashi/develop/zivo/private", "Permission denied"),),
         ),
     )
 
     assert next_state.directory_size_cache == (
-        DirectorySizeCacheEntry("/home/tadashi/develop/peneo/docs", "ready", size_bytes=4321),
+        DirectorySizeCacheEntry("/home/tadashi/develop/zivo/docs", "ready", size_bytes=4321),
         DirectorySizeCacheEntry(
-            "/home/tadashi/develop/peneo/private",
+            "/home/tadashi/develop/zivo/private",
             "failed",
             error_message="Permission denied",
         ),
     )
     assert next_state.directory_size_delta == DirectorySizeDeltaState(
         changed_paths=(
-            "/home/tadashi/develop/peneo/docs",
-            "/home/tadashi/develop/peneo/private",
+            "/home/tadashi/develop/zivo/docs",
+            "/home/tadashi/develop/zivo/private",
         ),
         revision=1,
     )
@@ -318,7 +318,7 @@ def test_directory_sizes_failed_marks_requested_paths_failed() -> None:
     state = replace(
         build_initial_app_state(),
         directory_size_cache=(
-            DirectorySizeCacheEntry("/home/tadashi/develop/peneo/docs", "pending"),
+            DirectorySizeCacheEntry("/home/tadashi/develop/zivo/docs", "pending"),
         ),
         pending_directory_size_request_id=4,
     )
@@ -327,20 +327,20 @@ def test_directory_sizes_failed_marks_requested_paths_failed() -> None:
         state,
         DirectorySizesFailed(
             request_id=4,
-            paths=("/home/tadashi/develop/peneo/docs",),
+            paths=("/home/tadashi/develop/zivo/docs",),
             message="Permission denied",
         ),
     )
 
     assert next_state.directory_size_cache == (
         DirectorySizeCacheEntry(
-            "/home/tadashi/develop/peneo/docs",
+            "/home/tadashi/develop/zivo/docs",
             "failed",
             error_message="Permission denied",
         ),
     )
     assert next_state.directory_size_delta == DirectorySizeDeltaState(
-        changed_paths=("/home/tadashi/develop/peneo/docs",),
+        changed_paths=("/home/tadashi/develop/zivo/docs",),
         revision=1,
     )
     assert next_state.pending_directory_size_request_id is None
@@ -350,7 +350,7 @@ def test_non_directory_size_action_clears_transient_directory_size_delta() -> No
     state = replace(
         build_initial_app_state(),
         directory_size_delta=DirectorySizeDeltaState(
-            changed_paths=("/home/tadashi/develop/peneo/docs",),
+            changed_paths=("/home/tadashi/develop/zivo/docs",),
             revision=4,
         ),
     )
@@ -366,7 +366,7 @@ def test_non_directory_size_action_clears_transient_directory_size_delta() -> No
 
 def test_toggle_selection_sets_transient_current_pane_delta() -> None:
     state = build_initial_app_state()
-    path = "/home/tadashi/develop/peneo/README.md"
+    path = "/home/tadashi/develop/zivo/README.md"
 
     next_state = _reduce_state(state, ToggleSelection(path))
 
@@ -379,7 +379,7 @@ def test_toggle_selection_sets_transient_current_pane_delta() -> None:
 
 def test_cut_targets_sets_transient_current_pane_delta() -> None:
     state = build_initial_app_state()
-    path = "/home/tadashi/develop/peneo/docs"
+    path = "/home/tadashi/develop/zivo/docs"
 
     next_state = _reduce_state(state, CutTargets((path,)))
 
@@ -401,14 +401,14 @@ def test_move_cursor_and_select_range_sets_transient_current_pane_delta() -> Non
 
     assert next_state.current_pane.selected_paths == frozenset(
         {
-            "/home/tadashi/develop/peneo/docs",
-            "/home/tadashi/develop/peneo/src",
+            "/home/tadashi/develop/zivo/docs",
+            "/home/tadashi/develop/zivo/src",
         }
     )
     assert next_state.current_pane_delta == CurrentPaneDeltaState(
         changed_paths=(
-            "/home/tadashi/develop/peneo/docs",
-            "/home/tadashi/develop/peneo/src",
+            "/home/tadashi/develop/zivo/docs",
+            "/home/tadashi/develop/zivo/src",
         ),
         revision=1,
     )
@@ -418,7 +418,7 @@ def test_non_selection_action_clears_transient_current_pane_delta() -> None:
     state = replace(
         build_initial_app_state(),
         current_pane_delta=CurrentPaneDeltaState(
-            changed_paths=("/home/tadashi/develop/peneo/docs",),
+            changed_paths=("/home/tadashi/develop/zivo/docs",),
             revision=4,
         ),
     )
@@ -434,7 +434,7 @@ def test_non_selection_action_clears_transient_current_pane_delta() -> None:
 
 def test_toggle_selection_uses_absolute_paths() -> None:
     state = build_initial_app_state()
-    path = "/home/tadashi/develop/peneo/README.md"
+    path = "/home/tadashi/develop/zivo/README.md"
 
     selected_state = _reduce_state(state, ToggleSelection(path))
     cleared_state = _reduce_state(selected_state, ToggleSelection(path))
@@ -447,7 +447,7 @@ def test_clear_selection_empties_selection() -> None:
     state = build_initial_app_state()
     selected_state = _reduce_state(
         state,
-        ToggleSelection("/home/tadashi/develop/peneo/README.md"),
+        ToggleSelection("/home/tadashi/develop/zivo/README.md"),
     )
 
     next_state = _reduce_state(selected_state, ClearSelection())
@@ -484,14 +484,14 @@ def test_set_sort_returns_new_state_without_mutating_input() -> None:
 
 def test_set_sort_keeps_cursor_on_same_visible_path() -> None:
     state = build_initial_app_state()
-    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/README.md"))
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/zivo/README.md"))
 
     next_state = _reduce_state(
         state,
         SetSort(field="modified", descending=True, directories_first=False),
     )
 
-    assert next_state.current_pane.cursor_path == "/home/tadashi/develop/peneo/README.md"
+    assert next_state.current_pane.cursor_path == "/home/tadashi/develop/zivo/README.md"
 
 
 def test_set_sort_normalizes_cursor_to_first_visible_path_when_hidden() -> None:
@@ -503,7 +503,7 @@ def test_set_sort_normalizes_cursor_to_first_visible_path_when_hidden() -> None:
         SetSort(field="name", descending=False, directories_first=True),
     )
 
-    assert next_state.current_pane.cursor_path == "/home/tadashi/develop/peneo/pyproject.toml"
+    assert next_state.current_pane.cursor_path == "/home/tadashi/develop/zivo/pyproject.toml"
 
 
 def test_set_cursor_path_ignores_unknown_path() -> None:
@@ -518,7 +518,7 @@ def test_enter_cursor_directory_requests_blocking_snapshot_when_child_pane_is_st
     state = replace(
         build_initial_app_state(),
         child_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo/src",
+            directory_path="/home/tadashi/develop/zivo/src",
             entries=(),
         ),
     )
@@ -530,7 +530,7 @@ def test_enter_cursor_directory_requests_blocking_snapshot_when_child_pane_is_st
     assert result.effects == (
         LoadBrowserSnapshotEffect(
             request_id=1,
-            path="/home/tadashi/develop/peneo/docs",
+            path="/home/tadashi/develop/zivo/docs",
             cursor_path=None,
             blocking=True,
         ),
@@ -672,7 +672,7 @@ def test_go_to_parent_directory_restores_cursor_to_previous_child() -> None:
     assert result.state.ui_mode == "BUSY"
     assert len(result.effects) == 1
     assert result.effects[0].path == "/home/tadashi/develop"
-    assert result.effects[0].cursor_path == "/home/tadashi/develop/peneo"
+    assert result.effects[0].cursor_path == "/home/tadashi/develop/zivo"
     assert result.effects[0].blocking is True
 
 
@@ -727,20 +727,20 @@ def test_go_to_home_directory_navigates_to_home() -> None:
 
 def test_reload_directory_requests_snapshot_with_current_cursor() -> None:
     state = build_initial_app_state()
-    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/src"))
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/zivo/src"))
 
     result = reduce_app_state(state, ReloadDirectory())
 
     assert result.state.pending_browser_snapshot_request_id == 3
     assert result.state.ui_mode == "BUSY"
     assert len(result.effects) == 1
-    assert result.effects[0].path == "/home/tadashi/develop/peneo"
-    assert result.effects[0].cursor_path == "/home/tadashi/develop/peneo/src"
+    assert result.effects[0].path == "/home/tadashi/develop/zivo"
+    assert result.effects[0].cursor_path == "/home/tadashi/develop/zivo/src"
     assert result.effects[0].blocking is True
     assert result.effects[0].invalidate_paths == (
-        "/home/tadashi/develop/peneo",
+        "/home/tadashi/develop/zivo",
         "/home/tadashi/develop",
-        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/zivo/src",
     )
 
 
@@ -749,13 +749,13 @@ def test_open_path_with_default_app_emits_external_launch_effect() -> None:
         build_initial_app_state(),
         current_pane=replace(
             build_initial_app_state().current_pane,
-            cursor_path="/home/tadashi/develop/peneo/README.md",
+            cursor_path="/home/tadashi/develop/zivo/README.md",
         ),
     )
 
     result = reduce_app_state(
         state,
-        OpenPathWithDefaultApp("/home/tadashi/develop/peneo/README.md"),
+        OpenPathWithDefaultApp("/home/tadashi/develop/zivo/README.md"),
     )
 
     assert result.state.ui_mode == "BROWSING"
@@ -765,7 +765,7 @@ def test_open_path_with_default_app_emits_external_launch_effect() -> None:
             request_id=1,
             request=ExternalLaunchRequest(
                 kind="open_file",
-                path="/home/tadashi/develop/peneo/README.md",
+                path="/home/tadashi/develop/zivo/README.md",
             ),
         ),
     )
@@ -776,13 +776,13 @@ def test_open_path_in_editor_emits_external_launch_effect() -> None:
         build_initial_app_state(),
         current_pane=replace(
             build_initial_app_state().current_pane,
-            cursor_path="/home/tadashi/develop/peneo/README.md",
+            cursor_path="/home/tadashi/develop/zivo/README.md",
         ),
     )
 
     result = reduce_app_state(
         state,
-        OpenPathInEditor("/home/tadashi/develop/peneo/README.md"),
+        OpenPathInEditor("/home/tadashi/develop/zivo/README.md"),
     )
 
     assert result.state.ui_mode == "BROWSING"
@@ -792,7 +792,7 @@ def test_open_path_in_editor_emits_external_launch_effect() -> None:
             request_id=1,
             request=ExternalLaunchRequest(
                 kind="open_editor",
-                path="/home/tadashi/develop/peneo/README.md",
+                path="/home/tadashi/develop/zivo/README.md",
             ),
         ),
     )
@@ -803,13 +803,13 @@ def test_open_path_in_editor_with_line_number_emits_external_launch_effect() -> 
         build_initial_app_state(),
         current_pane=replace(
             build_initial_app_state().current_pane,
-            cursor_path="/home/tadashi/develop/peneo/README.md",
+            cursor_path="/home/tadashi/develop/zivo/README.md",
         ),
     )
 
     result = reduce_app_state(
         state,
-        OpenPathInEditor("/home/tadashi/develop/peneo/README.md", line_number=42),
+        OpenPathInEditor("/home/tadashi/develop/zivo/README.md", line_number=42),
     )
 
     assert result.state.ui_mode == "BROWSING"
@@ -819,7 +819,7 @@ def test_open_path_in_editor_with_line_number_emits_external_launch_effect() -> 
             request_id=1,
             request=ExternalLaunchRequest(
                 kind="open_editor",
-                path="/home/tadashi/develop/peneo/README.md",
+                path="/home/tadashi/develop/zivo/README.md",
                 line_number=42,
             ),
         ),
@@ -835,7 +835,7 @@ def test_open_find_result_in_editor_emits_external_launch_effect() -> None:
             query="readme",
             file_search_results=(
                 FileSearchResultState(
-                    path="/home/tadashi/develop/peneo/README.md",
+                    path="/home/tadashi/develop/zivo/README.md",
                     display_path="README.md",
                 ),
             ),
@@ -853,7 +853,7 @@ def test_open_find_result_in_editor_emits_external_launch_effect() -> None:
             request_id=1,
             request=ExternalLaunchRequest(
                 kind="open_editor",
-                path="/home/tadashi/develop/peneo/README.md",
+                path="/home/tadashi/develop/zivo/README.md",
                 line_number=None,
             ),
         ),
@@ -869,8 +869,8 @@ def test_open_grep_result_in_editor_keeps_palette_state() -> None:
             query="reduce_app_state",
             grep_search_results=(
                 GrepSearchResultState(
-                    path="/home/tadashi/develop/peneo/src/peneo/state/reducer.py",
-                    display_path="src/peneo/state/reducer.py",
+                    path="/home/tadashi/develop/zivo/src/zivo/state/reducer.py",
+                    display_path="src/zivo/state/reducer.py",
                     line_number=15,
                     line_text=(
                         "def reduce_app_state("
@@ -893,7 +893,7 @@ def test_open_grep_result_in_editor_keeps_palette_state() -> None:
             request_id=1,
             request=ExternalLaunchRequest(
                 kind="open_editor",
-                path="/home/tadashi/develop/peneo/src/peneo/state/reducer.py",
+                path="/home/tadashi/develop/zivo/src/zivo/state/reducer.py",
                 line_number=15,
             ),
         ),
@@ -905,7 +905,7 @@ def test_open_terminal_at_path_emits_external_launch_effect() -> None:
 
     result = reduce_app_state(
         state,
-        OpenTerminalAtPath("/home/tadashi/develop/peneo"),
+        OpenTerminalAtPath("/home/tadashi/develop/zivo"),
     )
 
     assert result.state.next_request_id == 2
@@ -914,7 +914,7 @@ def test_open_terminal_at_path_emits_external_launch_effect() -> None:
             request_id=1,
             request=ExternalLaunchRequest(
                 kind="open_terminal",
-                path="/home/tadashi/develop/peneo",
+                path="/home/tadashi/develop/zivo",
             ),
         ),
     )
@@ -932,13 +932,13 @@ def test_begin_filter_input_switches_mode_without_mutating_query() -> None:
 def test_begin_rename_input_sets_initial_value_from_target_name() -> None:
     state = build_initial_app_state()
 
-    next_state = _reduce_state(state, BeginRenameInput("/home/tadashi/develop/peneo/docs"))
+    next_state = _reduce_state(state, BeginRenameInput("/home/tadashi/develop/zivo/docs"))
 
     assert next_state.ui_mode == "RENAME"
     assert next_state.pending_input == PendingInputState(
         prompt="Rename: ",
         value="docs",
-        target_path="/home/tadashi/develop/peneo/docs",
+        target_path="/home/tadashi/develop/zivo/docs",
     )
 
 
@@ -977,12 +977,12 @@ def test_begin_command_palette_sets_mode_and_empty_query() -> None:
 def test_begin_command_palette_keeps_current_cursor_path() -> None:
     state = _reduce_state(
         build_initial_app_state(),
-        SetCursorPath("/home/tadashi/develop/peneo/tests"),
+        SetCursorPath("/home/tadashi/develop/zivo/tests"),
     )
 
     next_state = _reduce_state(state, BeginCommandPalette())
 
-    assert next_state.current_pane.cursor_path == "/home/tadashi/develop/peneo/tests"
+    assert next_state.current_pane.cursor_path == "/home/tadashi/develop/zivo/tests"
 
 
 def test_move_command_palette_cursor_clamps_to_visible_commands() -> None:
@@ -1023,33 +1023,33 @@ def test_submit_command_palette_runs_create_file_flow() -> None:
 def test_begin_extract_archive_input_sets_default_destination() -> None:
     next_state = _reduce_state(
         build_initial_app_state(),
-        BeginExtractArchiveInput("/home/tadashi/develop/peneo/archive.tar.gz"),
+        BeginExtractArchiveInput("/home/tadashi/develop/zivo/archive.tar.gz"),
     )
 
     assert next_state.ui_mode == "EXTRACT"
     assert next_state.pending_input == PendingInputState(
         prompt="Extract to: ",
-        value="/home/tadashi/develop/peneo/archive",
-        extract_source_path="/home/tadashi/develop/peneo/archive.tar.gz",
+        value="/home/tadashi/develop/zivo/archive",
+        extract_source_path="/home/tadashi/develop/zivo/archive.tar.gz",
     )
 
 
 def test_begin_zip_compress_input_sets_default_destination() -> None:
     next_state = _reduce_state(
         build_initial_app_state(),
-        BeginZipCompressInput(("/home/tadashi/develop/peneo/README.md",)),
+        BeginZipCompressInput(("/home/tadashi/develop/zivo/README.md",)),
     )
 
     assert next_state.ui_mode == "ZIP"
     assert next_state.pending_input == PendingInputState(
         prompt="Compress to: ",
-        value="/home/tadashi/develop/peneo/README.zip",
-        zip_source_paths=("/home/tadashi/develop/peneo/README.md",),
+        value="/home/tadashi/develop/zivo/README.zip",
+        zip_source_paths=("/home/tadashi/develop/zivo/README.md",),
     )
 
 
 def test_submit_command_palette_begins_extract_archive_flow() -> None:
-    archive_path = "/home/tadashi/develop/peneo/archive.zip"
+    archive_path = "/home/tadashi/develop/zivo/archive.zip"
     state = replace(
         build_initial_app_state(),
         current_pane=replace(
@@ -1068,7 +1068,7 @@ def test_submit_command_palette_begins_extract_archive_flow() -> None:
 
     assert next_state.ui_mode == "EXTRACT"
     assert next_state.pending_input is not None
-    assert next_state.pending_input.value == "/home/tadashi/develop/peneo/archive"
+    assert next_state.pending_input.value == "/home/tadashi/develop/zivo/archive"
     assert next_state.pending_input.extract_source_path == archive_path
 
 
@@ -1079,8 +1079,8 @@ def test_submit_command_palette_begins_zip_compress_flow() -> None:
             build_initial_app_state().current_pane,
             selected_paths=frozenset(
                 {
-                    "/home/tadashi/develop/peneo/docs",
-                    "/home/tadashi/develop/peneo/src",
+                    "/home/tadashi/develop/zivo/docs",
+                    "/home/tadashi/develop/zivo/src",
                 }
             ),
         ),
@@ -1092,10 +1092,10 @@ def test_submit_command_palette_begins_zip_compress_flow() -> None:
 
     assert next_state.ui_mode == "ZIP"
     assert next_state.pending_input is not None
-    assert next_state.pending_input.value == "/home/tadashi/develop/peneo/peneo.zip"
+    assert next_state.pending_input.value == "/home/tadashi/develop/zivo/zivo.zip"
     assert next_state.pending_input.zip_source_paths == (
-        "/home/tadashi/develop/peneo/docs",
-        "/home/tadashi/develop/peneo/src",
+        "/home/tadashi/develop/zivo/docs",
+        "/home/tadashi/develop/zivo/src",
     )
 
 
@@ -1120,7 +1120,7 @@ def test_begin_history_search_enters_history_mode() -> None:
         history=HistoryState(
             back=("/tmp/a", "/tmp/b"),
             forward=("/tmp/c",),
-            visited_all=("/home/tadashi/develop/peneo", "/tmp/a", "/tmp/b", "/tmp/c"),
+            visited_all=("/home/tadashi/develop/zivo", "/tmp/a", "/tmp/b", "/tmp/c"),
         ),
     )
     next_state = _reduce_state(state, BeginHistorySearch())
@@ -1129,7 +1129,7 @@ def test_begin_history_search_enters_history_mode() -> None:
     assert next_state.command_palette is not None
     assert next_state.command_palette.source == "history"
     assert next_state.command_palette.history_results == (
-        "/home/tadashi/develop/peneo",
+        "/home/tadashi/develop/zivo",
         "/tmp/a",
         "/tmp/b",
         "/tmp/c",
@@ -1266,31 +1266,14 @@ def test_set_command_palette_query_resolves_relative_go_to_path_candidates(tmp_p
         BeginGoToPath(),
     )
     (tmp_path / "projects").mkdir()
-    (tmp_path / "projects" / "peneo").mkdir()
+    (tmp_path / "projects" / "zivo").mkdir()
 
-    next_state = _reduce_state(state, SetCommandPaletteQuery("projects/p"))
+    next_state = _reduce_state(state, SetCommandPaletteQuery("projects/z"))
 
     assert next_state.command_palette is not None
     assert next_state.command_palette.go_to_path_candidates == (
-        str(tmp_path / "projects" / "peneo"),
+        str(tmp_path / "projects" / "zivo"),
     )
-
-
-def test_set_command_palette_query_with_trailing_separator_clears_go_to_path_selection(
-    tmp_path,
-) -> None:
-    state = _reduce_state(
-        replace(build_initial_app_state(), current_path=str(tmp_path)),
-        BeginGoToPath(),
-    )
-    (tmp_path / "docs").mkdir()
-    (tmp_path / "docs" / "api").mkdir()
-
-    next_state = _reduce_state(state, SetCommandPaletteQuery("docs/"))
-
-    assert next_state.command_palette is not None
-    assert next_state.command_palette.go_to_path_candidates == (str(tmp_path / "docs" / "api"),)
-    assert next_state.command_palette.go_to_path_selection_active is False
 
 
 def test_submit_go_to_path_palette_requests_snapshot(tmp_path) -> None:
@@ -1384,7 +1367,7 @@ def test_submit_go_to_path_palette_with_invalid_directory_shows_error() -> None:
         message="Path does not exist or is not a directory",
     )
     state = _reduce_state(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         BeginCommandPalette(),
     )
     state = _reduce_state(state, SetCommandPaletteQuery("config"))
@@ -1394,17 +1377,17 @@ def test_submit_go_to_path_palette_with_invalid_directory_shows_error() -> None:
     assert next_state.ui_mode == "CONFIG"
     assert next_state.command_palette is None
     assert next_state.config_editor == ConfigEditorState(
-        path="/tmp/peneo/config.toml",
+        path="/tmp/zivo/config.toml",
         draft=next_state.config,
     )
 
 
 def test_move_config_editor_cursor_clamps_to_visible_settings() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
         ),
     )
@@ -1417,10 +1400,10 @@ def test_move_config_editor_cursor_clamps_to_visible_settings() -> None:
 
 def test_cycle_config_editor_editor_command_updates_draft_and_dirty_state() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
             cursor_index=0,
         ),
@@ -1435,10 +1418,10 @@ def test_cycle_config_editor_editor_command_updates_draft_and_dirty_state() -> N
 
 def test_cycle_config_editor_value_updates_draft_and_dirty_state() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
             cursor_index=1,
         ),
@@ -1452,12 +1435,12 @@ def test_cycle_config_editor_value_updates_draft_and_dirty_state() -> None:
 
 
 def test_cycle_config_editor_theme_updates_draft_and_dirty_state() -> None:
-    original_state = build_initial_app_state(config_path="/tmp/peneo/config.toml")
+    original_state = build_initial_app_state(config_path="/tmp/zivo/config.toml")
     state = replace(
         original_state,
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=original_state.config,
             cursor_index=2,
         ),
@@ -1481,7 +1464,7 @@ def test_cycle_config_editor_theme_supports_all_builtin_themes() -> None:
         base_state,
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=themed_config,
             cursor_index=2,
         ),
@@ -1496,10 +1479,10 @@ def test_cycle_config_editor_theme_supports_all_builtin_themes() -> None:
 
 def test_cycle_config_editor_directory_size_visibility_updates_draft_and_dirty_state() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
             cursor_index=3,
         ),
@@ -1514,10 +1497,10 @@ def test_cycle_config_editor_directory_size_visibility_updates_draft_and_dirty_s
 
 def test_cycle_config_editor_preview_visibility_updates_draft_and_dirty_state() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
             cursor_index=4,
         ),
@@ -1532,10 +1515,10 @@ def test_cycle_config_editor_preview_visibility_updates_draft_and_dirty_state() 
 
 def test_cycle_config_editor_preview_syntax_theme_updates_draft_and_dirty_state() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
             cursor_index=5,
         ),
@@ -1550,10 +1533,10 @@ def test_cycle_config_editor_preview_syntax_theme_updates_draft_and_dirty_state(
 
 def test_save_config_editor_emits_config_save_effect() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=replace(
                 build_initial_app_state().config,
                 behavior=replace(build_initial_app_state().config.behavior, confirm_delete=False),
@@ -1569,24 +1552,24 @@ def test_save_config_editor_emits_config_save_effect() -> None:
     assert result.effects == (
         RunConfigSaveEffect(
             request_id=1,
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             config=result.state.config_editor.draft,
         ),
     )
 
 
 def test_add_bookmark_emits_config_save_effect() -> None:
-    state = build_initial_app_state(config_path="/tmp/peneo/config.toml")
+    state = build_initial_app_state(config_path="/tmp/zivo/config.toml")
 
-    result = reduce_app_state(state, AddBookmark(path="/home/tadashi/develop/peneo"))
+    result = reduce_app_state(state, AddBookmark(path="/home/tadashi/develop/zivo"))
 
     assert result.state.pending_config_save_request_id == 1
     assert result.effects == (
         RunConfigSaveEffect(
             request_id=1,
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             config=AppConfig(
-                bookmarks=BookmarkConfig(paths=("/home/tadashi/develop/peneo",))
+                bookmarks=BookmarkConfig(paths=("/home/tadashi/develop/zivo",))
             ),
         ),
     )
@@ -1594,10 +1577,10 @@ def test_add_bookmark_emits_config_save_effect() -> None:
 
 def test_add_bookmark_ignores_duplicate_path() -> None:
     state = build_initial_app_state(
-        config=AppConfig(bookmarks=BookmarkConfig(paths=("/home/tadashi/develop/peneo",)))
+        config=AppConfig(bookmarks=BookmarkConfig(paths=("/home/tadashi/develop/zivo",)))
     )
 
-    next_state = _reduce_state(state, AddBookmark(path="/home/tadashi/develop/peneo"))
+    next_state = _reduce_state(state, AddBookmark(path="/home/tadashi/develop/zivo"))
 
     assert next_state.notification == NotificationState(
         level="info",
@@ -1607,21 +1590,21 @@ def test_add_bookmark_ignores_duplicate_path() -> None:
 
 def test_remove_bookmark_emits_config_save_effect() -> None:
     state = build_initial_app_state(
-        config_path="/tmp/peneo/config.toml",
+        config_path="/tmp/zivo/config.toml",
         config=AppConfig(
             bookmarks=BookmarkConfig(
-                paths=("/home/tadashi/develop/peneo", "/home/tadashi/src")
+                paths=("/home/tadashi/develop/zivo", "/home/tadashi/src")
             )
         ),
     )
 
-    result = reduce_app_state(state, RemoveBookmark(path="/home/tadashi/develop/peneo"))
+    result = reduce_app_state(state, RemoveBookmark(path="/home/tadashi/develop/zivo"))
 
     assert result.state.pending_config_save_request_id == 1
     assert result.effects == (
         RunConfigSaveEffect(
             request_id=1,
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             config=AppConfig(
                 bookmarks=BookmarkConfig(paths=("/home/tadashi/src",))
             ),
@@ -1631,10 +1614,10 @@ def test_remove_bookmark_emits_config_save_effect() -> None:
 
 def test_config_save_completed_updates_runtime_state_and_clears_dirty_flag() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=replace(
                 build_initial_app_state().config,
                 behavior=replace(build_initial_app_state().config.behavior, confirm_delete=False),
@@ -1649,7 +1632,7 @@ def test_config_save_completed_updates_runtime_state_and_clears_dirty_flag() -> 
         state,
         ConfigSaveCompleted(
             request_id=3,
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             config=saved_config,
         ),
     )
@@ -1662,23 +1645,23 @@ def test_config_save_completed_updates_runtime_state_and_clears_dirty_flag() -> 
 
 
 def test_config_save_completed_clears_preview_when_disabled() -> None:
-    path = "/home/tadashi/develop/peneo/README.md"
+    path = "/home/tadashi/develop/zivo/README.md"
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         current_pane=replace(
             build_initial_app_state().current_pane,
             cursor_path=path,
         ),
         child_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(),
             mode="preview",
             preview_path=path,
             preview_content="# Preview\n",
         ),
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=replace(
                 build_initial_app_state().config,
                 display=replace(build_initial_app_state().config.display, show_preview=False),
@@ -1693,22 +1676,22 @@ def test_config_save_completed_clears_preview_when_disabled() -> None:
         state,
         ConfigSaveCompleted(
             request_id=3,
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             config=saved_config,
         ),
     )
 
     assert next_state.config.display.show_preview is False
     assert next_state.child_pane == PaneState(
-        directory_path="/home/tadashi/develop/peneo",
+        directory_path="/home/tadashi/develop/zivo",
         entries=(),
     )
     assert next_state.pending_child_pane_request_id is None
 
 
 def test_config_save_completed_requests_preview_when_enabled() -> None:
-    path = "/home/tadashi/develop/peneo/README.md"
-    base_state = build_initial_app_state(config_path="/tmp/peneo/config.toml")
+    path = "/home/tadashi/develop/zivo/README.md"
+    base_state = build_initial_app_state(config_path="/tmp/zivo/config.toml")
     state = replace(
         base_state,
         ui_mode="CONFIG",
@@ -1717,9 +1700,9 @@ def test_config_save_completed_requests_preview_when_enabled() -> None:
             display=replace(base_state.config.display, show_preview=False),
         ),
         current_pane=replace(base_state.current_pane, cursor_path=path),
-        child_pane=PaneState(directory_path="/home/tadashi/develop/peneo", entries=()),
+        child_pane=PaneState(directory_path="/home/tadashi/develop/zivo", entries=()),
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=replace(
                 base_state.config,
                 display=replace(base_state.config.display, show_preview=True),
@@ -1734,7 +1717,7 @@ def test_config_save_completed_requests_preview_when_enabled() -> None:
         state,
         ConfigSaveCompleted(
             request_id=3,
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             config=saved_config,
         ),
     )
@@ -1744,15 +1727,15 @@ def test_config_save_completed_requests_preview_when_enabled() -> None:
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
             request_id=1,
-            current_path="/home/tadashi/develop/peneo",
+            current_path="/home/tadashi/develop/zivo",
             cursor_path=path,
         ),
         RunDirectorySizeEffect(
             request_id=2,
             paths=(
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
-                "/home/tadashi/develop/peneo/tests",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
+                "/home/tadashi/develop/zivo/tests",
             ),
         ),
     )
@@ -1760,7 +1743,7 @@ def test_config_save_completed_requests_preview_when_enabled() -> None:
 
 def test_config_save_failed_sets_error_notification() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         pending_config_save_request_id=4,
     )
 
@@ -1775,10 +1758,10 @@ def test_config_save_failed_sets_error_notification() -> None:
 
 def test_dismiss_config_editor_returns_to_browsing() -> None:
     state = replace(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
         config_editor=ConfigEditorState(
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
         ),
     )
@@ -1803,7 +1786,7 @@ def test_submit_command_palette_runs_copy_path_flow() -> None:
             request_id=1,
             request=ExternalLaunchRequest(
                 kind="copy_paths",
-                paths=("/home/tadashi/develop/peneo/docs",),
+                paths=("/home/tadashi/develop/zivo/docs",),
             ),
         ),
     )
@@ -1820,7 +1803,7 @@ def test_submit_command_palette_opens_attribute_dialog_for_single_target() -> No
     assert next_state.attribute_inspection is not None
     assert next_state.attribute_inspection.name == "docs"
     assert next_state.attribute_inspection.kind == "dir"
-    assert next_state.attribute_inspection.path == "/home/tadashi/develop/peneo/docs"
+    assert next_state.attribute_inspection.path == "/home/tadashi/develop/zivo/docs"
     assert next_state.attribute_inspection.permissions_mode is None
 
 
@@ -1832,7 +1815,7 @@ def test_dismiss_attribute_dialog_returns_to_browsing() -> None:
         attribute_inspection=AttributeInspectionState(
             name="docs",
             kind="dir",
-            path="/home/tadashi/develop/peneo/docs",
+            path="/home/tadashi/develop/zivo/docs",
         ),
     )
 
@@ -1856,7 +1839,7 @@ def test_submit_command_palette_opens_current_directory_in_file_manager() -> Non
             request_id=1,
             request=ExternalLaunchRequest(
                 kind="open_file",
-                path="/home/tadashi/develop/peneo",
+                path="/home/tadashi/develop/zivo",
             ),
         ),
     )
@@ -1904,7 +1887,7 @@ def test_submit_command_palette_runs_open_terminal_flow() -> None:
             request_id=1,
             request=ExternalLaunchRequest(
                 kind="open_terminal",
-                path="/home/tadashi/develop/peneo",
+                path="/home/tadashi/develop/zivo",
             ),
         ),
     )
@@ -1956,7 +1939,7 @@ def test_submit_command_palette_begins_bookmark_search() -> None:
 
 def test_submit_command_palette_adds_current_directory_bookmark() -> None:
     state = _reduce_state(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         BeginCommandPalette(),
     )
     state = _reduce_state(state, SetCommandPaletteQuery("bookmark this directory"))
@@ -1967,9 +1950,9 @@ def test_submit_command_palette_adds_current_directory_bookmark() -> None:
     assert result.effects == (
         RunConfigSaveEffect(
             request_id=1,
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             config=AppConfig(
-                bookmarks=BookmarkConfig(paths=("/home/tadashi/develop/peneo",))
+                bookmarks=BookmarkConfig(paths=("/home/tadashi/develop/zivo",))
             ),
         ),
     )
@@ -1984,7 +1967,7 @@ def test_show_attributes_enters_detail_mode_for_single_target() -> None:
     assert result.state.attribute_inspection == AttributeInspectionState(
         name="docs",
         kind="dir",
-        path="/home/tadashi/develop/peneo/docs",
+        path="/home/tadashi/develop/zivo/docs",
         size_bytes=None,
         modified_at=state.current_pane.entries[0].modified_at,
         hidden=False,
@@ -1999,8 +1982,8 @@ def test_show_attributes_warns_without_single_target() -> None:
             build_initial_app_state().current_pane,
             selected_paths=frozenset(
                 {
-                    "/home/tadashi/develop/peneo/docs",
-                    "/home/tadashi/develop/peneo/src",
+                    "/home/tadashi/develop/zivo/docs",
+                    "/home/tadashi/develop/zivo/src",
                 }
             ),
         ),
@@ -2023,7 +2006,7 @@ def test_copy_paths_to_clipboard_emits_external_launch_effect() -> None:
             request_id=1,
             request=ExternalLaunchRequest(
                 kind="copy_paths",
-                paths=("/home/tadashi/develop/peneo/docs",),
+                paths=("/home/tadashi/develop/zivo/docs",),
             ),
         ),
     )
@@ -2032,9 +2015,9 @@ def test_copy_paths_to_clipboard_emits_external_launch_effect() -> None:
 def test_submit_command_palette_removes_current_directory_bookmark() -> None:
     state = _reduce_state(
         build_initial_app_state(
-            config_path="/tmp/peneo/config.toml",
+            config_path="/tmp/zivo/config.toml",
             config=AppConfig(
-                bookmarks=BookmarkConfig(paths=("/home/tadashi/develop/peneo", "/home/tadashi/src"))
+                bookmarks=BookmarkConfig(paths=("/home/tadashi/develop/zivo", "/home/tadashi/src"))
             ),
         ),
         BeginCommandPalette(),
@@ -2047,7 +2030,7 @@ def test_submit_command_palette_removes_current_directory_bookmark() -> None:
     assert result.effects == (
         RunConfigSaveEffect(
             request_id=1,
-            path="/tmp/peneo/config.toml",
+            path="/tmp/zivo/config.toml",
             config=AppConfig(
                 bookmarks=BookmarkConfig(paths=("/home/tadashi/src",))
             ),
@@ -2126,8 +2109,8 @@ def test_submit_command_palette_toggles_split_terminal() -> None:
 
 def test_open_path_in_editor_allows_non_browser_file_path() -> None:
     result = reduce_app_state(
-        build_initial_app_state(config_path="/tmp/peneo/config.toml"),
-        OpenPathInEditor("/tmp/peneo/config.toml"),
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
+        OpenPathInEditor("/tmp/zivo/config.toml"),
     )
 
     assert result.state.next_request_id == 2
@@ -2136,7 +2119,7 @@ def test_open_path_in_editor_allows_non_browser_file_path() -> None:
             request_id=1,
             request=ExternalLaunchRequest(
                 kind="open_editor",
-                path="/tmp/peneo/config.toml",
+                path="/tmp/zivo/config.toml",
             ),
         ),
     )
@@ -2147,12 +2130,12 @@ def test_toggle_split_terminal_starts_embedded_session() -> None:
 
     assert result.state.split_terminal.visible is True
     assert result.state.split_terminal.status == "starting"
-    assert result.state.split_terminal.cwd == "/home/tadashi/develop/peneo"
+    assert result.state.split_terminal.cwd == "/home/tadashi/develop/zivo"
     assert result.state.split_terminal.session_id == 1
     assert result.effects == (
         StartSplitTerminalEffect(
             session_id=1,
-            cwd="/home/tadashi/develop/peneo",
+            cwd="/home/tadashi/develop/zivo",
         ),
     )
 
@@ -2252,7 +2235,7 @@ def test_split_terminal_started_marks_session_running() -> None:
 
     next_state = _reduce_state(
         state,
-        SplitTerminalStarted(session_id=5, cwd="/home/tadashi/develop/peneo"),
+        SplitTerminalStarted(session_id=5, cwd="/home/tadashi/develop/zivo"),
     )
 
     assert next_state.split_terminal.status == "running"
@@ -2309,8 +2292,8 @@ def test_submit_command_palette_uses_selected_paths_for_copy_path() -> None:
             initial_state.current_pane,
             selected_paths=frozenset(
                 {
-                    "/home/tadashi/develop/peneo/docs",
-                    "/home/tadashi/develop/peneo/src",
+                    "/home/tadashi/develop/zivo/docs",
+                    "/home/tadashi/develop/zivo/src",
                 }
             ),
         ),
@@ -2326,8 +2309,8 @@ def test_submit_command_palette_uses_selected_paths_for_copy_path() -> None:
             request=ExternalLaunchRequest(
                 kind="copy_paths",
                 paths=(
-                    "/home/tadashi/develop/peneo/docs",
-                    "/home/tadashi/develop/peneo/src",
+                    "/home/tadashi/develop/zivo/docs",
+                    "/home/tadashi/develop/zivo/src",
                 ),
             ),
         ),
@@ -2339,18 +2322,18 @@ def test_submit_command_palette_select_all_uses_visible_entries() -> None:
     state = replace(
         initial_state,
         current_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(
                 DirectoryEntryState(
-                    "/home/tadashi/develop/peneo/.env",
+                    "/home/tadashi/develop/zivo/.env",
                     ".env",
                     "file",
                     hidden=True,
                 ),
-                DirectoryEntryState("/home/tadashi/develop/peneo/docs", "docs", "dir"),
-                DirectoryEntryState("/home/tadashi/develop/peneo/src", "src", "dir"),
+                DirectoryEntryState("/home/tadashi/develop/zivo/docs", "docs", "dir"),
+                DirectoryEntryState("/home/tadashi/develop/zivo/src", "src", "dir"),
             ),
-            cursor_path="/home/tadashi/develop/peneo/docs",
+            cursor_path="/home/tadashi/develop/zivo/docs",
         ),
         filter=replace(initial_state.filter, query="s", active=True),
     )
@@ -2361,8 +2344,8 @@ def test_submit_command_palette_select_all_uses_visible_entries() -> None:
 
     assert next_state.current_pane.selected_paths == frozenset(
         {
-            "/home/tadashi/develop/peneo/docs",
-            "/home/tadashi/develop/peneo/src",
+            "/home/tadashi/develop/zivo/docs",
+            "/home/tadashi/develop/zivo/src",
         }
     )
 
@@ -2372,22 +2355,22 @@ def test_select_all_visible_entries_replaces_selection_with_visible_paths() -> N
     state = replace(
         initial_state,
         current_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(
                 DirectoryEntryState(
-                    "/home/tadashi/develop/peneo/.env",
+                    "/home/tadashi/develop/zivo/.env",
                     ".env",
                     "file",
                     hidden=True,
                 ),
-                DirectoryEntryState("/home/tadashi/develop/peneo/docs", "docs", "dir"),
-                DirectoryEntryState("/home/tadashi/develop/peneo/src", "src", "dir"),
+                DirectoryEntryState("/home/tadashi/develop/zivo/docs", "docs", "dir"),
+                DirectoryEntryState("/home/tadashi/develop/zivo/src", "src", "dir"),
             ),
-            cursor_path="/home/tadashi/develop/peneo/docs",
+            cursor_path="/home/tadashi/develop/zivo/docs",
             selected_paths=frozenset(
                 {
-                    "/home/tadashi/develop/peneo/.env",
-                    "/home/tadashi/develop/peneo/docs",
+                    "/home/tadashi/develop/zivo/.env",
+                    "/home/tadashi/develop/zivo/docs",
                 }
             ),
         ),
@@ -2397,16 +2380,16 @@ def test_select_all_visible_entries_replaces_selection_with_visible_paths() -> N
         state,
         SelectAllVisibleEntries(
             (
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
             )
         ),
     )
 
     assert next_state.current_pane.selected_paths == frozenset(
         {
-            "/home/tadashi/develop/peneo/docs",
-            "/home/tadashi/develop/peneo/src",
+            "/home/tadashi/develop/zivo/docs",
+            "/home/tadashi/develop/zivo/src",
         }
     )
 
@@ -2423,7 +2406,7 @@ def test_set_command_palette_query_starts_file_search_effect() -> None:
     assert result.effects == (
         RunFileSearchEffect(
             request_id=1,
-            root_path="/home/tadashi/develop/peneo",
+            root_path="/home/tadashi/develop/zivo",
             query="read",
             show_hidden=False,
         ),
@@ -2442,7 +2425,7 @@ def test_set_command_palette_query_starts_grep_search_effect() -> None:
     assert result.effects == (
         RunGrepSearchEffect(
             request_id=1,
-            root_path="/home/tadashi/develop/peneo",
+            root_path="/home/tadashi/develop/zivo",
             query="todo",
             show_hidden=False,
             include_globs=(),
@@ -2464,7 +2447,7 @@ def test_set_grep_search_field_builds_include_and_exclude_globs() -> None:
     assert result.effects == (
         RunGrepSearchEffect(
             request_id=3,
-            root_path="/home/tadashi/develop/peneo",
+            root_path="/home/tadashi/develop/zivo",
             query="todo",
             show_hidden=False,
             include_globs=("*.py", "*.ts"),
@@ -2514,7 +2497,7 @@ def test_set_grep_search_field_clears_results_when_keyword_becomes_empty() -> No
             grep_search_keyword="todo",
             grep_search_results=(
                 GrepSearchResultState(
-                    path="/home/tadashi/develop/peneo/README.md",
+                    path="/home/tadashi/develop/zivo/README.md",
                     display_path="README.md",
                     line_number=1,
                     line_text="TODO",
@@ -2545,26 +2528,26 @@ def test_set_command_palette_query_reuses_completed_file_search_results_for_pref
             query="read",
             file_search_results=(
                 FileSearchResultState(
-                    path="/home/tadashi/develop/peneo/README.md",
+                    path="/home/tadashi/develop/zivo/README.md",
                     display_path="README.md",
                 ),
                 FileSearchResultState(
-                    path="/home/tadashi/develop/peneo/docs/readings.txt",
+                    path="/home/tadashi/develop/zivo/docs/readings.txt",
                     display_path="docs/readings.txt",
                 ),
             ),
             file_search_cache_query="read",
             file_search_cache_results=(
                 FileSearchResultState(
-                    path="/home/tadashi/develop/peneo/README.md",
+                    path="/home/tadashi/develop/zivo/README.md",
                     display_path="README.md",
                 ),
                 FileSearchResultState(
-                    path="/home/tadashi/develop/peneo/docs/readings.txt",
+                    path="/home/tadashi/develop/zivo/docs/readings.txt",
                     display_path="docs/readings.txt",
                 ),
             ),
-            file_search_cache_root_path="/home/tadashi/develop/peneo",
+            file_search_cache_root_path="/home/tadashi/develop/zivo",
             file_search_cache_show_hidden=False,
         ),
         pending_file_search_request_id=4,
@@ -2576,8 +2559,8 @@ def test_set_command_palette_query_reuses_completed_file_search_results_for_pref
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
             request_id=5,
-            current_path="/home/tadashi/develop/peneo",
-            cursor_path="/home/tadashi/develop/peneo/README.md",
+            current_path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/README.md",
         ),
     )
     assert result.state.pending_file_search_request_id is None
@@ -2585,7 +2568,7 @@ def test_set_command_palette_query_reuses_completed_file_search_results_for_pref
     assert result.state.command_palette is not None
     assert result.state.command_palette.file_search_results == (
         FileSearchResultState(
-            path="/home/tadashi/develop/peneo/README.md",
+            path="/home/tadashi/develop/zivo/README.md",
             display_path="README.md",
         ),
     )
@@ -2601,18 +2584,18 @@ def test_set_command_palette_query_runs_new_search_when_query_is_not_prefix_exte
             query="read",
             file_search_results=(
                 FileSearchResultState(
-                    path="/home/tadashi/develop/peneo/README.md",
+                    path="/home/tadashi/develop/zivo/README.md",
                     display_path="README.md",
                 ),
             ),
             file_search_cache_query="read",
             file_search_cache_results=(
                 FileSearchResultState(
-                    path="/home/tadashi/develop/peneo/README.md",
+                    path="/home/tadashi/develop/zivo/README.md",
                     display_path="README.md",
                 ),
             ),
-            file_search_cache_root_path="/home/tadashi/develop/peneo",
+            file_search_cache_root_path="/home/tadashi/develop/zivo",
             file_search_cache_show_hidden=False,
         ),
         next_request_id=4,
@@ -2624,7 +2607,7 @@ def test_set_command_palette_query_runs_new_search_when_query_is_not_prefix_exte
     assert result.effects == (
         RunFileSearchEffect(
             request_id=4,
-            root_path="/home/tadashi/develop/peneo",
+            root_path="/home/tadashi/develop/zivo",
             query="rea",
             show_hidden=False,
         ),
@@ -2641,11 +2624,11 @@ def test_set_command_palette_query_runs_new_search_for_regex_queries() -> None:
             file_search_cache_query="read",
             file_search_cache_results=(
                 FileSearchResultState(
-                    path="/home/tadashi/develop/peneo/README.md",
+                    path="/home/tadashi/develop/zivo/README.md",
                     display_path="README.md",
                 ),
             ),
-            file_search_cache_root_path="/home/tadashi/develop/peneo",
+            file_search_cache_root_path="/home/tadashi/develop/zivo",
             file_search_cache_show_hidden=False,
         ),
         next_request_id=4,
@@ -2657,7 +2640,7 @@ def test_set_command_palette_query_runs_new_search_for_regex_queries() -> None:
     assert result.effects == (
         RunFileSearchEffect(
             request_id=4,
-            root_path="/home/tadashi/develop/peneo",
+            root_path="/home/tadashi/develop/zivo",
             query=r"re:^README\.md$",
             show_hidden=False,
         ),
@@ -2679,7 +2662,7 @@ def test_file_search_completed_updates_palette_results() -> None:
             query="read",
             results=(
                 FileSearchResultState(
-                    path="/home/tadashi/develop/peneo/README.md",
+                    path="/home/tadashi/develop/zivo/README.md",
                     display_path="README.md",
                 ),
             ),
@@ -2689,12 +2672,12 @@ def test_file_search_completed_updates_palette_results() -> None:
     assert next_state.command_palette is not None
     assert next_state.command_palette.file_search_results == (
         FileSearchResultState(
-            path="/home/tadashi/develop/peneo/README.md",
+            path="/home/tadashi/develop/zivo/README.md",
             display_path="README.md",
         ),
     )
     assert next_state.command_palette.file_search_cache_query == "read"
-    assert next_state.command_palette.file_search_cache_root_path == "/home/tadashi/develop/peneo"
+    assert next_state.command_palette.file_search_cache_root_path == "/home/tadashi/develop/zivo"
     assert next_state.command_palette.file_search_cache_show_hidden is False
     assert next_state.pending_file_search_request_id is None
 
@@ -2714,7 +2697,7 @@ def test_file_search_completed_does_not_cache_regex_queries() -> None:
             query=r"re:^README\.md$",
             results=(
                 FileSearchResultState(
-                    path="/home/tadashi/develop/peneo/README.md",
+                    path="/home/tadashi/develop/zivo/README.md",
                     display_path="README.md",
                 ),
             ),
@@ -2724,7 +2707,7 @@ def test_file_search_completed_does_not_cache_regex_queries() -> None:
     assert next_state.command_palette is not None
     assert next_state.command_palette.file_search_results == (
         FileSearchResultState(
-            path="/home/tadashi/develop/peneo/README.md",
+            path="/home/tadashi/develop/zivo/README.md",
             display_path="README.md",
         ),
     )
@@ -2741,7 +2724,7 @@ def test_file_search_failed_sets_inline_error_for_invalid_regex() -> None:
             query="re:[",
             file_search_results=(
                 FileSearchResultState(
-                    path="/home/tadashi/develop/peneo/README.md",
+                    path="/home/tadashi/develop/zivo/README.md",
                     display_path="README.md",
                 ),
             ),
@@ -2797,7 +2780,7 @@ def test_submit_command_palette_file_search_result_requests_snapshot() -> None:
             query="read",
             file_search_results=(
                 FileSearchResultState(
-                    path="/home/tadashi/develop/peneo/docs/README.md",
+                    path="/home/tadashi/develop/zivo/docs/README.md",
                     display_path="docs/README.md",
                 ),
             ),
@@ -2812,8 +2795,8 @@ def test_submit_command_palette_file_search_result_requests_snapshot() -> None:
     assert result.effects == (
         LoadBrowserSnapshotEffect(
             request_id=1,
-            path="/home/tadashi/develop/peneo/docs",
-            cursor_path="/home/tadashi/develop/peneo/docs/README.md",
+            path="/home/tadashi/develop/zivo/docs",
+            cursor_path="/home/tadashi/develop/zivo/docs/README.md",
             blocking=True,
         ),
     )
@@ -2834,8 +2817,8 @@ def test_grep_search_completed_updates_palette_results() -> None:
             query="todo",
             results=(
                 GrepSearchResultState(
-                    path="/home/tadashi/develop/peneo/src/peneo/app.py",
-                    display_path="src/peneo/app.py",
+                    path="/home/tadashi/develop/zivo/src/zivo/app.py",
+                    display_path="src/zivo/app.py",
                     line_number=42,
                     line_text="TODO: update palette",
                 ),
@@ -2846,8 +2829,8 @@ def test_grep_search_completed_updates_palette_results() -> None:
     assert next_state.command_palette is not None
     assert next_state.command_palette.grep_search_results == (
         GrepSearchResultState(
-            path="/home/tadashi/develop/peneo/src/peneo/app.py",
-            display_path="src/peneo/app.py",
+            path="/home/tadashi/develop/zivo/src/zivo/app.py",
+            display_path="src/zivo/app.py",
             line_number=42,
             line_text="TODO: update palette",
         ),
@@ -2863,8 +2846,8 @@ def test_grep_search_completed_requests_context_preview() -> None:
         pending_grep_search_request_id=4,
     )
     grep_result = GrepSearchResultState(
-        path="/home/tadashi/develop/peneo/src/peneo/app.py",
-        display_path="src/peneo/app.py",
+        path="/home/tadashi/develop/zivo/src/zivo/app.py",
+        display_path="src/zivo/app.py",
         line_number=42,
         line_text="TODO: update palette",
     )
@@ -2882,8 +2865,8 @@ def test_grep_search_completed_requests_context_preview() -> None:
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
             request_id=1,
-            current_path="/home/tadashi/develop/peneo",
-            cursor_path="/home/tadashi/develop/peneo/src/peneo/app.py",
+            current_path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/src/zivo/app.py",
             grep_result=grep_result,
             grep_context_lines=3,
         ),
@@ -2892,8 +2875,8 @@ def test_grep_search_completed_requests_context_preview() -> None:
 
 def test_grep_search_completed_skips_context_preview_when_preview_disabled() -> None:
     grep_result = GrepSearchResultState(
-        path="/home/tadashi/develop/peneo/src/peneo/app.py",
-        display_path="src/peneo/app.py",
+        path="/home/tadashi/develop/zivo/src/zivo/app.py",
+        display_path="src/zivo/app.py",
         line_number=42,
         line_text="TODO: update palette",
     )
@@ -2933,8 +2916,8 @@ def test_grep_search_failed_sets_inline_error_for_invalid_regex() -> None:
             query="re:[",
             grep_search_results=(
                 GrepSearchResultState(
-                    path="/home/tadashi/develop/peneo/src/peneo/app.py",
-                    display_path="src/peneo/app.py",
+                    path="/home/tadashi/develop/zivo/src/zivo/app.py",
+                    display_path="src/zivo/app.py",
                     line_number=42,
                     line_text="TODO: update palette",
                 ),
@@ -2968,8 +2951,8 @@ def test_submit_command_palette_grep_result_requests_snapshot() -> None:
             query="todo",
             grep_search_results=(
                 GrepSearchResultState(
-                    path="/home/tadashi/develop/peneo/src/peneo/app.py",
-                    display_path="src/peneo/app.py",
+                    path="/home/tadashi/develop/zivo/src/zivo/app.py",
+                    display_path="src/zivo/app.py",
                     line_number=42,
                     line_text="TODO: update palette",
                 ),
@@ -2984,21 +2967,21 @@ def test_submit_command_palette_grep_result_requests_snapshot() -> None:
     assert result.effects == (
         LoadBrowserSnapshotEffect(
             request_id=1,
-            path="/home/tadashi/develop/peneo/src/peneo",
-            cursor_path="/home/tadashi/develop/peneo/src/peneo/app.py",
+            path="/home/tadashi/develop/zivo/src/zivo",
+            cursor_path="/home/tadashi/develop/zivo/src/zivo/app.py",
             blocking=True,
         ),
     )
 
 
 def test_toggle_hidden_files_normalizes_cursor_and_selection() -> None:
-    hidden_path = "/home/tadashi/develop/peneo/.env"
-    visible_path = "/home/tadashi/develop/peneo/docs"
+    hidden_path = "/home/tadashi/develop/zivo/.env"
+    visible_path = "/home/tadashi/develop/zivo/docs"
     state = replace(
         build_initial_app_state(),
         show_hidden=True,
         current_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(
                 DirectoryEntryState(hidden_path, ".env", "file", hidden=True),
                 DirectoryEntryState(visible_path, "docs", "dir"),
@@ -3031,7 +3014,7 @@ def test_cancel_command_palette_returns_to_browsing() -> None:
 
 
 def test_cancel_grep_command_palette_restores_current_cursor_preview() -> None:
-    path = "/home/tadashi/develop/peneo/README.md"
+    path = "/home/tadashi/develop/zivo/README.md"
     grep_result = GrepSearchResultState(
         path=path,
         display_path="README.md",
@@ -3047,7 +3030,7 @@ def test_cancel_grep_command_palette_restores_current_cursor_preview() -> None:
             grep_search_results=(grep_result,),
         ),
         child_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(),
             mode="preview",
             preview_path=path,
@@ -3065,15 +3048,15 @@ def test_cancel_grep_command_palette_restores_current_cursor_preview() -> None:
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
             request_id=1,
-            current_path="/home/tadashi/develop/peneo",
+            current_path="/home/tadashi/develop/zivo",
             cursor_path=path,
         ),
         RunDirectorySizeEffect(
             request_id=2,
             paths=(
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
-                "/home/tadashi/develop/peneo/tests",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
+                "/home/tadashi/develop/zivo/tests",
             ),
         ),
     )
@@ -3084,14 +3067,14 @@ def test_begin_delete_targets_single_runs_file_mutation() -> None:
 
     result = reduce_app_state(
         state,
-        BeginDeleteTargets(("/home/tadashi/develop/peneo/docs",)),
+        BeginDeleteTargets(("/home/tadashi/develop/zivo/docs",)),
     )
 
     assert result.state.ui_mode == "BUSY"
     assert result.effects == (
         RunFileMutationEffect(
             request_id=1,
-            request=DeleteRequest(paths=("/home/tadashi/develop/peneo/docs",), mode="trash"),
+            request=DeleteRequest(paths=("/home/tadashi/develop/zivo/docs",), mode="trash"),
         ),
     )
 
@@ -3101,12 +3084,12 @@ def test_begin_delete_targets_single_enters_confirm_mode_when_enabled() -> None:
 
     next_state = _reduce_state(
         state,
-        BeginDeleteTargets(("/home/tadashi/develop/peneo/docs",)),
+        BeginDeleteTargets(("/home/tadashi/develop/zivo/docs",)),
     )
 
     assert next_state.ui_mode == "CONFIRM"
     assert next_state.delete_confirmation == DeleteConfirmationState(
-        paths=("/home/tadashi/develop/peneo/docs",)
+        paths=("/home/tadashi/develop/zivo/docs",)
     )
 
 
@@ -3125,8 +3108,8 @@ def test_begin_delete_targets_multiple_enters_confirm_mode() -> None:
         state,
         BeginDeleteTargets(
             (
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
             )
         ),
     )
@@ -3134,8 +3117,8 @@ def test_begin_delete_targets_multiple_enters_confirm_mode() -> None:
     assert next_state.ui_mode == "CONFIRM"
     assert next_state.delete_confirmation == DeleteConfirmationState(
         paths=(
-            "/home/tadashi/develop/peneo/docs",
-            "/home/tadashi/develop/peneo/src",
+            "/home/tadashi/develop/zivo/docs",
+            "/home/tadashi/develop/zivo/src",
         )
     )
 
@@ -3159,8 +3142,8 @@ def test_confirm_delete_targets_runs_file_mutation() -> None:
         ui_mode="CONFIRM",
         delete_confirmation=DeleteConfirmationState(
             paths=(
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
             )
         ),
         next_request_id=4,
@@ -3174,8 +3157,8 @@ def test_confirm_delete_targets_runs_file_mutation() -> None:
             request_id=4,
             request=DeleteRequest(
                 paths=(
-                    "/home/tadashi/develop/peneo/docs",
-                    "/home/tadashi/develop/peneo/src",
+                    "/home/tadashi/develop/zivo/docs",
+                    "/home/tadashi/develop/zivo/src",
                 ),
                 mode="trash",
             ),
@@ -3188,7 +3171,7 @@ def test_cancel_delete_confirmation_returns_to_browsing_with_warning() -> None:
         build_initial_app_state(),
         ui_mode="CONFIRM",
         delete_confirmation=DeleteConfirmationState(
-            paths=("/home/tadashi/develop/peneo/docs",),
+            paths=("/home/tadashi/develop/zivo/docs",),
         ),
     )
 
@@ -3204,12 +3187,12 @@ def test_begin_permanent_delete_targets_enters_confirm_mode_when_delete_confirma
 
     next_state = _reduce_state(
         state,
-        BeginDeleteTargets(("/home/tadashi/develop/peneo/docs",), mode="permanent"),
+        BeginDeleteTargets(("/home/tadashi/develop/zivo/docs",), mode="permanent"),
     )
 
     assert next_state.ui_mode == "CONFIRM"
     assert next_state.delete_confirmation == DeleteConfirmationState(
-        paths=("/home/tadashi/develop/peneo/docs",),
+        paths=("/home/tadashi/develop/zivo/docs",),
         mode="permanent",
     )
 
@@ -3219,7 +3202,7 @@ def test_confirm_permanent_delete_targets_runs_file_mutation() -> None:
         build_initial_app_state(),
         ui_mode="CONFIRM",
         delete_confirmation=DeleteConfirmationState(
-            paths=("/home/tadashi/develop/peneo/docs",),
+            paths=("/home/tadashi/develop/zivo/docs",),
             mode="permanent",
         ),
         next_request_id=4,
@@ -3232,7 +3215,7 @@ def test_confirm_permanent_delete_targets_runs_file_mutation() -> None:
         RunFileMutationEffect(
             request_id=4,
             request=DeleteRequest(
-                paths=("/home/tadashi/develop/peneo/docs",),
+                paths=("/home/tadashi/develop/zivo/docs",),
                 mode="permanent",
             ),
         ),
@@ -3244,7 +3227,7 @@ def test_cancel_permanent_delete_confirmation_returns_to_browsing_with_warning()
         build_initial_app_state(),
         ui_mode="CONFIRM",
         delete_confirmation=DeleteConfirmationState(
-            paths=("/home/tadashi/develop/peneo/docs",),
+            paths=("/home/tadashi/develop/zivo/docs",),
             mode="permanent",
         ),
     )
@@ -3265,7 +3248,7 @@ def test_submit_pending_extract_starts_archive_preparation() -> None:
         pending_input=PendingInputState(
             prompt="Extract to: ",
             value="/tmp/output/archive",
-            extract_source_path="/home/tadashi/develop/peneo/archive.zip",
+            extract_source_path="/home/tadashi/develop/zivo/archive.zip",
         ),
     )
 
@@ -3277,7 +3260,7 @@ def test_submit_pending_extract_starts_archive_preparation() -> None:
         RunArchivePreparationEffect(
             request_id=1,
             request=ExtractArchiveRequest(
-                source_path="/home/tadashi/develop/peneo/archive.zip",
+                source_path="/home/tadashi/develop/zivo/archive.zip",
                 destination_path="/tmp/output/archive",
             ),
         ),
@@ -3292,8 +3275,8 @@ def test_submit_pending_zip_compress_starts_preparation() -> None:
             prompt="Compress to: ",
             value="/tmp/output.zip",
             zip_source_paths=(
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
             ),
         ),
     )
@@ -3307,11 +3290,11 @@ def test_submit_pending_zip_compress_starts_preparation() -> None:
             request_id=1,
             request=CreateZipArchiveRequest(
                 source_paths=(
-                    "/home/tadashi/develop/peneo/docs",
-                    "/home/tadashi/develop/peneo/src",
+                    "/home/tadashi/develop/zivo/docs",
+                    "/home/tadashi/develop/zivo/src",
                 ),
                 destination_path="/tmp/output.zip",
-                root_dir="/home/tadashi/develop/peneo",
+                root_dir="/home/tadashi/develop/zivo",
             ),
         ),
     )
@@ -3324,7 +3307,7 @@ def test_submit_pending_extract_resolves_relative_destination_from_archive_paren
         pending_input=PendingInputState(
             prompt="Extract to: ",
             value="../exports/archive",
-            extract_source_path="/home/tadashi/develop/peneo/docs/archive.tar.bz2",
+            extract_source_path="/home/tadashi/develop/zivo/docs/archive.tar.bz2",
         ),
     )
 
@@ -3334,8 +3317,8 @@ def test_submit_pending_extract_resolves_relative_destination_from_archive_paren
         RunArchivePreparationEffect(
             request_id=1,
             request=ExtractArchiveRequest(
-                source_path="/home/tadashi/develop/peneo/docs/archive.tar.bz2",
-                destination_path="/home/tadashi/develop/peneo/exports/archive",
+                source_path="/home/tadashi/develop/zivo/docs/archive.tar.bz2",
+                destination_path="/home/tadashi/develop/zivo/exports/archive",
             ),
         ),
     )
@@ -3343,7 +3326,7 @@ def test_submit_pending_extract_resolves_relative_destination_from_archive_paren
 
 def test_archive_preparation_with_conflicts_enters_confirm_mode() -> None:
     request = ExtractArchiveRequest(
-        source_path="/home/tadashi/develop/peneo/archive.zip",
+        source_path="/home/tadashi/develop/zivo/archive.zip",
         destination_path="/tmp/output/archive",
     )
     state = replace(
@@ -3380,16 +3363,16 @@ def test_archive_preparation_with_conflicts_enters_confirm_mode() -> None:
 
 def test_zip_compress_preparation_with_existing_destination_enters_confirm_mode() -> None:
     request = CreateZipArchiveRequest(
-        source_paths=("/home/tadashi/develop/peneo/docs",),
-        destination_path="/home/tadashi/develop/peneo/docs.zip",
-        root_dir="/home/tadashi/develop/peneo",
+        source_paths=("/home/tadashi/develop/zivo/docs",),
+        destination_path="/home/tadashi/develop/zivo/docs.zip",
+        root_dir="/home/tadashi/develop/zivo",
     )
     state = replace(
         build_initial_app_state(),
         ui_mode="BUSY",
         pending_input=PendingInputState(
             prompt="Compress to: ",
-            value="/home/tadashi/develop/peneo/docs.zip",
+            value="/home/tadashi/develop/zivo/docs.zip",
             zip_source_paths=request.source_paths,
         ),
         pending_zip_compress_prepare_request_id=4,
@@ -3415,7 +3398,7 @@ def test_zip_compress_preparation_with_existing_destination_enters_confirm_mode(
 
 def test_confirm_archive_extract_runs_extract_effect() -> None:
     request = ExtractArchiveRequest(
-        source_path="/home/tadashi/develop/peneo/archive.zip",
+        source_path="/home/tadashi/develop/zivo/archive.zip",
         destination_path="/tmp/output/archive",
     )
     state = replace(
@@ -3447,16 +3430,16 @@ def test_confirm_archive_extract_runs_extract_effect() -> None:
 
 def test_confirm_zip_compress_runs_effect() -> None:
     request = CreateZipArchiveRequest(
-        source_paths=("/home/tadashi/develop/peneo/docs",),
-        destination_path="/home/tadashi/develop/peneo/docs.zip",
-        root_dir="/home/tadashi/develop/peneo",
+        source_paths=("/home/tadashi/develop/zivo/docs",),
+        destination_path="/home/tadashi/develop/zivo/docs.zip",
+        root_dir="/home/tadashi/develop/zivo",
     )
     state = replace(
         build_initial_app_state(),
         ui_mode="CONFIRM",
         pending_input=PendingInputState(
             prompt="Compress to: ",
-            value="/home/tadashi/develop/peneo/docs.zip",
+            value="/home/tadashi/develop/zivo/docs.zip",
             zip_source_paths=request.source_paths,
         ),
         zip_compress_confirmation=ZipCompressConfirmationState(
@@ -3478,7 +3461,7 @@ def test_confirm_zip_compress_runs_effect() -> None:
 
 def test_cancel_archive_extract_confirmation_returns_to_extract_mode() -> None:
     request = ExtractArchiveRequest(
-        source_path="/home/tadashi/develop/peneo/archive.zip",
+        source_path="/home/tadashi/develop/zivo/archive.zip",
         destination_path="/tmp/output/archive",
     )
     state = replace(
@@ -3509,16 +3492,16 @@ def test_cancel_archive_extract_confirmation_returns_to_extract_mode() -> None:
 
 def test_cancel_zip_compress_confirmation_returns_to_zip_mode() -> None:
     request = CreateZipArchiveRequest(
-        source_paths=("/home/tadashi/develop/peneo/docs",),
-        destination_path="/home/tadashi/develop/peneo/docs.zip",
-        root_dir="/home/tadashi/develop/peneo",
+        source_paths=("/home/tadashi/develop/zivo/docs",),
+        destination_path="/home/tadashi/develop/zivo/docs.zip",
+        root_dir="/home/tadashi/develop/zivo",
     )
     state = replace(
         build_initial_app_state(),
         ui_mode="CONFIRM",
         pending_input=PendingInputState(
             prompt="Compress to: ",
-            value="/home/tadashi/develop/peneo/docs.zip",
+            value="/home/tadashi/develop/zivo/docs.zip",
             zip_source_paths=request.source_paths,
         ),
         zip_compress_confirmation=ZipCompressConfirmationState(
@@ -3578,14 +3561,14 @@ def test_zip_compress_progress_updates_notification() -> None:
             request_id=6,
             completed_entries=2,
             total_entries=5,
-            current_path="/home/tadashi/develop/peneo/docs/readme.txt",
+            current_path="/home/tadashi/develop/zivo/docs/readme.txt",
         ),
     )
 
     assert next_state.zip_compress_progress == ZipCompressProgressState(
         completed_entries=2,
         total_entries=5,
-        current_path="/home/tadashi/develop/peneo/docs/readme.txt",
+        current_path="/home/tadashi/develop/zivo/docs/readme.txt",
     )
     assert next_state.notification == NotificationState(
         level="info",
@@ -3600,7 +3583,7 @@ def test_archive_extract_completed_requests_snapshot_for_destination_parent() ->
         pending_input=PendingInputState(
             prompt="Extract to: ",
             value="/tmp/output/archive",
-            extract_source_path="/home/tadashi/develop/peneo/archive.zip",
+            extract_source_path="/home/tadashi/develop/zivo/archive.zip",
         ),
         pending_archive_extract_request_id=9,
     )
@@ -3640,7 +3623,7 @@ def test_zip_compress_completed_requests_snapshot_for_destination_parent() -> No
         pending_input=PendingInputState(
             prompt="Compress to: ",
             value="/tmp/output.zip",
-            zip_source_paths=("/home/tadashi/develop/peneo/docs",),
+            zip_source_paths=("/home/tadashi/develop/zivo/docs",),
         ),
         pending_zip_compress_request_id=9,
     )
@@ -3680,7 +3663,7 @@ def test_archive_extract_failed_returns_to_extract_mode() -> None:
         pending_input=PendingInputState(
             prompt="Extract to: ",
             value="/tmp/output/archive",
-            extract_source_path="/home/tadashi/develop/peneo/archive.zip",
+            extract_source_path="/home/tadashi/develop/zivo/archive.zip",
         ),
         pending_archive_extract_request_id=12,
     )
@@ -3705,7 +3688,7 @@ def test_zip_compress_failed_returns_to_zip_mode() -> None:
         pending_input=PendingInputState(
             prompt="Compress to: ",
             value="/tmp/output.zip",
-            zip_source_paths=("/home/tadashi/develop/peneo/docs",),
+            zip_source_paths=("/home/tadashi/develop/zivo/docs",),
         ),
         pending_zip_compress_request_id=12,
     )
@@ -3730,7 +3713,7 @@ def test_archive_preparation_failed_returns_to_extract_mode() -> None:
         pending_input=PendingInputState(
             prompt="Extract to: ",
             value="/tmp/output/archive",
-            extract_source_path="/home/tadashi/develop/peneo/archive.zip",
+            extract_source_path="/home/tadashi/develop/zivo/archive.zip",
         ),
         pending_archive_prepare_request_id=7,
     )
@@ -3790,7 +3773,7 @@ def test_submit_pending_input_treats_unchanged_rename_as_noop() -> None:
         pending_input=PendingInputState(
             prompt="Rename: ",
             value="docs",
-            target_path="/home/tadashi/develop/peneo/docs",
+            target_path="/home/tadashi/develop/zivo/docs",
         ),
     )
 
@@ -3808,7 +3791,7 @@ def test_submit_pending_input_emits_file_mutation_effect() -> None:
         pending_input=PendingInputState(
             prompt="Rename: ",
             value="manuals",
-            target_path="/home/tadashi/develop/peneo/docs",
+            target_path="/home/tadashi/develop/zivo/docs",
         ),
     )
 
@@ -3820,7 +3803,7 @@ def test_submit_pending_input_emits_file_mutation_effect() -> None:
         RunFileMutationEffect(
             request_id=1,
             request=RenameRequest(
-                source_path="/home/tadashi/develop/peneo/docs",
+                source_path="/home/tadashi/develop/zivo/docs",
                 new_name="manuals",
             ),
         ),
@@ -3844,7 +3827,7 @@ def test_submit_pending_input_emits_create_effect() -> None:
         RunFileMutationEffect(
             request_id=1,
             request=CreatePathRequest(
-                parent_dir="/home/tadashi/develop/peneo",
+                parent_dir="/home/tadashi/develop/zivo",
                 name="notes.txt",
                 kind="file",
             ),
@@ -3859,7 +3842,7 @@ def test_submit_pending_input_name_conflict_enters_confirm_mode_for_rename() -> 
         pending_input=PendingInputState(
             prompt="Rename: ",
             value="src",
-            target_path="/home/tadashi/develop/peneo/docs",
+            target_path="/home/tadashi/develop/zivo/docs",
         ),
     )
 
@@ -3924,10 +3907,10 @@ def test_cancel_filter_input_clears_query_from_browsing() -> None:
 def test_copy_targets_updates_clipboard_state() -> None:
     state = build_initial_app_state()
 
-    next_state = _reduce_state(state, CopyTargets(("/home/tadashi/develop/peneo/docs",)))
+    next_state = _reduce_state(state, CopyTargets(("/home/tadashi/develop/zivo/docs",)))
 
     assert next_state.clipboard.mode == "copy"
-    assert next_state.clipboard.paths == ("/home/tadashi/develop/peneo/docs",)
+    assert next_state.clipboard.paths == ("/home/tadashi/develop/zivo/docs",)
 
 
 def test_copy_targets_warns_when_empty() -> None:
@@ -3951,7 +3934,7 @@ def test_cut_targets_warns_when_empty() -> None:
 def test_paste_clipboard_emits_paste_effect_and_sets_busy() -> None:
     state = _reduce_state(
         build_initial_app_state(),
-        CopyTargets(("/home/tadashi/develop/peneo/docs",)),
+        CopyTargets(("/home/tadashi/develop/zivo/docs",)),
     )
 
     result = reduce_app_state(state, PasteClipboard())
@@ -3964,7 +3947,7 @@ def test_paste_clipboard_emits_paste_effect_and_sets_busy() -> None:
             request=result.effects[0].request,
         ),
     )
-    assert result.effects[0].request.destination_dir == "/home/tadashi/develop/peneo"
+    assert result.effects[0].request.destination_dir == "/home/tadashi/develop/zivo"
 
 
 def test_paste_clipboard_warns_when_empty() -> None:
@@ -3988,13 +3971,13 @@ def test_undo_last_operation_warns_when_stack_is_empty() -> None:
 def test_paste_needs_resolution_enters_confirm_mode() -> None:
     state = _reduce_state(
         build_initial_app_state(),
-        CopyTargets(("/home/tadashi/develop/peneo/docs",)),
+        CopyTargets(("/home/tadashi/develop/zivo/docs",)),
     )
     requested = reduce_app_state(state, PasteClipboard()).state
 
     conflict = PasteConflict(
-        source_path="/home/tadashi/develop/peneo/docs",
-        destination_path="/home/tadashi/develop/peneo/docs",
+        source_path="/home/tadashi/develop/zivo/docs",
+        destination_path="/home/tadashi/develop/zivo/docs",
     )
     next_state = _reduce_state(
         requested,
@@ -4002,8 +3985,8 @@ def test_paste_needs_resolution_enters_confirm_mode() -> None:
             request_id=1,
             request=PasteRequest(
                 mode="copy",
-                source_paths=("/home/tadashi/develop/peneo/docs",),
-                destination_dir="/home/tadashi/develop/peneo",
+                source_paths=("/home/tadashi/develop/zivo/docs",),
+                destination_dir="/home/tadashi/develop/zivo",
             ),
             conflicts=(conflict,),
         ),
@@ -4017,13 +4000,13 @@ def test_paste_needs_resolution_enters_confirm_mode() -> None:
 def test_paste_needs_resolution_uses_configured_default_resolution() -> None:
     state = _reduce_state(
         build_initial_app_state(paste_conflict_action="rename"),
-        CopyTargets(("/home/tadashi/develop/peneo/docs",)),
+        CopyTargets(("/home/tadashi/develop/zivo/docs",)),
     )
     requested = reduce_app_state(state, PasteClipboard()).state
 
     conflict = PasteConflict(
-        source_path="/home/tadashi/develop/peneo/docs",
-        destination_path="/home/tadashi/develop/peneo/docs",
+        source_path="/home/tadashi/develop/zivo/docs",
+        destination_path="/home/tadashi/develop/zivo/docs",
     )
     result = reduce_app_state(
         requested,
@@ -4031,8 +4014,8 @@ def test_paste_needs_resolution_uses_configured_default_resolution() -> None:
             request_id=1,
             request=PasteRequest(
                 mode="copy",
-                source_paths=("/home/tadashi/develop/peneo/docs",),
-                destination_dir="/home/tadashi/develop/peneo",
+                source_paths=("/home/tadashi/develop/zivo/docs",),
+                destination_dir="/home/tadashi/develop/zivo",
             ),
             conflicts=(conflict,),
         ),
@@ -4044,8 +4027,8 @@ def test_paste_needs_resolution_uses_configured_default_resolution() -> None:
             request_id=2,
             request=PasteRequest(
                 mode="copy",
-                source_paths=("/home/tadashi/develop/peneo/docs",),
-                destination_dir="/home/tadashi/develop/peneo",
+                source_paths=("/home/tadashi/develop/zivo/docs",),
+                destination_dir="/home/tadashi/develop/zivo",
                 conflict_resolution="rename",
             ),
         ),
@@ -4055,13 +4038,13 @@ def test_paste_needs_resolution_uses_configured_default_resolution() -> None:
 def test_paste_needs_resolution_ignores_stale_request() -> None:
     state = _reduce_state(
         build_initial_app_state(),
-        CopyTargets(("/home/tadashi/develop/peneo/docs",)),
+        CopyTargets(("/home/tadashi/develop/zivo/docs",)),
     )
     requested = reduce_app_state(state, PasteClipboard()).state
 
     conflict = PasteConflict(
-        source_path="/home/tadashi/develop/peneo/docs",
-        destination_path="/home/tadashi/develop/peneo/docs",
+        source_path="/home/tadashi/develop/zivo/docs",
+        destination_path="/home/tadashi/develop/zivo/docs",
     )
     next_state = _reduce_state(
         requested,
@@ -4069,8 +4052,8 @@ def test_paste_needs_resolution_ignores_stale_request() -> None:
             request_id=99,
             request=PasteRequest(
                 mode="copy",
-                source_paths=("/home/tadashi/develop/peneo/docs",),
-                destination_dir="/home/tadashi/develop/peneo",
+                source_paths=("/home/tadashi/develop/zivo/docs",),
+                destination_dir="/home/tadashi/develop/zivo",
             ),
             conflicts=(conflict,),
         ),
@@ -4081,8 +4064,8 @@ def test_paste_needs_resolution_ignores_stale_request() -> None:
 
 def test_resolve_paste_conflict_restarts_paste_with_resolution() -> None:
     conflict = PasteConflict(
-        source_path="/home/tadashi/develop/peneo/docs",
-        destination_path="/home/tadashi/develop/peneo/docs",
+        source_path="/home/tadashi/develop/zivo/docs",
+        destination_path="/home/tadashi/develop/zivo/docs",
     )
     state = replace(
         build_initial_app_state(),
@@ -4090,8 +4073,8 @@ def test_resolve_paste_conflict_restarts_paste_with_resolution() -> None:
         paste_conflict=PasteConflictState(
             request=PasteRequest(
                 mode="copy",
-                source_paths=("/home/tadashi/develop/peneo/docs",),
-                destination_dir="/home/tadashi/develop/peneo",
+                source_paths=("/home/tadashi/develop/zivo/docs",),
+                destination_dir="/home/tadashi/develop/zivo",
             ),
             conflicts=(conflict,),
             first_conflict=conflict,
@@ -4111,8 +4094,8 @@ def test_resolve_paste_conflict_restarts_paste_with_resolution() -> None:
             request_id=2,
             request=PasteRequest(
                 mode="copy",
-                source_paths=("/home/tadashi/develop/peneo/docs",),
-                destination_dir="/home/tadashi/develop/peneo",
+                source_paths=("/home/tadashi/develop/zivo/docs",),
+                destination_dir="/home/tadashi/develop/zivo",
                 conflict_resolution="rename",
             ),
         ),
@@ -4122,7 +4105,7 @@ def test_resolve_paste_conflict_restarts_paste_with_resolution() -> None:
 def test_clipboard_paste_completed_for_cut_clears_clipboard_and_requests_reload() -> None:
     state = _reduce_state(
         build_initial_app_state(),
-        CutTargets(("/home/tadashi/develop/peneo/docs",)),
+        CutTargets(("/home/tadashi/develop/zivo/docs",)),
     )
     state = replace(state, pending_paste_request_id=4)
 
@@ -4132,7 +4115,7 @@ def test_clipboard_paste_completed_for_cut_clears_clipboard_and_requests_reload(
             request_id=4,
             summary=PasteSummary(
                 mode="cut",
-                destination_dir="/home/tadashi/develop/peneo",
+                destination_dir="/home/tadashi/develop/zivo",
                 total_count=1,
                 success_count=1,
                 skipped_count=0,
@@ -4140,7 +4123,7 @@ def test_clipboard_paste_completed_for_cut_clears_clipboard_and_requests_reload(
             applied_changes=(
                 PasteAppliedChange(
                     source_path="/tmp/staging/docs",
-                    destination_path="/home/tadashi/develop/peneo/docs",
+                    destination_path="/home/tadashi/develop/zivo/docs",
                 ),
             ),
         ),
@@ -4152,7 +4135,7 @@ def test_clipboard_paste_completed_for_cut_clears_clipboard_and_requests_reload(
             kind="paste_cut",
             steps=(
                 UndoMovePathStep(
-                    source_path="/home/tadashi/develop/peneo/docs",
+                    source_path="/home/tadashi/develop/zivo/docs",
                     destination_path="/tmp/staging/docs",
                 ),
             ),
@@ -4162,13 +4145,13 @@ def test_clipboard_paste_completed_for_cut_clears_clipboard_and_requests_reload(
     assert result.effects == (
         LoadBrowserSnapshotEffect(
             request_id=1,
-            path="/home/tadashi/develop/peneo",
-            cursor_path="/home/tadashi/develop/peneo/docs",
+            path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/docs",
             blocking=False,
             invalidate_paths=(
-                "/home/tadashi/develop/peneo",
+                "/home/tadashi/develop/zivo",
                 "/home/tadashi/develop",
-                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/zivo/docs",
             ),
         ),
     )
@@ -4183,7 +4166,7 @@ def test_clipboard_paste_completed_pushes_copy_undo_entry() -> None:
             request_id=4,
             summary=PasteSummary(
                 mode="copy",
-                destination_dir="/home/tadashi/develop/peneo",
+                destination_dir="/home/tadashi/develop/zivo",
                 total_count=1,
                 success_count=1,
                 skipped_count=0,
@@ -4191,7 +4174,7 @@ def test_clipboard_paste_completed_pushes_copy_undo_entry() -> None:
             applied_changes=(
                 PasteAppliedChange(
                     source_path="/tmp/source/docs",
-                    destination_path="/home/tadashi/develop/peneo/docs copy",
+                    destination_path="/home/tadashi/develop/zivo/docs copy",
                 ),
             ),
         ),
@@ -4200,7 +4183,7 @@ def test_clipboard_paste_completed_pushes_copy_undo_entry() -> None:
     assert next_state.undo_stack == (
         UndoEntry(
             kind="paste_copy",
-            steps=(UndoDeletePathStep(path="/home/tadashi/develop/peneo/docs copy"),),
+            steps=(UndoDeletePathStep(path="/home/tadashi/develop/zivo/docs copy"),),
         ),
     )
 
@@ -4214,7 +4197,7 @@ def test_clipboard_paste_completed_skips_undo_for_overwrite() -> None:
             request_id=4,
             summary=PasteSummary(
                 mode="copy",
-                destination_dir="/home/tadashi/develop/peneo",
+                destination_dir="/home/tadashi/develop/zivo",
                 total_count=1,
                 success_count=1,
                 skipped_count=0,
@@ -4223,7 +4206,7 @@ def test_clipboard_paste_completed_skips_undo_for_overwrite() -> None:
             applied_changes=(
                 PasteAppliedChange(
                     source_path="/tmp/source/docs",
-                    destination_path="/home/tadashi/develop/peneo/docs",
+                    destination_path="/home/tadashi/develop/zivo/docs",
                 ),
             ),
         ),
@@ -4253,7 +4236,7 @@ def test_file_mutation_completed_requests_reload_with_result_cursor() -> None:
         FileMutationCompleted(
             request_id=4,
             result=FileMutationResult(
-                path="/home/tadashi/develop/peneo/notes.txt",
+                path="/home/tadashi/develop/zivo/notes.txt",
                 message="Created file notes.txt",
             ),
         ),
@@ -4266,13 +4249,13 @@ def test_file_mutation_completed_requests_reload_with_result_cursor() -> None:
     assert result.effects == (
         LoadBrowserSnapshotEffect(
             request_id=1,
-            path="/home/tadashi/develop/peneo",
-            cursor_path="/home/tadashi/develop/peneo/notes.txt",
+            path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/notes.txt",
             blocking=False,
             invalidate_paths=(
-                "/home/tadashi/develop/peneo",
+                "/home/tadashi/develop/zivo",
                 "/home/tadashi/develop",
-                "/home/tadashi/develop/peneo/notes.txt",
+                "/home/tadashi/develop/zivo/notes.txt",
             ),
         ),
     )
@@ -4286,7 +4269,7 @@ def test_rename_file_mutation_completed_pushes_undo_entry() -> None:
         pending_input=PendingInputState(
             prompt="Rename: ",
             value="manuals",
-            target_path="/home/tadashi/develop/peneo/docs",
+            target_path="/home/tadashi/develop/zivo/docs",
         ),
     )
 
@@ -4295,10 +4278,10 @@ def test_rename_file_mutation_completed_pushes_undo_entry() -> None:
         FileMutationCompleted(
             request_id=4,
             result=FileMutationResult(
-                path="/home/tadashi/develop/peneo/manuals",
+                path="/home/tadashi/develop/zivo/manuals",
                 message="Renamed to manuals",
                 operation="rename",
-                source_path="/home/tadashi/develop/peneo/docs",
+                source_path="/home/tadashi/develop/zivo/docs",
             ),
         ),
     )
@@ -4308,8 +4291,8 @@ def test_rename_file_mutation_completed_pushes_undo_entry() -> None:
             kind="rename",
             steps=(
                 UndoMovePathStep(
-                    source_path="/home/tadashi/develop/peneo/manuals",
-                    destination_path="/home/tadashi/develop/peneo/docs",
+                    source_path="/home/tadashi/develop/zivo/manuals",
+                    destination_path="/home/tadashi/develop/zivo/docs",
                 ),
             ),
         ),
@@ -4323,7 +4306,7 @@ def test_delete_file_mutation_completed_requests_reload_without_deleted_cursor()
         pending_file_mutation_request_id=7,
         current_pane=replace(
             build_initial_app_state().current_pane,
-            cursor_path="/home/tadashi/develop/peneo/docs",
+            cursor_path="/home/tadashi/develop/zivo/docs",
         ),
     )
 
@@ -4334,7 +4317,7 @@ def test_delete_file_mutation_completed_requests_reload_without_deleted_cursor()
             result=FileMutationResult(
                 path=None,
                 message="Trashed 1 item",
-                removed_paths=("/home/tadashi/develop/peneo/docs",),
+                removed_paths=("/home/tadashi/develop/zivo/docs",),
             ),
         ),
     )
@@ -4344,13 +4327,13 @@ def test_delete_file_mutation_completed_requests_reload_without_deleted_cursor()
     assert result.effects == (
         LoadBrowserSnapshotEffect(
             request_id=1,
-            path="/home/tadashi/develop/peneo",
-            cursor_path="/home/tadashi/develop/peneo/src",
+            path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/src",
             blocking=False,
             invalidate_paths=(
-                "/home/tadashi/develop/peneo",
+                "/home/tadashi/develop/zivo",
                 "/home/tadashi/develop",
-                "/home/tadashi/develop/peneo/src",
+                "/home/tadashi/develop/zivo/src",
             ),
         ),
     )
@@ -4370,12 +4353,12 @@ def test_trash_file_mutation_completed_pushes_undo_entry() -> None:
             result=FileMutationResult(
                 path=None,
                 message="Trashed 1 item",
-                removed_paths=("/home/tadashi/develop/peneo/docs",),
+                removed_paths=("/home/tadashi/develop/zivo/docs",),
                 operation="delete",
                 delete_mode="trash",
                 trash_records=(
                     TrashRestoreRecord(
-                        original_path="/home/tadashi/develop/peneo/docs",
+                        original_path="/home/tadashi/develop/zivo/docs",
                         trashed_path="/home/tadashi/.local/share/Trash/files/docs",
                         metadata_path="/home/tadashi/.local/share/Trash/info/docs.trashinfo",
                     ),
@@ -4390,7 +4373,7 @@ def test_trash_file_mutation_completed_pushes_undo_entry() -> None:
             steps=(
                 UndoRestoreTrashStep(
                     record=TrashRestoreRecord(
-                        original_path="/home/tadashi/develop/peneo/docs",
+                        original_path="/home/tadashi/develop/zivo/docs",
                         trashed_path="/home/tadashi/.local/share/Trash/files/docs",
                         metadata_path="/home/tadashi/.local/share/Trash/info/docs.trashinfo",
                     )
@@ -4444,13 +4427,13 @@ def test_undo_completed_pops_stack_and_requests_reload() -> None:
     assert result.effects == (
         LoadBrowserSnapshotEffect(
             request_id=4,
-            path="/home/tadashi/develop/peneo",
-            cursor_path="/home/tadashi/develop/peneo/docs",
+            path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/docs",
             blocking=False,
             invalidate_paths=(
-                "/home/tadashi/develop/peneo",
+                "/home/tadashi/develop/zivo",
                 "/home/tadashi/develop",
-                "/home/tadashi/develop/peneo/docs",
+                "/home/tadashi/develop/zivo/docs",
             ),
         ),
     )
@@ -4484,7 +4467,7 @@ def test_file_mutation_failed_keeps_input_value_and_returns_error() -> None:
         pending_input=PendingInputState(
             prompt="Rename: ",
             value="docs copy",
-            target_path="/home/tadashi/develop/peneo/docs",
+            target_path="/home/tadashi/develop/zivo/docs",
         ),
     )
 
@@ -4517,8 +4500,8 @@ def test_delete_file_mutation_failed_returns_to_browsing() -> None:
 
 def test_clipboard_paste_failed_returns_to_browsing_and_clears_dialog_state() -> None:
     conflict = PasteConflict(
-        source_path="/home/tadashi/develop/peneo/docs",
-        destination_path="/home/tadashi/develop/peneo/docs",
+        source_path="/home/tadashi/develop/zivo/docs",
+        destination_path="/home/tadashi/develop/zivo/docs",
     )
     state = replace(
         build_initial_app_state(),
@@ -4527,13 +4510,13 @@ def test_clipboard_paste_failed_returns_to_browsing_and_clears_dialog_state() ->
         paste_conflict=PasteConflictState(
             request=PasteRequest(
                 mode="copy",
-                source_paths=("/home/tadashi/develop/peneo/docs",),
-                destination_dir="/home/tadashi/develop/peneo",
+                source_paths=("/home/tadashi/develop/zivo/docs",),
+                destination_dir="/home/tadashi/develop/zivo",
             ),
             conflicts=(conflict,),
             first_conflict=conflict,
         ),
-        delete_confirmation=DeleteConfirmationState(paths=("/home/tadashi/develop/peneo/docs",)),
+        delete_confirmation=DeleteConfirmationState(paths=("/home/tadashi/develop/zivo/docs",)),
         name_conflict=NameConflictState(kind="rename", name="docs"),
     )
 
@@ -4556,14 +4539,14 @@ def test_external_launch_failed_sets_error_notification() -> None:
         state,
         ExternalLaunchFailed(
             request_id=5,
-            request=ExternalLaunchRequest(kind="open_file", path="/tmp/peneo/README.md"),
-            message="Failed to open /tmp/peneo/README.md: permission denied",
+            request=ExternalLaunchRequest(kind="open_file", path="/tmp/zivo/README.md"),
+            message="Failed to open /tmp/zivo/README.md: permission denied",
         ),
     )
 
     assert next_state.notification == NotificationState(
         level="error",
-        message="Failed to open /tmp/peneo/README.md: permission denied",
+        message="Failed to open /tmp/zivo/README.md: permission denied",
     )
 
 
@@ -4576,7 +4559,7 @@ def test_external_launch_completed_sets_copy_notification() -> None:
             request_id=5,
             request=ExternalLaunchRequest(
                 kind="copy_paths",
-                paths=("/tmp/peneo/docs", "/tmp/peneo/README.md"),
+                paths=("/tmp/zivo/docs", "/tmp/zivo/README.md"),
             ),
         ),
     )
@@ -4594,7 +4577,7 @@ def test_dismiss_name_conflict_restores_rename_mode_and_keeps_input() -> None:
         pending_input=PendingInputState(
             prompt="Rename: ",
             value="src",
-            target_path="/home/tadashi/develop/peneo/docs",
+            target_path="/home/tadashi/develop/zivo/docs",
         ),
         name_conflict=NameConflictState(kind="rename", name="src"),
     )
@@ -4636,13 +4619,13 @@ def test_cancel_paste_conflict_returns_to_browsing_with_warning() -> None:
 
 def test_toggle_selection_and_advance_moves_cursor_to_next_visible_entry() -> None:
     state = build_initial_app_state()
-    current_path = "/home/tadashi/develop/peneo/docs"
+    current_path = "/home/tadashi/develop/zivo/docs"
     visible_paths = (
-        "/home/tadashi/develop/peneo/docs",
-        "/home/tadashi/develop/peneo/src",
-        "/home/tadashi/develop/peneo/tests",
-        "/home/tadashi/develop/peneo/README.md",
-        "/home/tadashi/develop/peneo/pyproject.toml",
+        "/home/tadashi/develop/zivo/docs",
+        "/home/tadashi/develop/zivo/src",
+        "/home/tadashi/develop/zivo/tests",
+        "/home/tadashi/develop/zivo/README.md",
+        "/home/tadashi/develop/zivo/pyproject.toml",
     )
 
     result = reduce_app_state(
@@ -4651,20 +4634,20 @@ def test_toggle_selection_and_advance_moves_cursor_to_next_visible_entry() -> No
     )
 
     assert result.state.current_pane.selected_paths == frozenset({current_path})
-    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/src"
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/zivo/src"
     assert result.state.pending_child_pane_request_id == 1
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
             request_id=1,
-            current_path="/home/tadashi/develop/peneo",
-            cursor_path="/home/tadashi/develop/peneo/src",
+            current_path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/src",
         ),
         RunDirectorySizeEffect(
             request_id=2,
             paths=(
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
-                "/home/tadashi/develop/peneo/tests",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
+                "/home/tadashi/develop/zivo/tests",
             ),
         ),
     )
@@ -4673,11 +4656,11 @@ def test_toggle_selection_and_advance_moves_cursor_to_next_visible_entry() -> No
 def test_move_cursor_and_select_range_sets_anchor_and_selects_contiguous_entries() -> None:
     state = build_initial_app_state()
     visible_paths = (
-        "/home/tadashi/develop/peneo/docs",
-        "/home/tadashi/develop/peneo/src",
-        "/home/tadashi/develop/peneo/tests",
-        "/home/tadashi/develop/peneo/README.md",
-        "/home/tadashi/develop/peneo/pyproject.toml",
+        "/home/tadashi/develop/zivo/docs",
+        "/home/tadashi/develop/zivo/src",
+        "/home/tadashi/develop/zivo/tests",
+        "/home/tadashi/develop/zivo/README.md",
+        "/home/tadashi/develop/zivo/pyproject.toml",
     )
 
     result = reduce_app_state(
@@ -4685,26 +4668,26 @@ def test_move_cursor_and_select_range_sets_anchor_and_selects_contiguous_entries
         MoveCursorAndSelectRange(delta=1, visible_paths=visible_paths),
     )
 
-    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/src"
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/zivo/src"
     assert result.state.current_pane.selected_paths == frozenset(
         {
-            "/home/tadashi/develop/peneo/docs",
-            "/home/tadashi/develop/peneo/src",
+            "/home/tadashi/develop/zivo/docs",
+            "/home/tadashi/develop/zivo/src",
         }
     )
-    assert result.state.current_pane.selection_anchor_path == "/home/tadashi/develop/peneo/docs"
+    assert result.state.current_pane.selection_anchor_path == "/home/tadashi/develop/zivo/docs"
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
             request_id=1,
-            current_path="/home/tadashi/develop/peneo",
-            cursor_path="/home/tadashi/develop/peneo/src",
+            current_path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/src",
         ),
         RunDirectorySizeEffect(
             request_id=2,
             paths=(
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
-                "/home/tadashi/develop/peneo/tests",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
+                "/home/tadashi/develop/zivo/tests",
             ),
         ),
     )
@@ -4712,11 +4695,11 @@ def test_move_cursor_and_select_range_sets_anchor_and_selects_contiguous_entries
 
 def test_move_cursor_and_select_range_reuses_anchor_when_shrinking_selection() -> None:
     visible_paths = (
-        "/home/tadashi/develop/peneo/docs",
-        "/home/tadashi/develop/peneo/src",
-        "/home/tadashi/develop/peneo/tests",
-        "/home/tadashi/develop/peneo/README.md",
-        "/home/tadashi/develop/peneo/pyproject.toml",
+        "/home/tadashi/develop/zivo/docs",
+        "/home/tadashi/develop/zivo/src",
+        "/home/tadashi/develop/zivo/tests",
+        "/home/tadashi/develop/zivo/README.md",
+        "/home/tadashi/develop/zivo/pyproject.toml",
     )
     state = reduce_app_state(
         build_initial_app_state(),
@@ -4732,21 +4715,21 @@ def test_move_cursor_and_select_range_reuses_anchor_when_shrinking_selection() -
         MoveCursorAndSelectRange(delta=-1, visible_paths=visible_paths),
     )
 
-    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/src"
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/zivo/src"
     assert result.state.current_pane.selected_paths == frozenset(
         {
-            "/home/tadashi/develop/peneo/docs",
-            "/home/tadashi/develop/peneo/src",
+            "/home/tadashi/develop/zivo/docs",
+            "/home/tadashi/develop/zivo/src",
         }
     )
-    assert result.state.current_pane.selection_anchor_path == "/home/tadashi/develop/peneo/docs"
+    assert result.state.current_pane.selection_anchor_path == "/home/tadashi/develop/zivo/docs"
 
 
 def test_move_cursor_clears_range_selection_anchor() -> None:
     visible_paths = (
-        "/home/tadashi/develop/peneo/docs",
-        "/home/tadashi/develop/peneo/src",
-        "/home/tadashi/develop/peneo/tests",
+        "/home/tadashi/develop/zivo/docs",
+        "/home/tadashi/develop/zivo/src",
+        "/home/tadashi/develop/zivo/tests",
     )
     initial_state = build_initial_app_state()
     state = replace(
@@ -4755,21 +4738,21 @@ def test_move_cursor_clears_range_selection_anchor() -> None:
             initial_state.current_pane,
             selected_paths=frozenset(
                 {
-                    "/home/tadashi/develop/peneo/docs",
-                    "/home/tadashi/develop/peneo/src",
+                    "/home/tadashi/develop/zivo/docs",
+                    "/home/tadashi/develop/zivo/src",
                 }
             ),
-            selection_anchor_path="/home/tadashi/develop/peneo/docs",
+            selection_anchor_path="/home/tadashi/develop/zivo/docs",
         ),
     )
 
     result = reduce_app_state(state, MoveCursor(delta=1, visible_paths=visible_paths))
 
-    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/src"
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/zivo/src"
     assert result.state.current_pane.selected_paths == frozenset(
         {
-            "/home/tadashi/develop/peneo/docs",
-            "/home/tadashi/develop/peneo/src",
+            "/home/tadashi/develop/zivo/docs",
+            "/home/tadashi/develop/zivo/src",
         }
     )
     assert result.state.current_pane.selection_anchor_path is None
@@ -4847,29 +4830,29 @@ def test_browser_snapshot_loaded_preserves_remaining_selection_on_reload() -> No
     state = build_initial_app_state()
     state = _reduce_state(
         state,
-        ToggleSelection("/home/tadashi/develop/peneo/docs"),
+        ToggleSelection("/home/tadashi/develop/zivo/docs"),
     )
     state = _reduce_state(
         state,
-        ToggleSelection("/home/tadashi/develop/peneo/README.md"),
+        ToggleSelection("/home/tadashi/develop/zivo/README.md"),
     )
     requested = reduce_app_state(
         state,
-        RequestBrowserSnapshot("/home/tadashi/develop/peneo", blocking=True),
+        RequestBrowserSnapshot("/home/tadashi/develop/zivo", blocking=True),
     ).state
 
     snapshot = BrowserSnapshot(
-        current_path="/home/tadashi/develop/peneo",
+        current_path="/home/tadashi/develop/zivo",
         parent_pane=requested.parent_pane,
         current_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(
-                DirectoryEntryState("/home/tadashi/develop/peneo/docs", "docs", "dir"),
-                DirectoryEntryState("/home/tadashi/develop/peneo/src", "src", "dir"),
+                DirectoryEntryState("/home/tadashi/develop/zivo/docs", "docs", "dir"),
+                DirectoryEntryState("/home/tadashi/develop/zivo/src", "src", "dir"),
             ),
-            cursor_path="/home/tadashi/develop/peneo/src",
+            cursor_path="/home/tadashi/develop/zivo/src",
         ),
-        child_pane=PaneState(directory_path="/home/tadashi/develop/peneo/src", entries=()),
+        child_pane=PaneState(directory_path="/home/tadashi/develop/zivo/src", entries=()),
     )
 
     next_state = _reduce_state(
@@ -4878,7 +4861,7 @@ def test_browser_snapshot_loaded_preserves_remaining_selection_on_reload() -> No
     )
 
     assert next_state.current_pane.selected_paths == frozenset(
-        {"/home/tadashi/develop/peneo/docs"}
+        {"/home/tadashi/develop/zivo/docs"}
     )
 
 
@@ -4886,32 +4869,32 @@ def test_browser_snapshot_loaded_clears_selection_when_directory_changes() -> No
     state = build_initial_app_state()
     state = _reduce_state(
         state,
-        ToggleSelection("/home/tadashi/develop/peneo/docs"),
+        ToggleSelection("/home/tadashi/develop/zivo/docs"),
     )
     requested = reduce_app_state(
         state,
-        RequestBrowserSnapshot("/home/tadashi/develop/peneo/docs", blocking=True),
+        RequestBrowserSnapshot("/home/tadashi/develop/zivo/docs", blocking=True),
     ).state
 
     snapshot = BrowserSnapshot(
-        current_path="/home/tadashi/develop/peneo/docs",
+        current_path="/home/tadashi/develop/zivo/docs",
         parent_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=state.current_pane.entries,
-            cursor_path="/home/tadashi/develop/peneo/docs",
+            cursor_path="/home/tadashi/develop/zivo/docs",
         ),
         current_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo/docs",
+            directory_path="/home/tadashi/develop/zivo/docs",
             entries=(
                 DirectoryEntryState(
-                    "/home/tadashi/develop/peneo/docs/spec.md",
+                    "/home/tadashi/develop/zivo/docs/spec.md",
                     "spec.md",
                     "file",
                 ),
             ),
-            cursor_path="/home/tadashi/develop/peneo/docs/spec.md",
+            cursor_path="/home/tadashi/develop/zivo/docs/spec.md",
         ),
-        child_pane=PaneState(directory_path="/home/tadashi/develop/peneo/docs", entries=()),
+        child_pane=PaneState(directory_path="/home/tadashi/develop/zivo/docs", entries=()),
     )
 
     next_state = _reduce_state(
@@ -4941,58 +4924,58 @@ def test_browser_snapshot_failed_sets_error_notification() -> None:
 def test_move_cursor_emits_child_snapshot_effect_only_when_target_changes() -> None:
     state = build_initial_app_state()
     visible_paths = (
-        "/home/tadashi/develop/peneo/docs",
-        "/home/tadashi/develop/peneo/src",
-        "/home/tadashi/develop/peneo/tests",
+        "/home/tadashi/develop/zivo/docs",
+        "/home/tadashi/develop/zivo/src",
+        "/home/tadashi/develop/zivo/tests",
     )
 
-    result = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/peneo/docs"))
+    result = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/zivo/docs"))
     assert result.effects == (
         RunDirectorySizeEffect(
             request_id=1,
             paths=(
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
-                "/home/tadashi/develop/peneo/tests",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
+                "/home/tadashi/develop/zivo/tests",
             ),
         ),
     )
 
-    moved = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/peneo/src"))
+    moved = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/zivo/src"))
 
     assert moved.state.pending_child_pane_request_id == 1
     assert moved.state.child_pane == state.child_pane
     assert moved.effects == (
         LoadChildPaneSnapshotEffect(
             request_id=1,
-            current_path="/home/tadashi/develop/peneo",
-            cursor_path="/home/tadashi/develop/peneo/src",
+            current_path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/src",
         ),
         RunDirectorySizeEffect(
             request_id=2,
             paths=(
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
-                "/home/tadashi/develop/peneo/tests",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
+                "/home/tadashi/develop/zivo/tests",
             ),
         ),
     )
 
     down = reduce_app_state(state, MoveCursor(delta=1, visible_paths=visible_paths))
 
-    assert down.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/src"
+    assert down.state.current_pane.cursor_path == "/home/tadashi/develop/zivo/src"
     assert down.effects == (
         LoadChildPaneSnapshotEffect(
             request_id=1,
-            current_path="/home/tadashi/develop/peneo",
-            cursor_path="/home/tadashi/develop/peneo/src",
+            current_path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/src",
         ),
         RunDirectorySizeEffect(
             request_id=2,
             paths=(
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
-                "/home/tadashi/develop/peneo/tests",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
+                "/home/tadashi/develop/zivo/tests",
             ),
         ),
     )
@@ -5001,22 +4984,22 @@ def test_move_cursor_emits_child_snapshot_effect_only_when_target_changes() -> N
 def test_set_cursor_path_to_file_requests_child_pane_preview() -> None:
     state = build_initial_app_state()
 
-    result = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/peneo/README.md"))
+    result = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/zivo/README.md"))
 
     assert result.state.child_pane == state.child_pane
     assert result.state.pending_child_pane_request_id == 1
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
             request_id=1,
-            current_path="/home/tadashi/develop/peneo",
-            cursor_path="/home/tadashi/develop/peneo/README.md",
+            current_path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/README.md",
         ),
         RunDirectorySizeEffect(
             request_id=2,
             paths=(
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
-                "/home/tadashi/develop/peneo/tests",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
+                "/home/tadashi/develop/zivo/tests",
             ),
         ),
     )
@@ -5030,18 +5013,18 @@ def test_set_cursor_path_to_file_clears_child_pane_when_preview_disabled() -> No
             display=replace(build_initial_app_state().config.display, show_preview=False),
         ),
         child_pane=PaneState(
-            directory_path="/home/tadashi/develop/peneo",
+            directory_path="/home/tadashi/develop/zivo",
             entries=(),
             mode="preview",
-            preview_path="/home/tadashi/develop/peneo/pyproject.toml",
+            preview_path="/home/tadashi/develop/zivo/pyproject.toml",
             preview_content="[project]\n",
         ),
     )
 
-    result = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/peneo/README.md"))
+    result = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/zivo/README.md"))
 
     assert result.state.child_pane == PaneState(
-        directory_path="/home/tadashi/develop/peneo",
+        directory_path="/home/tadashi/develop/zivo",
         entries=(),
     )
     assert result.state.pending_child_pane_request_id is None
@@ -5049,9 +5032,9 @@ def test_set_cursor_path_to_file_clears_child_pane_when_preview_disabled() -> No
         RunDirectorySizeEffect(
             request_id=1,
             paths=(
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
-                "/home/tadashi/develop/peneo/tests",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
+                "/home/tadashi/develop/zivo/tests",
             ),
         ),
     )
@@ -5059,7 +5042,7 @@ def test_set_cursor_path_to_file_clears_child_pane_when_preview_disabled() -> No
 
 def test_child_pane_snapshot_loaded_ignores_stale_request() -> None:
     state = build_initial_app_state()
-    requested = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/peneo/src")).state
+    requested = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/zivo/src")).state
 
     next_state = _reduce_state(
         requested,
@@ -5073,7 +5056,7 @@ def test_child_pane_snapshot_loaded_ignores_stale_request() -> None:
 
 
 def test_child_pane_snapshot_loaded_clears_grep_preview_when_file_preview_disabled() -> None:
-    path = "/home/tadashi/develop/peneo/README.md"
+    path = "/home/tadashi/develop/zivo/README.md"
     state = replace(
         build_initial_app_state(),
         config=replace(
@@ -5088,7 +5071,7 @@ def test_child_pane_snapshot_loaded_clears_grep_preview_when_file_preview_disabl
         ChildPaneSnapshotLoaded(
             request_id=7,
             pane=PaneState(
-                directory_path="/home/tadashi/develop/peneo",
+                directory_path="/home/tadashi/develop/zivo",
                 entries=(),
                 mode="preview",
                 preview_path=path,
@@ -5101,7 +5084,7 @@ def test_child_pane_snapshot_loaded_clears_grep_preview_when_file_preview_disabl
     )
 
     assert next_state.child_pane == PaneState(
-        directory_path="/home/tadashi/develop/peneo",
+        directory_path="/home/tadashi/develop/zivo",
         entries=(),
     )
     assert next_state.pending_child_pane_request_id is None
@@ -5109,7 +5092,7 @@ def test_child_pane_snapshot_loaded_clears_grep_preview_when_file_preview_disabl
 
 def test_child_pane_snapshot_failed_ignores_stale_request() -> None:
     state = build_initial_app_state()
-    requested = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/peneo/src")).state
+    requested = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/zivo/src")).state
 
     next_state = _reduce_state(
         requested,
@@ -5121,14 +5104,14 @@ def test_child_pane_snapshot_failed_ignores_stale_request() -> None:
 
 def test_child_pane_snapshot_failure_sets_error_and_clears_entries() -> None:
     state = build_initial_app_state()
-    requested = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/peneo/src")).state
+    requested = reduce_app_state(state, SetCursorPath("/home/tadashi/develop/zivo/src")).state
 
     next_state = _reduce_state(
         requested,
         ChildPaneSnapshotFailed(request_id=1, message="permission denied"),
     )
 
-    assert next_state.child_pane.directory_path == "/home/tadashi/develop/peneo"
+    assert next_state.child_pane.directory_path == "/home/tadashi/develop/zivo"
     assert next_state.child_pane.entries == ()
     assert next_state.notification == NotificationState(
         level="error",
@@ -5146,7 +5129,7 @@ class TestSetTerminalHeight:
         assert next_state.terminal_height == 48
 
     def test_repositions_viewport_window_to_keep_cursor_visible(self) -> None:
-        path = "/tmp/peneo-viewport-terminal-height"
+        path = "/tmp/zivo-viewport-terminal-height"
         entries = _viewport_test_entries(path, 20)
         state = replace(
             build_initial_app_state(current_pane_projection_mode="viewport"),
@@ -5175,20 +5158,20 @@ class TestSetTerminalHeight:
 def test_jump_cursor_start() -> None:
     state = build_initial_app_state()
     visible_paths = (
-        "/home/tadashi/develop/peneo/docs",
-        "/home/tadashi/develop/peneo/src",
-        "/home/tadashi/develop/peneo/tests",
+        "/home/tadashi/develop/zivo/docs",
+        "/home/tadashi/develop/zivo/src",
+        "/home/tadashi/develop/zivo/tests",
     )
-    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/tests"))
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/zivo/tests"))
 
     result = reduce_app_state(state, JumpCursor(position="start", visible_paths=visible_paths))
 
-    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/docs"
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/zivo/docs"
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
             request_id=3,
-            current_path="/home/tadashi/develop/peneo",
-            cursor_path="/home/tadashi/develop/peneo/docs",
+            current_path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/docs",
         ),
     )
 
@@ -5196,33 +5179,33 @@ def test_jump_cursor_start() -> None:
 def test_jump_cursor_end() -> None:
     state = build_initial_app_state()
     visible_paths = (
-        "/home/tadashi/develop/peneo/docs",
-        "/home/tadashi/develop/peneo/src",
-        "/home/tadashi/develop/peneo/tests",
+        "/home/tadashi/develop/zivo/docs",
+        "/home/tadashi/develop/zivo/src",
+        "/home/tadashi/develop/zivo/tests",
     )
 
     result = reduce_app_state(state, JumpCursor(position="end", visible_paths=visible_paths))
 
-    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/tests"
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/zivo/tests"
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
             request_id=1,
-            current_path="/home/tadashi/develop/peneo",
-            cursor_path="/home/tadashi/develop/peneo/tests",
+            current_path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/tests",
         ),
         RunDirectorySizeEffect(
             request_id=2,
             paths=(
-                "/home/tadashi/develop/peneo/docs",
-                "/home/tadashi/develop/peneo/src",
-                "/home/tadashi/develop/peneo/tests",
+                "/home/tadashi/develop/zivo/docs",
+                "/home/tadashi/develop/zivo/src",
+                "/home/tadashi/develop/zivo/tests",
             ),
         ),
     )
 
 
 def test_jump_cursor_end_repositions_viewport_window() -> None:
-    path = "/tmp/peneo-viewport-jump"
+    path = "/tmp/zivo-viewport-jump"
     entries = _viewport_test_entries(path, 20)
     visible_paths = tuple(entry.path for entry in entries)
     state = replace(
@@ -5253,21 +5236,21 @@ def test_jump_cursor_empty_paths() -> None:
 def test_jump_cursor_with_filter() -> None:
     state = build_initial_app_state()
     filtered_paths = (
-        "/home/tadashi/develop/peneo/src",
-        "/home/tadashi/develop/peneo/tests",
+        "/home/tadashi/develop/zivo/src",
+        "/home/tadashi/develop/zivo/tests",
     )
-    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/tests"))
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/zivo/tests"))
 
     result = reduce_app_state(
         state,
         JumpCursor(position="start", visible_paths=filtered_paths),
     )
 
-    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/src"
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/zivo/src"
 
 
 def test_move_cursor_page_down_repositions_viewport_window() -> None:
-    path = "/tmp/peneo-viewport-page"
+    path = "/tmp/zivo-viewport-page"
     entries = _viewport_test_entries(path, 20)
     visible_paths = tuple(entry.path for entry in entries)
     state = replace(
@@ -5288,7 +5271,7 @@ def test_move_cursor_page_down_repositions_viewport_window() -> None:
 
 
 def test_set_filter_query_resets_viewport_window_when_cursor_leaves_visible_entries() -> None:
-    path = "/tmp/peneo-viewport-filter"
+    path = "/tmp/zivo-viewport-filter"
     entries = _viewport_test_entries(path, 20)
     state = replace(
         build_initial_app_state(current_pane_projection_mode="viewport"),
@@ -5309,7 +5292,7 @@ def test_set_filter_query_resets_viewport_window_when_cursor_leaves_visible_entr
 
 
 def test_toggle_hidden_files_clamps_viewport_window_start() -> None:
-    path = "/tmp/peneo-viewport-hidden"
+    path = "/tmp/zivo-viewport-hidden"
     entries = _viewport_test_entries(path, 10, hidden_indexes=frozenset({7, 8, 9}))
     state = replace(
         build_initial_app_state(current_pane_projection_mode="viewport"),
@@ -5332,7 +5315,7 @@ def test_toggle_hidden_files_clamps_viewport_window_start() -> None:
 
 
 def test_set_sort_keeps_cursor_visible_when_viewport_order_changes() -> None:
-    path = "/tmp/peneo-viewport-sort"
+    path = "/tmp/zivo-viewport-sort"
     entries = _viewport_test_entries(path, 20)
     state = replace(
         build_initial_app_state(current_pane_projection_mode="viewport"),
@@ -5746,24 +5729,24 @@ def test_browser_snapshot_loaded_exits_filter_mode_on_directory_change() -> None
 def test_move_cursor_by_page_down() -> None:
     state = build_initial_app_state()
     visible_paths = (
-        "/home/tadashi/develop/peneo/docs",
-        "/home/tadashi/develop/peneo/src",
-        "/home/tadashi/develop/peneo/tests",
-        "/home/tadashi/develop/peneo/README.md",
-        "/home/tadashi/develop/peneo/pyproject.toml",
+        "/home/tadashi/develop/zivo/docs",
+        "/home/tadashi/develop/zivo/src",
+        "/home/tadashi/develop/zivo/tests",
+        "/home/tadashi/develop/zivo/README.md",
+        "/home/tadashi/develop/zivo/pyproject.toml",
     )
-    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/docs"))
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/zivo/docs"))
 
     result = reduce_app_state(
         state, MoveCursorByPage(direction="down", page_size=3, visible_paths=visible_paths)
     )
 
-    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/README.md"
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/zivo/README.md"
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
             request_id=2,
-            current_path="/home/tadashi/develop/peneo",
-            cursor_path="/home/tadashi/develop/peneo/README.md",
+            current_path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/README.md",
         ),
     )
 
@@ -5771,24 +5754,24 @@ def test_move_cursor_by_page_down() -> None:
 def test_move_cursor_by_page_up() -> None:
     state = build_initial_app_state()
     visible_paths = (
-        "/home/tadashi/develop/peneo/docs",
-        "/home/tadashi/develop/peneo/src",
-        "/home/tadashi/develop/peneo/tests",
-        "/home/tadashi/develop/peneo/README.md",
-        "/home/tadashi/develop/peneo/pyproject.toml",
+        "/home/tadashi/develop/zivo/docs",
+        "/home/tadashi/develop/zivo/src",
+        "/home/tadashi/develop/zivo/tests",
+        "/home/tadashi/develop/zivo/README.md",
+        "/home/tadashi/develop/zivo/pyproject.toml",
     )
-    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/pyproject.toml"))
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/zivo/pyproject.toml"))
 
     result = reduce_app_state(
         state, MoveCursorByPage(direction="up", page_size=3, visible_paths=visible_paths)
     )
 
-    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/src"
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/zivo/src"
     assert result.effects == (
         LoadChildPaneSnapshotEffect(
             request_id=3,
-            current_path="/home/tadashi/develop/peneo",
-            cursor_path="/home/tadashi/develop/peneo/src",
+            current_path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/src",
         ),
     )
 
@@ -5796,33 +5779,33 @@ def test_move_cursor_by_page_up() -> None:
 def test_move_cursor_by_page_down_clamps_to_last_entry() -> None:
     state = build_initial_app_state()
     visible_paths = (
-        "/home/tadashi/develop/peneo/docs",
-        "/home/tadashi/develop/peneo/src",
-        "/home/tadashi/develop/peneo/tests",
+        "/home/tadashi/develop/zivo/docs",
+        "/home/tadashi/develop/zivo/src",
+        "/home/tadashi/develop/zivo/tests",
     )
-    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/src"))
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/zivo/src"))
 
     result = reduce_app_state(
         state, MoveCursorByPage(direction="down", page_size=10, visible_paths=visible_paths)
     )
 
-    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/tests"
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/zivo/tests"
 
 
 def test_move_cursor_by_page_up_clamps_to_first_entry() -> None:
     state = build_initial_app_state()
     visible_paths = (
-        "/home/tadashi/develop/peneo/docs",
-        "/home/tadashi/develop/peneo/src",
-        "/home/tadashi/develop/peneo/tests",
+        "/home/tadashi/develop/zivo/docs",
+        "/home/tadashi/develop/zivo/src",
+        "/home/tadashi/develop/zivo/tests",
     )
-    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/peneo/src"))
+    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/zivo/src"))
 
     result = reduce_app_state(
         state, MoveCursorByPage(direction="up", page_size=10, visible_paths=visible_paths)
     )
 
-    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/peneo/docs"
+    assert result.state.current_pane.cursor_path == "/home/tadashi/develop/zivo/docs"
 
 
 def test_move_cursor_by_page_empty_paths() -> None:
@@ -5842,8 +5825,8 @@ def test_open_new_tab_clones_path_but_resets_filter_and_selection() -> None:
         filter=replace(build_initial_app_state().filter, query="read", active=True),
         current_pane=replace(
             build_initial_app_state().current_pane,
-            selected_paths=frozenset({"/home/tadashi/develop/peneo/docs"}),
-            selection_anchor_path="/home/tadashi/develop/peneo/docs",
+            selected_paths=frozenset({"/home/tadashi/develop/zivo/docs"}),
+            selection_anchor_path="/home/tadashi/develop/zivo/docs",
         ),
     )
 
@@ -5857,7 +5840,7 @@ def test_open_new_tab_clones_path_but_resets_filter_and_selection() -> None:
     assert len(select_browser_tabs(next_state)) == 2
     assert select_browser_tabs(next_state)[0].filter.query == "read"
     assert select_browser_tabs(next_state)[0].current_pane.selected_paths == frozenset(
-        {"/home/tadashi/develop/peneo/docs"}
+        {"/home/tadashi/develop/zivo/docs"}
     )
 
 

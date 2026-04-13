@@ -1,14 +1,16 @@
-# Peneo
+# zivo
 
-![CI](https://github.com/devgamesan/peneo/workflows/Python%20CI/badge.svg)
+![CI](https://github.com/devgamesan/zivo/workflows/Python%20CI/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.12+-blue.svg)
-![Release](https://img.shields.io/github/v/release/devgamesan/peneo)
+![Release](https://img.shields.io/github/v/release/devgamesan/zivo)
 ![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)
 
 [日本語版 README](README.ja.md)
 
-Peneo is a TUI file manager you can use without memorizing keybindings. Common actions stay visible in the help bar at the bottom, and less-frequent actions are available from the command palette.
+zivo is a simple and intuitive TUI file manager that lets you browse, search, and operate files without memorizing commands — a Zero-friction Interface for Viewing & Operations.
+
+zivo aims to be usable by everyone without complex configuration, plugin installation, or script creation. It does not aim to do everything — it focuses on making common operations comfortable and simple to perform.
 
 - **No memorization needed**: Common actions are always visible in the help bar
 - **Never get lost**: All actions can be called from the command palette
@@ -33,7 +35,7 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 
   ![](docs/resources/screen-text-preview.png)
 
-- Multiple tabs let you keep separate working directories open in one Peneo session. You can open a new tab, switch to the next or previous tab, and close the current tab without leaving the TUI.
+- Multiple tabs let you keep separate working directories open in one zivo session. You can open a new tab, switch to the next or previous tab, and close the current tab without leaving the TUI.
 
 - An embedded terminal can be opened below the browser panes. `t` switches quickly between the browser and terminal, and the terminal starts in the current directory so you can move between browsing and shell work without changing directories manually.
 
@@ -59,7 +61,7 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 
   ![](docs/resources/screen-history.png)
 
-- Press `e` on a file to switch into a terminal editor in the current terminal session. Editors such as `nvim`, `vim`, and `nano` can be used seamlessly. The following shows an example of opening Vim from Peneo.
+- Press `e` on a file to switch into a terminal editor in the current terminal session. Editors such as `nvim`, `vim`, and `nano` can be used seamlessly. The following shows an example of opening Vim from zivo.
 
   ![](docs/resources/screen-terminal-editor.png)
 
@@ -84,7 +86,7 @@ Peneo is a TUI file manager you can use without memorizing keybindings. Common a
 
 ### Prerequisites: Install uv
 
-Peneo uses [uv](https://docs.astral.sh/uv/) as the package manager. If you don't have it yet, install it first:
+zivo uses [uv](https://docs.astral.sh/uv/) as the package manager. If you don't have it yet, install it first:
 
 ```bash
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -94,27 +96,27 @@ For other installation methods, see the [uv official documentation](https://docs
 
 ### Install from PyPI
 
-With `uv` installed, install Peneo directly from PyPI.
+With `uv` installed, install zivo directly from PyPI.
 
 ```bash
-uv tool install peneo
+uv tool install zivo
 ```
 
 ### Install from repository
 
-Alternatively, clone the repository and install Peneo as a tool.
+Alternatively, clone the repository and install zivo as a tool.
 
 ```bash
-git clone https://github.com/devgamesan/peneo.git
-cd peneo
-uv tool install --from . peneo
+git clone https://github.com/devgamesan/zivo.git
+cd zivo
+uv tool install --from . zivo
 ```
 
 To update, pull the latest changes and run the same install command again.
 
 ### Dependencies
 
-Peneo itself can be installed and started with `uv`, but some features depend on external commands being available on `PATH`. The required tools vary by OS or environment.
+zivo itself can be installed and started with `uv`, but some features depend on external commands being available on `PATH`. The required tools vary by OS or environment.
 
 #### Ubuntu / Debian
 
@@ -168,25 +170,25 @@ brew install ripgrep
 ## Run
 
 ```bash
-peneo
+zivo
 ```
 
-`peneo` itself cannot change the current directory of the parent shell. If you want your shell to follow the last directory you visited after quitting Peneo, add shell integration first:
+`zivo` itself cannot change the current directory of the parent shell. If you want your shell to follow the last directory you visited after quitting zivo, add shell integration first:
 
 ```bash
-eval "$(peneo init bash)"  # for bash
-eval "$(peneo init zsh)"   # for zsh
+eval "$(zivo init bash)"  # for bash
+eval "$(zivo init zsh)"   # for zsh
 ```
 
-This defines a shell function named `peneo-cd`. Start Peneo with `peneo-cd` when you want the parent shell to `cd` into the last directory on exit:
+This defines a shell function named `zivo-cd`. Start zivo with `zivo-cd` when you want the parent shell to `cd` into the last directory on exit:
 
 ```bash
-peneo-cd
+zivo-cd
 ```
 
-Use plain `peneo` when you only want to browse without changing the shell's working directory.
+Use plain `zivo` when you only want to browse without changing the shell's working directory.
 
-When a file is focused, press `e` to switch into a terminal editor in the current terminal session. Peneo prefers `config.toml` `editor.command` when set, then falls back to `$EDITOR`, then built-in defaults such as `nvim`, `vim`, or `nano`.
+When a file is focused, press `e` to switch into a terminal editor in the current terminal session. zivo prefers `config.toml` `editor.command` when set, then falls back to `$EDITOR`, then built-in defaults such as `nvim`, `vim`, or `nano`.
 
 ## Keybindings
 
@@ -354,11 +356,11 @@ The tab strip is only shown when two or more browser tabs are open.
 
 ## Configuration File
 
-On startup, Peneo reads `config.toml` from the platform-specific user config directory.
-If the file does not exist yet, Peneo creates it automatically with default values.
+On startup, zivo reads `config.toml` from the platform-specific user config directory.
+If the file does not exist yet, zivo creates it automatically with default values.
 
-- Linux: `${XDG_CONFIG_HOME:-~/.config}/peneo/config.toml`
-- macOS: `~/Library/Application Support/peneo/config.toml`
+- Linux: `${XDG_CONFIG_HOME:-~/.config}/zivo/config.toml`
+- macOS: `~/Library/Application Support/zivo/config.toml`
 - Windows config path is reserved for future compatibility, but native Windows runtime is still unsupported
 
 The supported settings are:
@@ -368,9 +370,9 @@ The supported settings are:
 | `terminal` | `linux` | Array of shell-style command templates | Optional terminal launch commands for Linux. Use `{path}` as the working-directory placeholder. Invalid or empty entries are ignored. |
 | `terminal` | `macos` | Array of shell-style command templates | Optional terminal launch commands for macOS, validated the same way as Linux entries. |
 | `terminal` | `windows` | Array of shell-style command templates | Optional terminal launch commands for Windows and WSL bridge workflows. The config key is accepted even though native Windows runtime is not currently supported. |
-| `editor` | `command` | Shell-style string, for example `nvim -u NONE` | Optional terminal editor command used by `e`. Do not include the file path; Peneo appends it automatically. Unsupported GUI editors or invalid commands are ignored. |
+| `editor` | `command` | Shell-style string, for example `nvim -u NONE` | Optional terminal editor command used by `e`. Do not include the file path; zivo appends it automatically. Unsupported GUI editors or invalid commands are ignored. |
 | `display` | `show_hidden_files` | `true` / `false` | Default hidden-file visibility when the app starts. |
-| `display` | `show_directory_sizes` | `true` / `false` | Shows recursive directory sizes in the current pane. Defaults to `true`. Large directories can be expensive to scan. Peneo also calculates sizes automatically while the main pane is sorted by `size`. |
+| `display` | `show_directory_sizes` | `true` / `false` | Shows recursive directory sizes in the current pane. Defaults to `true`. Large directories can be expensive to scan. zivo also calculates sizes automatically while the main pane is sorted by `size`. |
 | `display` | `show_preview` | `true` / `false` | Shows the text-file preview in the right pane. Defaults to `true`. Directory and archive child panes are unaffected. grep result context preview follows the same setting. |
 | `display` | `show_help_bar` | `true` / `false` | Shows the help bar at the bottom of the screen. Defaults to `true`. The help bar is always shown when the command palette or split terminal is open, regardless of this setting. |
 | `display` | `theme` | Any built-in Textual theme, for example `textual-dark`, `textual-light`, `dracula`, or `tokyo-night` | Default UI theme applied on startup. In the settings editor, theme changes are previewed immediately and are persisted when you save. |
@@ -382,7 +384,7 @@ The supported settings are:
 | `behavior` | `paste_conflict_action` | `prompt` / `overwrite` / `skip` / `rename` | Chooses the default paste-conflict behavior. `prompt` keeps the conflict dialog enabled. |
 | `logging` | `enabled` | `true` / `false` | Enables file output for startup failures and unhandled exceptions. |
 | `logging` | `level` | `DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL` | Log level for file output. Defaults to `ERROR`. Requires app restart to take effect. |
-| `logging` | `path` | Path string | Optional log file path. Leave empty to use `peneo.log` next to `config.toml`. Default log file locations: Linux: `~/.config/peneo/peneo.log`, macOS: `~/Library/Application Support/peneo/peneo.log`. |
+| `logging` | `path` | Path string | Optional log file path. Leave empty to use `zivo.log` next to `config.toml`. Default log file locations: Linux: `~/.config/zivo/zivo.log`, macOS: `~/Library/Application Support/zivo/zivo.log`. |
 | `bookmarks` | `paths` | Array of absolute path strings | Bookmarked directories shown by `b` and `Show bookmarks` in the command palette. Duplicate paths are removed when the config is loaded. |
 
 Example:
@@ -420,7 +422,7 @@ path = ""
 paths = ["/home/user/src", "/home/user/docs"]
 ```
 
-Invalid config values do not stop startup. Peneo falls back to built-in defaults and shows a warning after the initial directory load.
+Invalid config values do not stop startup. zivo falls back to built-in defaults and shows a warning after the initial directory load.
 When logging is enabled, startup failures and unhandled exceptions are appended to the configured log file for later investigation.
 The accepted `display.theme` values come from the built-in themes shipped with the installed Textual version.
 The accepted `display.preview_syntax_theme` values are `auto` plus the Pygments styles available in the installed environment.
@@ -432,9 +434,9 @@ The accepted `display.preview_syntax_theme` values are `auto` plus the Pygments 
 - The embedded split terminal currently targets POSIX environments, especially Ubuntu/Linux and WSL.
 - `config.toml` can override both the preferred terminal editor and external terminal launch commands before built-in fallbacks are used.
 - On WSL, `wslu` is recommended so `wslview` is available for the preferred bridge behavior.
-- On WSL, Peneo prefers Windows-side bridges such as `wslview`, `explorer.exe`, and `clip.exe` when available, while keeping Linux-side fallbacks for WSLg and desktop Linux environments.
+- On WSL, zivo prefers Windows-side bridges such as `wslview`, `explorer.exe`, and `clip.exe` when available, while keeping Linux-side fallbacks for WSLg and desktop Linux environments.
 - Behavior and keybindings may change in future revisions.
-- File mutations operate on the selected directory entry. If the selected item is a symlink, Peneo mutates the symlink itself instead of silently following and mutating the link target.
+- File mutations operate on the selected directory entry. If the selected item is a symlink, zivo mutates the symlink itself instead of silently following and mutating the link target.
 
 ## Related Documents
 
@@ -452,7 +454,7 @@ uv sync --python 3.12 --dev
 To launch the app directly from a local checkout, run this from the repository root:
 
 ```bash
-uv run peneo
+uv run zivo
 ```
 
 Lint and test:
@@ -471,5 +473,5 @@ uv tool install \
   --index-url https://test.pypi.org/simple/ \
   --extra-index-url https://pypi.org/simple/ \
   --index-strategy unsafe-best-match \
-  peneo
+  zivo
 ```

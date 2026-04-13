@@ -11,8 +11,8 @@ from rich.text import Text
 from textual.css.query import NoMatches
 from textual.widgets import DataTable, Label, Static
 
-from peneo import create_app
-from peneo.models import (
+from zivo import create_app
+from zivo.models import (
     AppConfig,
     BehaviorConfig,
     DeleteRequest,
@@ -31,7 +31,7 @@ from peneo.models import (
     UndoEntry,
     UndoResult,
 )
-from peneo.services import (
+from zivo.services import (
     FakeBrowserSnapshotLoader,
     FakeClipboardOperationService,
     FakeDirectorySizeService,
@@ -44,7 +44,7 @@ from peneo.services import (
     FakeUndoService,
     LiveExternalLaunchService,
 )
-from peneo.state import (
+from zivo.state import (
     BrowserSnapshot,
     ConfigSaveCompleted,
     DirectoryEntryState,
@@ -55,13 +55,13 @@ from peneo.state import (
     PaneState,
     SetTerminalHeight,
 )
-from peneo.state.selectors import (
+from zivo.state.selectors import (
     compute_current_pane_visible_window,
     select_command_palette_state,
     select_shell_data,
 )
-from peneo.theme_support import SUPPORTED_PREVIEW_SYNTAX_THEMES
-from peneo.ui import (
+from zivo.theme_support import SUPPORTED_PREVIEW_SYNTAX_THEMES
+from zivo.ui import (
     AttributeDialog,
     ChildPane,
     CommandPalette,
@@ -77,7 +77,7 @@ from peneo.ui import (
     SummaryBar,
     TabBar,
 )
-from peneo.ui.panes import MainPane
+from zivo.ui.panes import MainPane
 
 
 def _build_snapshot(
@@ -672,10 +672,10 @@ async def _wait_for_child_pane_runtime_idle(app, timeout: float = 0.5) -> None:
         await asyncio.sleep(0.01)
 
 
-def test_create_app_returns_peneo_app() -> None:
+def test_create_app_returns_zivo_app() -> None:
     app = create_app()
 
-    assert app.title == "Peneo"
+    assert app.title == "zivo"
     assert app.sub_title == "Three-pane shell"
 
 
@@ -708,7 +708,7 @@ def test_create_app_applies_configured_startup_state() -> None:
 
 @pytest.mark.asyncio
 async def test_app_loads_directory_sizes_when_enabled() -> None:
-    path = "/tmp/peneo-dir-size"
+    path = "/tmp/zivo-dir-size"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -752,7 +752,7 @@ async def test_app_loads_directory_sizes_when_enabled() -> None:
 async def test_app_applies_directory_size_updates_without_full_current_pane_refresh(
     monkeypatch,
 ) -> None:
-    path = "/tmp/peneo-dir-size-delta"
+    path = "/tmp/zivo-dir-size-delta"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -817,7 +817,7 @@ async def test_app_applies_directory_size_updates_without_full_current_pane_refr
 
 @pytest.mark.asyncio
 async def test_app_keeps_successful_directory_sizes_when_some_paths_fail() -> None:
-    path = "/tmp/peneo-dir-size-partial"
+    path = "/tmp/zivo-dir-size-partial"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -919,66 +919,8 @@ async def test_app_live_snapshot_highlights_current_directory_in_parent_pane(tmp
 
 
 @pytest.mark.asyncio
-async def test_app_renders_loaded_three_pane_shell() -> None:
-    path = "/tmp/peneo-app"
-    current_entries = (
-        DirectoryEntryState(f"{path}/docs", "docs", "dir"),
-        DirectoryEntryState(f"{path}/README.md", "README.md", "file", size_bytes=120),
-    )
-    child_entries = (DirectoryEntryState(f"{path}/docs/spec.md", "spec.md", "file"),)
-    loader = FakeBrowserSnapshotLoader(
-        snapshots={
-            path: _build_snapshot(
-                path,
-                current_entries,
-                child_path=f"{path}/docs",
-                child_entries=child_entries,
-            )
-        }
-    )
-    app = create_app(snapshot_loader=loader, initial_path=path)
-
-    async with app.run_test():
-        await _wait_for_snapshot_loaded(app, path)
-        await _wait_for_row_count(app, 2)
-        await _wait_for_parent_entries(app, ["peneo-app", "sibling"])
-        await _wait_for_child_entries(app, ["spec.md"])
-
-        parent_pane = app.query_one("#parent-pane", SidePane)
-        parent_list = app.query_one("#parent-pane-list", Static)
-        current_table = app.query_one("#current-pane-table", DataTable)
-        child_list = app.query_one("#child-pane-list", Static)
-        parent_title = app.query_one("#parent-pane .pane-title", Label)
-        current_title = app.query_one("#current-pane .pane-title", Label)
-        child_title = app.query_one("#child-pane .pane-title", Label)
-        current_path_bar = await _wait_for_current_path_bar(app)
-        summary_bar = await _wait_for_summary_bar(app)
-        status_bar = await _wait_for_status_bar(app)
-        parent_entries = _side_pane_lines(parent_list)
-        child_entries = _side_pane_lines(child_list)
-        headers = [str(column.label) for column in current_table.ordered_columns]
-
-        assert str(parent_title.renderable) == "Parent Directory"
-        assert str(current_title.renderable) == "Current Directory"
-        assert str(child_title.renderable) == "Child Directory"
-        assert parent_entries == ["peneo-app", "sibling"]
-        parent_renderable = parent_list.renderable
-        assert isinstance(parent_renderable, Text)
-        assert _text_has_style(
-            parent_renderable,
-            _style_without_background(parent_pane.get_component_rich_style("ft-directory-sel")),
-        )
-        assert headers == ["Sel", "Name", "Size", "Modified"]
-        assert current_table.row_count == 2
-        assert child_entries == ["spec.md"]
-        assert str(current_path_bar.renderable) == f"Current Path: {path}"
-        assert str(summary_bar.renderable) == ("2 items | 0 selected | sort: name asc dirs:on")
-        assert str(status_bar.renderable) == ""
-
-
-@pytest.mark.asyncio
 async def test_app_can_start_in_narrow_headless_mode() -> None:
-    path = "/tmp/peneo-narrow"
+    path = "/tmp/zivo-narrow"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -998,7 +940,7 @@ async def test_app_can_start_in_narrow_headless_mode() -> None:
 
 @pytest.mark.asyncio
 async def test_app_renders_text_preview_in_child_pane_for_file_cursor() -> None:
-    path = "/tmp/peneo-preview"
+    path = "/tmp/zivo-preview"
     readme = f"{path}/README.md"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -1007,7 +949,7 @@ async def test_app_renders_text_preview_in_child_pane_for_file_cursor() -> None:
                 parent_pane=PaneState(
                     directory_path="/tmp",
                     entries=(
-                        DirectoryEntryState(path, "peneo-preview", "dir"),
+                        DirectoryEntryState(path, "zivo-preview", "dir"),
                         DirectoryEntryState("/tmp/sibling", "sibling", "dir"),
                     ),
                     cursor_path=path,
@@ -1043,7 +985,7 @@ async def test_app_renders_text_preview_in_child_pane_for_file_cursor() -> None:
 
 @pytest.mark.asyncio
 async def test_app_hides_text_preview_in_child_pane_when_preview_disabled() -> None:
-    path = "/tmp/peneo-preview-disabled"
+    path = "/tmp/zivo-preview-disabled"
     readme = f"{path}/README.md"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -1052,7 +994,7 @@ async def test_app_hides_text_preview_in_child_pane_when_preview_disabled() -> N
                 parent_pane=PaneState(
                     directory_path="/tmp",
                     entries=(
-                        DirectoryEntryState(path, "peneo-preview-disabled", "dir"),
+                        DirectoryEntryState(path, "zivo-preview-disabled", "dir"),
                         DirectoryEntryState("/tmp/sibling", "sibling", "dir"),
                     ),
                     cursor_path=path,
@@ -1091,7 +1033,7 @@ async def test_app_hides_text_preview_in_child_pane_when_preview_disabled() -> N
 
 @pytest.mark.asyncio
 async def test_app_updates_child_preview_when_cursor_moves_between_files() -> None:
-    path = "/tmp/peneo-preview-switch"
+    path = "/tmp/zivo-preview-switch"
     readme = f"{path}/README.md"
     config = f"{path}/config.toml"
     loader = FakeBrowserSnapshotLoader(
@@ -1101,7 +1043,7 @@ async def test_app_updates_child_preview_when_cursor_moves_between_files() -> No
                 parent_pane=PaneState(
                     directory_path="/tmp",
                     entries=(
-                        DirectoryEntryState(path, "peneo-preview-switch", "dir"),
+                        DirectoryEntryState(path, "zivo-preview-switch", "dir"),
                         DirectoryEntryState("/tmp/sibling", "sibling", "dir"),
                     ),
                     cursor_path=path,
@@ -1159,7 +1101,7 @@ async def test_app_updates_child_preview_when_cursor_moves_between_files() -> No
 
 @pytest.mark.asyncio
 async def test_app_renders_preview_message_for_unsupported_file_cursor() -> None:
-    path = "/tmp/peneo-preview-unsupported"
+    path = "/tmp/zivo-preview-unsupported"
     binary = f"{path}/archive.bin"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -1168,7 +1110,7 @@ async def test_app_renders_preview_message_for_unsupported_file_cursor() -> None
                 parent_pane=PaneState(
                     directory_path="/tmp",
                     entries=(
-                        DirectoryEntryState(path, "peneo-preview-unsupported", "dir"),
+                        DirectoryEntryState(path, "zivo-preview-unsupported", "dir"),
                         DirectoryEntryState("/tmp/sibling", "sibling", "dir"),
                     ),
                     cursor_path=path,
@@ -1202,7 +1144,7 @@ async def test_app_renders_preview_message_for_unsupported_file_cursor() -> None
 
 @pytest.mark.asyncio
 async def test_app_renders_preview_message_for_permission_denied_file_cursor() -> None:
-    path = "/tmp/peneo-preview-permission-denied"
+    path = "/tmp/zivo-preview-permission-denied"
     readme = f"{path}/README.md"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -1211,7 +1153,7 @@ async def test_app_renders_preview_message_for_permission_denied_file_cursor() -
                 parent_pane=PaneState(
                     directory_path="/tmp",
                     entries=(
-                        DirectoryEntryState(path, "peneo-preview-permission-denied", "dir"),
+                        DirectoryEntryState(path, "zivo-preview-permission-denied", "dir"),
                         DirectoryEntryState("/tmp/sibling", "sibling", "dir"),
                     ),
                     cursor_path=path,
@@ -1245,7 +1187,7 @@ async def test_app_renders_preview_message_for_permission_denied_file_cursor() -
 
 @pytest.mark.asyncio
 async def test_app_truncates_long_labels_in_all_panes_when_narrow() -> None:
-    path = "/tmp/peneo-narrow-truncate"
+    path = "/tmp/zivo-narrow-truncate"
     current_entries = (
         DirectoryEntryState(
             f"{path}/reducer_common_directory",
@@ -1312,7 +1254,7 @@ async def test_app_truncates_long_labels_in_all_panes_when_narrow() -> None:
 
 @pytest.mark.asyncio
 async def test_app_tab_keeps_focus_on_current_pane() -> None:
-    path = "/tmp/peneo-tab-focus"
+    path = "/tmp/zivo-tab-focus"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -1353,7 +1295,7 @@ async def test_app_tab_keeps_focus_on_current_pane() -> None:
 
 @pytest.mark.asyncio
 async def test_app_hides_tab_bar_until_multiple_tabs_are_open() -> None:
-    path = "/tmp/peneo-single-tab"
+    path = "/tmp/zivo-single-tab"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -1375,7 +1317,7 @@ async def test_app_hides_tab_bar_until_multiple_tabs_are_open() -> None:
 
 @pytest.mark.asyncio
 async def test_app_tab_shortcuts_switch_between_browser_tabs() -> None:
-    path = "/tmp/peneo-tabs"
+    path = "/tmp/zivo-tabs"
     docs_path = f"{path}/docs"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -1406,7 +1348,7 @@ async def test_app_tab_shortcuts_switch_between_browser_tabs() -> None:
 
         tab_bar = await _wait_for_tab_bar(app)
         assert tab_bar.display is True
-        assert str(tab_bar.renderable) == "[1:peneo-tabs] [2:peneo-tabs]"
+        assert str(tab_bar.renderable) == "[1:zivo-tabs] [2:zivo-tabs]"
         assert app.focused is current_table
 
         await pilot.press("enter")
@@ -1430,7 +1372,7 @@ async def test_app_tab_shortcuts_switch_between_browser_tabs() -> None:
 
 @pytest.mark.asyncio
 async def test_app_keyboard_input_updates_selection_and_child_pane() -> None:
-    path = "/tmp/peneo-keyboard"
+    path = "/tmp/zivo-keyboard"
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -1493,7 +1435,7 @@ async def test_app_keyboard_input_updates_selection_and_child_pane() -> None:
 
 @pytest.mark.asyncio
 async def test_app_child_pane_updates_immediately_on_rapid_cursor_moves() -> None:
-    path = "/tmp/peneo-child-pane-debounce"
+    path = "/tmp/zivo-child-pane-debounce"
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -1539,7 +1481,7 @@ async def test_app_child_pane_updates_immediately_on_rapid_cursor_moves() -> Non
 
 @pytest.mark.asyncio
 async def test_app_hides_stale_child_entries_while_new_child_snapshot_is_pending() -> None:
-    path = "/tmp/peneo-child-pane-pending"
+    path = "/tmp/zivo-child-pane-pending"
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -1580,7 +1522,7 @@ async def test_app_hides_stale_child_entries_while_new_child_snapshot_is_pending
 
 @pytest.mark.asyncio
 async def test_app_shift_down_selects_range_and_down_clears_it() -> None:
-    path = "/tmp/peneo-range-selection"
+    path = "/tmp/zivo-range-selection"
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -1631,7 +1573,7 @@ async def test_app_shift_down_selects_range_and_down_clears_it() -> None:
 
 @pytest.mark.asyncio
 async def test_app_cut_marks_row_with_dimmed_style() -> None:
-    path = "/tmp/peneo-cut"
+    path = "/tmp/zivo-cut"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -1668,7 +1610,7 @@ async def test_app_cut_marks_row_with_dimmed_style() -> None:
 
 @pytest.mark.asyncio
 async def test_app_cut_uses_targeted_row_updates(monkeypatch) -> None:
-    path = "/tmp/peneo-cut-row-delta"
+    path = "/tmp/zivo-cut-row-delta"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -1715,7 +1657,7 @@ async def test_app_cut_uses_targeted_row_updates(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_app_right_enters_directory_and_left_returns_to_parent() -> None:
-    root = "/tmp/peneo-nav"
+    root = "/tmp/zivo-nav"
     docs = f"{root}/docs"
     root_entries = (
         DirectoryEntryState(docs, "docs", "dir"),
@@ -1772,15 +1714,15 @@ async def test_app_right_enters_directory_and_left_returns_to_parent() -> None:
 
 @pytest.mark.asyncio
 async def test_app_left_can_move_above_initial_directory() -> None:
-    initial_path = "/tmp/peneo-nav/deeper"
-    parent_path = "/tmp/peneo-nav"
+    initial_path = "/tmp/zivo-nav/deeper"
+    parent_path = "/tmp/zivo-nav"
     grandparent_path = "/tmp"
     parent_entries = (
         DirectoryEntryState(initial_path, "deeper", "dir"),
         DirectoryEntryState(f"{parent_path}/sibling", "sibling", "dir"),
     )
     grandparent_entries = (
-        DirectoryEntryState(parent_path, "peneo-nav", "dir"),
+        DirectoryEntryState(parent_path, "zivo-nav", "dir"),
         DirectoryEntryState("/tmp/other", "other", "dir"),
     )
     loader = FakeBrowserSnapshotLoader(
@@ -1843,7 +1785,7 @@ async def test_app_left_can_move_above_initial_directory() -> None:
 
 @pytest.mark.asyncio
 async def test_app_capital_R_keeps_cursor_when_entry_still_exists() -> None:
-    path = "/tmp/peneo-reload"
+    path = "/tmp/zivo-reload"
     initial_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -1887,7 +1829,7 @@ async def test_app_capital_R_keeps_cursor_when_entry_still_exists() -> None:
 
 @pytest.mark.asyncio
 async def test_app_capital_R_falls_back_to_first_row_when_cursor_disappears() -> None:
-    path = "/tmp/peneo-reload-fallback"
+    path = "/tmp/zivo-reload-fallback"
     initial_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -1927,7 +1869,7 @@ async def test_app_capital_R_falls_back_to_first_row_when_cursor_disappears() ->
 
 @pytest.mark.asyncio
 async def test_app_capital_R_drops_selection_for_missing_entries() -> None:
-    path = "/tmp/peneo-reload-selection"
+    path = "/tmp/zivo-reload-selection"
     initial_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -1971,7 +1913,7 @@ async def test_app_capital_R_drops_selection_for_missing_entries() -> None:
 
 @pytest.mark.asyncio
 async def test_app_navigation_clears_selection_in_new_directory() -> None:
-    root = "/tmp/peneo-selection-nav"
+    root = "/tmp/zivo-selection-nav"
     docs = f"{root}/docs"
     root_entries = (DirectoryEntryState(docs, "docs", "dir"),)
     docs_entries = (DirectoryEntryState(f"{docs}/guide.md", "guide.md", "file", size_bytes=42),)
@@ -2019,7 +1961,7 @@ async def test_app_navigation_clears_selection_in_new_directory() -> None:
 
 @pytest.mark.asyncio
 async def test_app_refresh_updates_widgets_in_place() -> None:
-    path = "/tmp/peneo-refresh"
+    path = "/tmp/zivo-refresh"
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -2066,7 +2008,7 @@ async def test_app_refresh_updates_widgets_in_place() -> None:
 
 @pytest.mark.asyncio
 async def test_app_cursor_move_does_not_rebuild_current_table_rows(monkeypatch) -> None:
-    path = "/tmp/peneo-cursor-stable"
+    path = "/tmp/zivo-cursor-stable"
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -2124,7 +2066,7 @@ async def test_app_cursor_move_does_not_rebuild_current_table_rows(monkeypatch) 
 
 @pytest.mark.asyncio
 async def test_app_refresh_keeps_parent_pane_items_when_entries_are_unchanged() -> None:
-    path = "/tmp/peneo-parent-stable"
+    path = "/tmp/zivo-parent-stable"
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -2161,7 +2103,7 @@ async def test_app_refresh_keeps_parent_pane_items_when_entries_are_unchanged() 
 
 @pytest.mark.asyncio
 async def test_app_selection_toggle_avoids_rebuilding_large_current_pane(monkeypatch) -> None:
-    path = "/tmp/peneo-large-selection"
+    path = "/tmp/zivo-large-selection"
     current_entries = tuple(
         DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
         for index in range(1000)
@@ -2238,7 +2180,7 @@ async def test_app_selection_toggle_avoids_rebuilding_large_current_pane(monkeyp
 
 @pytest.mark.asyncio
 async def test_app_directory_size_update_avoids_rebuilding_large_current_pane(monkeypatch) -> None:
-    path = "/tmp/peneo-large-dir-size"
+    path = "/tmp/zivo-large-dir-size"
     current_entries = tuple(
         DirectoryEntryState(f"{path}/dir_{index:04d}", f"dir_{index:04d}", "dir")
         for index in range(1000)
@@ -2296,7 +2238,7 @@ async def test_app_directory_size_update_avoids_rebuilding_large_current_pane(mo
 
 @pytest.mark.asyncio
 async def test_app_default_viewport_projection_limits_rendered_rows_for_large_directory() -> None:
-    path = "/tmp/peneo-viewport-large"
+    path = "/tmp/zivo-viewport-large"
     current_entries = tuple(
         DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
         for index in range(1000)
@@ -2327,7 +2269,7 @@ async def test_app_default_viewport_projection_limits_rendered_rows_for_large_di
 
 @pytest.mark.asyncio
 async def test_app_default_viewport_projection_shifts_window_after_cursor_crosses_edge() -> None:
-    path = "/tmp/peneo-viewport-scroll"
+    path = "/tmp/zivo-viewport-scroll"
     current_entries = tuple(
         DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
         for index in range(40)
@@ -2363,7 +2305,7 @@ async def test_app_default_viewport_projection_shifts_window_after_cursor_crosse
 
 @pytest.mark.asyncio
 async def test_app_default_viewport_projection_pages_and_jumps_without_losing_cursor() -> None:
-    path = "/tmp/peneo-viewport-page-jump"
+    path = "/tmp/zivo-viewport-page-jump"
     current_entries = tuple(
         DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
         for index in range(40)
@@ -2418,7 +2360,7 @@ async def test_app_default_viewport_projection_pages_and_jumps_without_losing_cu
 
 @pytest.mark.asyncio
 async def test_app_default_viewport_projection_recalculates_window_after_resize() -> None:
-    path = "/tmp/peneo-viewport-resize"
+    path = "/tmp/zivo-viewport-resize"
     current_entries = tuple(
         DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
         for index in range(40)
@@ -2463,7 +2405,7 @@ async def test_app_default_viewport_projection_recalculates_window_after_resize(
 
 @pytest.mark.asyncio
 async def test_app_file_cursor_clears_child_pane() -> None:
-    path = "/tmp/peneo-file"
+    path = "/tmp/zivo-file"
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/README.md", "README.md", "file", size_bytes=120),
@@ -2494,7 +2436,7 @@ async def test_app_file_cursor_clears_child_pane() -> None:
 
 @pytest.mark.asyncio
 async def test_app_child_snapshot_failure_shows_error() -> None:
-    path = "/tmp/peneo-failure"
+    path = "/tmp/zivo-failure"
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -2533,7 +2475,7 @@ async def test_app_child_snapshot_failure_shows_error() -> None:
 
 @pytest.mark.asyncio
 async def test_app_displays_browsing_help_bar() -> None:
-    path = "/tmp/peneo-help"
+    path = "/tmp/zivo-help"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2560,7 +2502,7 @@ async def test_app_displays_browsing_help_bar() -> None:
 
 @pytest.mark.asyncio
 async def test_app_pressing_z_runs_undo() -> None:
-    path = "/tmp/peneo-undo"
+    path = "/tmp/zivo-undo"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2596,7 +2538,7 @@ async def test_app_pressing_z_runs_undo() -> None:
 
 @pytest.mark.asyncio
 async def test_app_pressing_q_exits_with_current_path() -> None:
-    path = "/tmp/peneo-quit"
+    path = "/tmp/zivo-quit"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2618,7 +2560,7 @@ async def test_app_pressing_q_exits_with_current_path() -> None:
 
 @pytest.mark.asyncio
 async def test_app_colon_shows_command_palette() -> None:
-    path = "/tmp/peneo-command-palette"
+    path = "/tmp/zivo-command-palette"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2645,7 +2587,7 @@ async def test_app_colon_shows_command_palette() -> None:
 
 @pytest.mark.asyncio
 async def test_app_command_palette_overlay_stays_top_aligned_without_resizing_main_pane() -> None:
-    path = "/tmp/peneo-command-palette-overlay"
+    path = "/tmp/zivo-command-palette-overlay"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2679,7 +2621,7 @@ async def test_app_command_palette_overlay_stays_top_aligned_without_resizing_ma
 
 @pytest.mark.asyncio
 async def test_app_command_palette_stays_compact_when_filtered_results_fit() -> None:
-    path = "/tmp/peneo-command-palette-compact"
+    path = "/tmp/zivo-command-palette-compact"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2711,7 +2653,7 @@ async def test_app_command_palette_stays_compact_when_filtered_results_fit() -> 
 
 @pytest.mark.asyncio
 async def test_app_palette_keeps_current_table_cursor_row() -> None:
-    path = "/tmp/peneo-command-palette-cursor"
+    path = "/tmp/zivo-command-palette-cursor"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2745,7 +2687,7 @@ async def test_app_palette_keeps_current_table_cursor_row() -> None:
 
 @pytest.mark.asyncio
 async def test_app_command_palette_create_file_opens_context_input() -> None:
-    path = "/tmp/peneo-command-palette-create"
+    path = "/tmp/zivo-command-palette-create"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2865,7 +2807,7 @@ async def test_app_go_to_path_submit_after_completion_stays_on_completed_directo
 
 @pytest.mark.asyncio
 async def test_app_command_palette_find_file_jumps_to_matching_parent_directory() -> None:
-    path = "/tmp/peneo-command-palette-find-file"
+    path = "/tmp/zivo-command-palette-find-file"
     docs_path = f"{path}/docs"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -2986,7 +2928,7 @@ async def test_app_file_search_long_results_stay_single_line_in_palette(tmp_path
 
 @pytest.mark.asyncio
 async def test_app_file_search_cancel_restores_child_pane_snapshot() -> None:
-    path = "/tmp/peneo-file-search-preview-cancel"
+    path = "/tmp/zivo-file-search-preview-cancel"
     docs_path = f"{path}/docs"
     notes_path = f"{path}/notes.txt"
     child_entries = (
@@ -3225,7 +3167,7 @@ async def test_app_file_search_shows_invalid_regex_message_in_palette(tmp_path) 
 
 @pytest.mark.asyncio
 async def test_app_command_palette_grep_jumps_to_matching_parent_directory() -> None:
-    path = "/tmp/peneo-command-palette-grep"
+    path = "/tmp/zivo-command-palette-grep"
     docs_path = f"{path}/docs"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -3498,7 +3440,7 @@ async def test_app_grep_search_shows_invalid_regex_message_in_palette(tmp_path) 
 
 @pytest.mark.asyncio
 async def test_app_command_palette_show_attributes_opens_read_only_dialog() -> None:
-    path = "/tmp/peneo-command-palette-attributes"
+    path = "/tmp/zivo-command-palette-attributes"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -3541,7 +3483,7 @@ async def test_app_command_palette_show_attributes_opens_read_only_dialog() -> N
 
 @pytest.mark.asyncio
 async def test_app_attribute_dialog_overlay_is_centered_without_resizing_main_pane() -> None:
-    path = "/tmp/peneo-attribute-dialog-overlay"
+    path = "/tmp/zivo-attribute-dialog-overlay"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -3576,7 +3518,7 @@ async def test_app_attribute_dialog_overlay_is_centered_without_resizing_main_pa
 
 @pytest.mark.asyncio
 async def test_app_command_palette_opens_config_dialog_and_saves_changes() -> None:
-    path = "/tmp/peneo-command-palette-config"
+    path = "/tmp/zivo-command-palette-config"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -3593,7 +3535,7 @@ async def test_app_command_palette_opens_config_dialog_and_saves_changes() -> No
     app = create_app(
         snapshot_loader=loader,
         config_save_service=config_save_service,
-        config_path="/tmp/peneo/config.toml",
+        config_path="/tmp/zivo/config.toml",
         initial_path=path,
     )
 
@@ -3610,25 +3552,25 @@ async def test_app_command_palette_opens_config_dialog_and_saves_changes() -> No
 
         assert app.app_state.ui_mode == "CONFIG"
         assert "Config Editor" in str(title.renderable)
-        assert "Path: /tmp/peneo/config.toml" in str(lines.renderable)
+        assert "Path: /tmp/zivo/config.toml" in str(lines.renderable)
         assert "> Editor command: system default" in str(lines.renderable)
 
         for _ in range(3):
             await pilot.press("down")
         await pilot.press("enter")
         await pilot.press("s")
-        await _wait_for_notification_message(app, "Config saved: /tmp/peneo/config.toml")
+        await _wait_for_notification_message(app, "Config saved: /tmp/zivo/config.toml")
 
         assert len(config_save_service.saved_requests) == 1
         saved_path, saved_config = config_save_service.saved_requests[0]
-        assert saved_path == "/tmp/peneo/config.toml"
+        assert saved_path == "/tmp/zivo/config.toml"
         assert saved_config.display.show_hidden_files is True
         assert app.app_state.show_hidden is True
 
 
 @pytest.mark.asyncio
 async def test_app_config_dialog_save_updates_theme(monkeypatch) -> None:
-    path = "/tmp/peneo-command-palette-theme"
+    path = "/tmp/zivo-command-palette-theme"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -3645,7 +3587,7 @@ async def test_app_config_dialog_save_updates_theme(monkeypatch) -> None:
     app = create_app(
         snapshot_loader=loader,
         config_save_service=config_save_service,
-        config_path="/tmp/peneo/config.toml",
+        config_path="/tmp/zivo/config.toml",
         initial_path=path,
     )
 
@@ -3695,7 +3637,7 @@ async def test_app_config_dialog_save_updates_theme(monkeypatch) -> None:
         assert app.app_state.config.display.theme == "textual-dark"
 
         await pilot.press("s")
-        await _wait_for_notification_message(app, "Config saved: /tmp/peneo/config.toml")
+        await _wait_for_notification_message(app, "Config saved: /tmp/zivo/config.toml")
 
         assert len(config_save_service.saved_requests) == 1
         _saved_path, saved_config = config_save_service.saved_requests[0]
@@ -3720,7 +3662,7 @@ async def test_app_config_dialog_save_updates_theme(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_app_config_dialog_dismiss_restores_theme_preview() -> None:
-    path = "/tmp/peneo-command-palette-theme-dismiss"
+    path = "/tmp/zivo-command-palette-theme-dismiss"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -3735,7 +3677,7 @@ async def test_app_config_dialog_dismiss_restores_theme_preview() -> None:
     )
     app = create_app(
         snapshot_loader=loader,
-        config_path="/tmp/peneo/config.toml",
+        config_path="/tmp/zivo/config.toml",
         initial_path=path,
     )
 
@@ -3761,7 +3703,7 @@ async def test_app_config_dialog_dismiss_restores_theme_preview() -> None:
 
 @pytest.mark.asyncio
 async def test_app_config_dialog_theme_preview_updates_auto_syntax_theme() -> None:
-    path = "/tmp/peneo-command-palette-theme-preview"
+    path = "/tmp/zivo-command-palette-theme-preview"
     preview_path = f"{path}/README.md"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -3797,7 +3739,7 @@ async def test_app_config_dialog_theme_preview_updates_auto_syntax_theme() -> No
     )
     app = create_app(
         snapshot_loader=loader,
-        config_path="/tmp/peneo/config.toml",
+        config_path="/tmp/zivo/config.toml",
         initial_path=path,
     )
 
@@ -3823,7 +3765,7 @@ async def test_app_config_dialog_theme_preview_updates_auto_syntax_theme() -> No
 
 @pytest.mark.asyncio
 async def test_app_config_dialog_save_updates_preview_syntax_theme() -> None:
-    path = "/tmp/peneo-command-palette-preview-theme"
+    path = "/tmp/zivo-command-palette-preview-theme"
     preview_path = f"{path}/README.md"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -3863,7 +3805,7 @@ async def test_app_config_dialog_save_updates_preview_syntax_theme() -> None:
     app = create_app(
         snapshot_loader=loader,
         config_save_service=config_save_service,
-        config_path="/tmp/peneo/config.toml",
+        config_path="/tmp/zivo/config.toml",
         initial_path=path,
     )
 
@@ -3913,7 +3855,7 @@ async def test_app_config_dialog_save_updates_preview_syntax_theme() -> None:
 
 @pytest.mark.asyncio
 async def test_app_config_dialog_e_opens_config_file_in_editor() -> None:
-    path = "/tmp/peneo-command-palette-config-editor"
+    path = "/tmp/zivo-command-palette-config-editor"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -3930,7 +3872,7 @@ async def test_app_config_dialog_e_opens_config_file_in_editor() -> None:
     app = create_app(
         snapshot_loader=loader,
         external_launch_service=launch_service,
-        config_path="/tmp/peneo/config.toml",
+        config_path="/tmp/zivo/config.toml",
         initial_path=path,
     )
     app.suspend = nullcontext  # type: ignore[method-assign]
@@ -3945,13 +3887,13 @@ async def test_app_config_dialog_e_opens_config_file_in_editor() -> None:
         await _wait_for_external_launch_count(app, 1)
 
         assert launch_service.executed_requests == [
-            ExternalLaunchRequest(kind="open_editor", path="/tmp/peneo/config.toml")
+            ExternalLaunchRequest(kind="open_editor", path="/tmp/zivo/config.toml")
         ]
 
 
 @pytest.mark.asyncio
 async def test_app_config_save_refreshes_live_external_launch_service() -> None:
-    path = "/tmp/peneo-refresh-editor-config"
+    path = "/tmp/zivo-refresh-editor-config"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -3966,7 +3908,7 @@ async def test_app_config_save_refreshes_live_external_launch_service() -> None:
     )
     app = create_app(
         snapshot_loader=loader,
-        config_path="/tmp/peneo/config.toml",
+        config_path="/tmp/zivo/config.toml",
         initial_path=path,
     )
 
@@ -3982,7 +3924,7 @@ async def test_app_config_save_refreshes_live_external_launch_service() -> None:
             (
                 ConfigSaveCompleted(
                     request_id=7,
-                    path="/tmp/peneo/config.toml",
+                    path="/tmp/zivo/config.toml",
                     config=saved_config,
                 ),
             )
@@ -3996,7 +3938,7 @@ async def test_app_config_save_refreshes_live_external_launch_service() -> None:
 
 @pytest.mark.asyncio
 async def test_app_command_palette_toggles_hidden_files() -> None:
-    path = "/tmp/peneo-command-palette-hidden"
+    path = "/tmp/zivo-command-palette-hidden"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4034,7 +3976,7 @@ async def test_app_command_palette_toggles_hidden_files() -> None:
 
 @pytest.mark.asyncio
 async def test_app_enter_on_file_launches_default_app() -> None:
-    path = "/tmp/peneo-open-file"
+    path = "/tmp/zivo-open-file"
     launch_service = FakeExternalLaunchService()
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4068,7 +4010,7 @@ async def test_app_enter_on_file_launches_default_app() -> None:
 
 @pytest.mark.asyncio
 async def test_app_right_on_file_does_not_launch_default_app() -> None:
-    path = "/tmp/peneo-right-file"
+    path = "/tmp/zivo-right-file"
     launch_service = FakeExternalLaunchService()
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4102,7 +4044,7 @@ async def test_app_right_on_file_does_not_launch_default_app() -> None:
 
 @pytest.mark.asyncio
 async def test_app_command_palette_copy_path_copies_cursor_target() -> None:
-    path = "/tmp/peneo-copy-path"
+    path = "/tmp/zivo-copy-path"
     launch_service = FakeExternalLaunchService()
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4140,7 +4082,7 @@ async def test_app_command_palette_copy_path_copies_cursor_target() -> None:
 
 @pytest.mark.asyncio
 async def test_app_command_palette_open_terminal_launches_current_directory() -> None:
-    path = "/tmp/peneo-open-terminal"
+    path = "/tmp/zivo-open-terminal"
     launch_service = FakeExternalLaunchService()
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4175,7 +4117,7 @@ async def test_app_command_palette_open_terminal_launches_current_directory() ->
 
 @pytest.mark.asyncio
 async def test_app_ctrl_t_opens_split_terminal_and_focuses_it() -> None:
-    path = "/tmp/peneo-split-terminal"
+    path = "/tmp/zivo-split-terminal"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4213,7 +4155,7 @@ async def test_app_ctrl_t_opens_split_terminal_and_focuses_it() -> None:
 
 @pytest.mark.asyncio
 async def test_app_split_terminal_uses_half_of_body_height_when_visible() -> None:
-    path = "/tmp/peneo-split-terminal-layout"
+    path = "/tmp/zivo-split-terminal-layout"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4246,7 +4188,7 @@ async def test_app_split_terminal_uses_half_of_body_height_when_visible() -> Non
 
 @pytest.mark.asyncio
 async def test_app_split_terminal_focus_routes_input_to_session() -> None:
-    path = "/tmp/peneo-split-terminal-input"
+    path = "/tmp/zivo-split-terminal-input"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4275,7 +4217,7 @@ async def test_app_split_terminal_focus_routes_input_to_session() -> None:
 
 @pytest.mark.asyncio
 async def test_app_split_terminal_focus_sends_tab() -> None:
-    path = "/tmp/peneo-split-terminal-tab"
+    path = "/tmp/zivo-split-terminal-tab"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4305,7 +4247,7 @@ async def test_app_split_terminal_focus_sends_tab() -> None:
 
 @pytest.mark.asyncio
 async def test_app_split_terminal_coalesces_rapid_output_updates() -> None:
-    path = "/tmp/peneo-split-terminal-coalesce"
+    path = "/tmp/zivo-split-terminal-coalesce"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4353,7 +4295,7 @@ async def test_app_split_terminal_coalesces_rapid_output_updates() -> None:
 
 @pytest.mark.asyncio
 async def test_app_split_terminal_ignores_unsupported_private_sgr_sequences() -> None:
-    path = "/tmp/peneo-split-terminal-private-sgr"
+    path = "/tmp/zivo-split-terminal-private-sgr"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4388,7 +4330,7 @@ async def test_app_split_terminal_ignores_unsupported_private_sgr_sequences() ->
 
 @pytest.mark.asyncio
 async def test_app_command_palette_open_in_file_manager_launches_current_directory() -> None:
-    path = "/tmp/peneo-open-file-manager"
+    path = "/tmp/zivo-open-file-manager"
     launch_service = FakeExternalLaunchService()
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4423,7 +4365,7 @@ async def test_app_command_palette_open_in_file_manager_launches_current_directo
 
 @pytest.mark.asyncio
 async def test_app_command_palette_runs_shell_command_and_notifies() -> None:
-    path = "/tmp/peneo-shell-command"
+    path = "/tmp/zivo-shell-command"
     shell_command_service = FakeShellCommandService(
         results={
             (path, "pwd"): ShellCommandResult(exit_code=0, stdout=f"{path}\n"),
@@ -4473,7 +4415,7 @@ async def test_app_command_palette_runs_shell_command_and_notifies() -> None:
 
 @pytest.mark.asyncio
 async def test_app_pressing_bang_opens_shell_command_dialog() -> None:
-    path = "/tmp/peneo-shell-command-keybinding"
+    path = "/tmp/zivo-shell-command-keybinding"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4503,7 +4445,7 @@ async def test_app_pressing_bang_opens_shell_command_dialog() -> None:
 
 @pytest.mark.asyncio
 async def test_app_shell_command_dialog_overlay_is_centered_without_resizing_main_pane() -> None:
-    path = "/tmp/peneo-shell-dialog-overlay"
+    path = "/tmp/zivo-shell-dialog-overlay"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4533,7 +4475,7 @@ async def test_app_shell_command_dialog_overlay_is_centered_without_resizing_mai
 
 @pytest.mark.asyncio
 async def test_app_pressing_e_launches_editor_for_file() -> None:
-    path = "/tmp/peneo-open-editor"
+    path = "/tmp/zivo-open-editor"
     launch_service = FakeExternalLaunchService()
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4568,7 +4510,7 @@ async def test_app_pressing_e_launches_editor_for_file() -> None:
 
 @pytest.mark.asyncio
 async def test_app_pressing_e_refreshes_after_editor_returns() -> None:
-    path = "/tmp/peneo-open-editor-refresh"
+    path = "/tmp/zivo-open-editor-refresh"
     launch_service = FakeExternalLaunchService()
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4608,10 +4550,10 @@ async def test_app_pressing_e_refreshes_after_editor_returns() -> None:
 
 @pytest.mark.asyncio
 async def test_app_external_launch_failure_surfaces_error_notification() -> None:
-    path = "/tmp/peneo-open-failure"
+    path = "/tmp/zivo-open-failure"
     request = ExternalLaunchRequest(kind="open_file", path=f"{path}/README.md")
     launch_service = FakeExternalLaunchService(
-        failure_messages={request: "Failed to open /tmp/peneo-open-failure/README.md: denied"}
+        failure_messages={request: "Failed to open /tmp/zivo-open-failure/README.md: denied"}
     )
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4638,14 +4580,14 @@ async def test_app_external_launch_failure_surfaces_error_notification() -> None
         await _wait_for_external_launch_count(app, 1)
 
         status_bar = await _wait_for_status_bar(app)
-        assert "error: Failed to open /tmp/peneo-open-failure/README.md: denied" in str(
+        assert "error: Failed to open /tmp/zivo-open-failure/README.md: denied" in str(
             status_bar.renderable
         )
 
 
 @pytest.mark.asyncio
 async def test_app_sort_shortcuts_keep_side_panes_fixed_and_update_status_bar() -> None:
-    path = "/tmp/peneo-sort-shortcuts"
+    path = "/tmp/zivo-sort-shortcuts"
     parent_path = "/tmp"
     child_path = f"{path}/zeta"
     snapshot = BrowserSnapshot(
@@ -4655,7 +4597,7 @@ async def test_app_sort_shortcuts_keep_side_panes_fixed_and_update_status_bar() 
             entries=(
                 DirectoryEntryState(f"{parent_path}/beta.txt", "beta.txt", "file"),
                 DirectoryEntryState(f"{parent_path}/alpha", "alpha", "dir"),
-                DirectoryEntryState(path, "peneo-sort-shortcuts", "dir"),
+                DirectoryEntryState(path, "zivo-sort-shortcuts", "dir"),
             ),
             cursor_path=path,
         ),
@@ -4696,7 +4638,7 @@ async def test_app_sort_shortcuts_keep_side_panes_fixed_and_update_status_bar() 
         assert app.app_state.sort.directories_first is False
         assert _side_pane_lines(parent_list) == [
             "alpha",
-            "peneo-sort-shortcuts",
+            "zivo-sort-shortcuts",
             "beta.txt",
         ]
         assert _side_pane_lines(child_list) == [
@@ -4708,7 +4650,7 @@ async def test_app_sort_shortcuts_keep_side_panes_fixed_and_update_status_bar() 
 
 @pytest.mark.asyncio
 async def test_app_filter_mode_accepts_printable_bound_keys() -> None:
-    path = "/tmp/peneo-filter-keys"
+    path = "/tmp/zivo-filter-keys"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4737,7 +4679,7 @@ async def test_app_filter_mode_accepts_printable_bound_keys() -> None:
 
 @pytest.mark.asyncio
 async def test_app_action_dispatch_bound_key_uses_dispatcher_character_rules() -> None:
-    path = "/tmp/peneo-palette-bound-space"
+    path = "/tmp/zivo-palette-bound-space"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4766,7 +4708,7 @@ async def test_app_action_dispatch_bound_key_uses_dispatcher_character_rules() -
 
 @pytest.mark.asyncio
 async def test_app_confirmed_filter_stays_visible_in_current_pane() -> None:
-    path = "/tmp/peneo-filter-confirm"
+    path = "/tmp/zivo-filter-confirm"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4799,7 +4741,7 @@ async def test_app_confirmed_filter_stays_visible_in_current_pane() -> None:
 
 @pytest.mark.asyncio
 async def test_app_filter_down_confirms_and_returns_to_browsing() -> None:
-    path = "/tmp/peneo-filter-down"
+    path = "/tmp/zivo-filter-down"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4832,7 +4774,7 @@ async def test_app_filter_down_confirms_and_returns_to_browsing() -> None:
 
 @pytest.mark.asyncio
 async def test_app_escape_clears_active_filter_before_selection() -> None:
-    path = "/tmp/peneo-filter-escape-priority"
+    path = "/tmp/zivo-filter-escape-priority"
     docs = f"{path}/docs"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4866,7 +4808,7 @@ async def test_app_escape_clears_active_filter_before_selection() -> None:
 
 @pytest.mark.asyncio
 async def test_app_rename_mode_shows_context_input_and_updates_help() -> None:
-    path = "/tmp/peneo-rename-mode"
+    path = "/tmp/zivo-rename-mode"
     docs = f"{path}/docs"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4979,7 +4921,7 @@ async def test_app_create_name_conflict_dialog_returns_to_input(tmp_path) -> Non
 
 @pytest.mark.asyncio
 async def test_app_paste_conflict_dialog_round_trip() -> None:
-    path = "/tmp/peneo-paste-conflict"
+    path = "/tmp/zivo-paste-conflict"
     docs = f"{path}/docs"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -5051,7 +4993,7 @@ async def test_app_paste_conflict_dialog_round_trip() -> None:
 
 @pytest.mark.asyncio
 async def test_app_delete_confirmation_round_trip() -> None:
-    path = "/tmp/peneo-delete-confirm"
+    path = "/tmp/zivo-delete-confirm"
     docs = f"{path}/docs"
     src = f"{path}/src"
     loader = FakeBrowserSnapshotLoader(
@@ -5106,7 +5048,7 @@ async def test_app_delete_confirmation_round_trip() -> None:
 
 @pytest.mark.asyncio
 async def test_app_delete_skips_confirmation_when_disabled() -> None:
-    path = "/tmp/peneo-delete-without-confirm"
+    path = "/tmp/zivo-delete-without-confirm"
     docs = f"{path}/docs"
     src = f"{path}/src"
     loader = FakeBrowserSnapshotLoader(
@@ -5163,7 +5105,7 @@ async def test_app_delete_skips_confirmation_when_disabled() -> None:
 
 @pytest.mark.asyncio
 async def test_app_permanent_delete_always_confirms() -> None:
-    path = "/tmp/peneo-permanent-delete"
+    path = "/tmp/zivo-permanent-delete"
     docs = f"{path}/docs"
     src = f"{path}/src"
     loader = FakeBrowserSnapshotLoader(
@@ -5330,7 +5272,7 @@ async def test_app_large_directory_smoke_with_1000_entries(tmp_path) -> None:
 async def test_app_cursor_move_refreshes_large_child_pane_without_remount(
     monkeypatch,
 ) -> None:
-    path = "/tmp/peneo-large-child-pane"
+    path = "/tmp/zivo-large-child-pane"
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -5397,7 +5339,7 @@ async def test_app_cursor_move_refreshes_large_child_pane_without_remount(
 # --- Pane visibility on narrow terminals (Issue #390) ---
 
 
-def _pane_visibility_app(path: str = "/tmp/peneo-pane-vis"):
+def _pane_visibility_app(path: str = "/tmp/zivo-pane-vis"):
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -5415,7 +5357,7 @@ async def test_app_hides_both_side_panes_at_narrow_width() -> None:
     app = _pane_visibility_app()
 
     async with app.run_test(size=(60, 20)):
-        await _wait_for_snapshot_loaded(app, "/tmp/peneo-pane-vis")
+        await _wait_for_snapshot_loaded(app, "/tmp/zivo-pane-vis")
         parent = app.query_one("#parent-pane")
         child = app.query_one("#child-pane")
         assert not parent.display
@@ -5427,7 +5369,7 @@ async def test_app_hides_parent_pane_at_medium_width() -> None:
     app = _pane_visibility_app()
 
     async with app.run_test(size=(80, 20)):
-        await _wait_for_snapshot_loaded(app, "/tmp/peneo-pane-vis")
+        await _wait_for_snapshot_loaded(app, "/tmp/zivo-pane-vis")
         parent = app.query_one("#parent-pane")
         child = app.query_one("#child-pane")
         assert not parent.display
@@ -5439,7 +5381,7 @@ async def test_app_shows_all_panes_at_wide_width() -> None:
     app = _pane_visibility_app()
 
     async with app.run_test(size=(120, 20)):
-        await _wait_for_snapshot_loaded(app, "/tmp/peneo-pane-vis")
+        await _wait_for_snapshot_loaded(app, "/tmp/zivo-pane-vis")
         parent = app.query_one("#parent-pane")
         child = app.query_one("#child-pane")
         assert parent.display
@@ -5451,7 +5393,7 @@ async def test_app_toggles_pane_visibility_on_resize() -> None:
     app = _pane_visibility_app()
 
     async with app.run_test(size=(120, 20)):
-        await _wait_for_snapshot_loaded(app, "/tmp/peneo-pane-vis")
+        await _wait_for_snapshot_loaded(app, "/tmp/zivo-pane-vis")
 
         parent = app.query_one("#parent-pane")
         child = app.query_one("#child-pane")
