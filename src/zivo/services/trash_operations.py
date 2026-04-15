@@ -3,6 +3,7 @@
 import configparser
 import platform
 import shutil
+import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -147,30 +148,26 @@ class MacOsTrashService:
         return str(trash_path) if trash_path.exists() else None
 
     def empty_trash(self) -> tuple[int, str]:
-        trash_path = self.get_trash_path()
-        if not trash_path:
-            return 0, "Trash directory not found"
-
-        trash_dir = Path(trash_path)
+        trash_dir = Path.home() / ".Trash"
         if not trash_dir.exists():
-            return 0, "No items in trash"
+            return 0, ""
 
-        removed_count = 0
-        failures = []
+        items = [item for item in trash_dir.iterdir() if item.name != ".DS_Store"]
+        if not items:
+            return 0, ""
 
-        try:
-            for item in trash_dir.iterdir():
-                try:
-                    _remove_path(item)
-                    removed_count += 1
-                except OSError as error:
-                    failures.append(f"{item.name}: {error}")
-
-            if failures:
-                return removed_count, f"Removed {removed_count} items with {len(failures)} failures"
-            return removed_count, ""
-        except Exception as error:  # pragma: no cover - defensive fallback
-            return 0, f"Failed to empty trash: {error}"
+        result = subprocess.run(
+            ["osascript", "-e", 'tell application "Finder" to empty trash'],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return 0, (
+                "Failed to empty trash. Grant Full Disk Access to your"
+                " terminal in System Settings > Privacy & Security"
+            )
+        return len(items), ""
 
     def capture_restorable_trash(
         self,
