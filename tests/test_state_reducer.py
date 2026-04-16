@@ -40,6 +40,7 @@ from zivo.state import (
     BeginCommandPalette,
     BeginCreateInput,
     BeginDeleteTargets,
+    BeginEmptyTrash,
     BeginExtractArchiveInput,
     BeginFileSearch,
     BeginFilterInput,
@@ -54,6 +55,7 @@ from zivo.state import (
     CancelArchiveExtractConfirmation,
     CancelCommandPalette,
     CancelDeleteConfirmation,
+    CancelEmptyTrashConfirmation,
     CancelFilterInput,
     CancelPasteConflict,
     CancelPendingInput,
@@ -72,6 +74,7 @@ from zivo.state import (
     ConfigSaveFailed,
     ConfirmArchiveExtract,
     ConfirmDeleteTargets,
+    ConfirmEmptyTrash,
     ConfirmFilterInput,
     ConfirmZipCompress,
     CopyPathsToClipboard,
@@ -88,6 +91,7 @@ from zivo.state import (
     DismissAttributeDialog,
     DismissConfigEditor,
     DismissNameConflict,
+    EmptyTrashConfirmationState,
     EnterCursorDirectory,
     ExternalLaunchCompleted,
     ExternalLaunchFailed,
@@ -5902,3 +5906,182 @@ def test_browser_snapshot_loaded_updates_inactive_tab_only() -> None:
 
     loaded = _reduce_state(loaded, ActivateNextTab())
     assert loaded.current_path == "/tmp/project"
+
+
+def test_begin_empty_trash_enters_confirm_mode(monkeypatch) -> None:
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
+
+    state = build_initial_app_state()
+
+    next_state = _reduce_state(state, BeginEmptyTrash())
+
+    assert next_state.ui_mode == "CONFIRM"
+    assert next_state.empty_trash_confirmation is not None
+    assert next_state.empty_trash_confirmation.platform == "darwin"
+    assert next_state.command_palette is None
+    assert next_state.pending_input is None
+
+
+def test_cancel_empty_trash_confirmation_returns_to_browsing() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        empty_trash_confirmation=EmptyTrashConfirmationState(platform="darwin"),
+    )
+
+    next_state = _reduce_state(state, CancelEmptyTrashConfirmation())
+
+    assert next_state.ui_mode == "BROWSING"
+    assert next_state.empty_trash_confirmation is None
+    assert next_state.notification is None
+
+
+def test_confirm_empty_trash_shows_notification_on_success(monkeypatch) -> None:
+    from unittest.mock import MagicMock
+
+    from zivo.services.trash_operations import MacOsTrashService
+
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        empty_trash_confirmation=EmptyTrashConfirmationState(platform="darwin"),
+    )
+
+    fake_service = MacOsTrashService()
+    monkeypatch.setattr(
+        "zivo.services.resolve_trash_service",
+        lambda: fake_service,
+    )
+    monkeypatch.setattr(
+        "zivo.services.trash_operations.subprocess.run",
+        lambda *a, **kw: MagicMock(returncode=0, stderr=""),
+    )
+
+    class FakeHome:
+        def __truediv__(self, other):
+            return FakePath()
+
+    class FakePath:
+        def exists(self):
+            return False
+
+    monkeypatch.setattr("pathlib.Path.home", lambda: FakeHome())
+
+    next_state = _reduce_state(state, ConfirmEmptyTrash())
+
+    assert next_state.ui_mode == "BROWSING"
+    assert next_state.empty_trash_confirmation is None
+    assert next_state.notification is not None
+    assert next_state.notification.level == "info"
+
+
+def test_submit_pending_input_case_only_rename_emits_mutation() -> None:
+    """Case-only rename (docs -> Docs) should proceed, not show 'Name unchanged'."""
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="RENAME",
+        pending_input=PendingInputState(
+            prompt="Rename: ",
+            value="Docs",
+            target_path="/home/tadashi/develop/zivo/docs",
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitPendingInput())
+
+    assert result.state.ui_mode == "BUSY"
+    assert result.effects == (
+        RunFileMutationEffect(
+            request_id=1,
+            request=RenameRequest(
+                source_path="/home/tadashi/develop/zivo/docs",
+                new_name="Docs",
+            ),
+        ),
+    )
+
+
+def test_submit_pending_input_case_insensitive_conflict_on_macos(monkeypatch) -> None:
+    """On macOS, renaming to a case-different existing name should conflict."""
+    import zivo.state.reducer_common as rc
+
+    monkeypatch.setattr(rc, "_is_macos", True)
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="RENAME",
+        pending_input=PendingInputState(
+            prompt="Rename: ",
+            value="Src",
+            target_path="/home/tadashi/develop/zivo/docs",
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitPendingInput())
+
+    assert result.state.ui_mode == "CONFIRM"
+    assert result.state.name_conflict == NameConflictState(kind="rename", name="Src")
+
+
+def test_submit_pending_input_case_sensitive_no_conflict_on_linux(monkeypatch) -> None:
+    """On Linux, renaming to a case-different existing name should NOT conflict."""
+    import zivo.state.reducer_common as rc
+
+    monkeypatch.setattr(rc, "_is_macos", False)
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="RENAME",
+        pending_input=PendingInputState(
+            prompt="Rename: ",
+            value="Src",
+            target_path="/home/tadashi/develop/zivo/docs",
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitPendingInput())
+
+    assert result.state.ui_mode == "BUSY"
+    assert result.effects != ()
+
+
+def test_submit_pending_input_rejects_colon_in_name_on_macos(monkeypatch) -> None:
+    """On macOS, names containing ':' should be rejected."""
+    import zivo.state.reducer_common as rc
+
+    monkeypatch.setattr(rc, "_is_macos", True)
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CREATE",
+        pending_input=PendingInputState(
+            prompt="New file: ",
+            value="file:name.txt",
+            create_kind="file",
+        ),
+    )
+
+    next_state = _reduce_state(state, SubmitPendingInput())
+
+    assert next_state.notification is not None
+    assert next_state.notification.level == "error"
+    assert "colons" in next_state.notification.message
+
+
+def test_submit_pending_input_allows_colon_in_name_on_linux(monkeypatch) -> None:
+    """On Linux, names containing ':' should not be rejected."""
+    import zivo.state.reducer_common as rc
+
+    monkeypatch.setattr(rc, "_is_macos", False)
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CREATE",
+        pending_input=PendingInputState(
+            prompt="New file: ",
+            value="file:name.txt",
+            create_kind="file",
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitPendingInput())
+
+    # Should proceed to emit a create effect (not blocked by colon validation)
+    assert result.state.ui_mode == "BUSY"
+    assert result.effects != ()
