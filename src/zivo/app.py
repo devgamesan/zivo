@@ -271,7 +271,7 @@ class zivoApp(App[None]):
         command_palette_layer.styles.height = pane_region.height
         command_palette_layer.styles.offset = (
             pane_region.x,
-            max(0, row_region.y - 1),
+            row_region.y,
         )
 
     def _update_config_dialog_geometry(self) -> None:
@@ -293,7 +293,7 @@ class zivoApp(App[None]):
         config_dialog_layer.styles.height = pane_region.height
         config_dialog_layer.styles.offset = (
             pane_region.x,
-            max(0, row_region.y - 1),
+            row_region.y,
         )
 
     async def on_mount(self) -> None:
