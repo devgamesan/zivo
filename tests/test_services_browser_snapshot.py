@@ -362,7 +362,10 @@ def test_fake_browser_snapshot_loader_records_invalidated_directory_listing_path
     loader.invalidate_directory_listing_cache(("/tmp/project", "/tmp/project/docs"))
 
     assert loader.invalidated_directory_listing_paths == [
-        ("/tmp/project", "/tmp/project/docs"),
+        (
+            str(Path("/tmp/project").resolve()),
+            str(Path("/tmp/project/docs").resolve()),
+        ),
     ]
 
 

@@ -102,7 +102,10 @@ def test_loader_reads_valid_config_values(tmp_path) -> None:
     assert result.config.behavior.paste_conflict_action == "rename"
     assert result.config.logging.enabled is False
     assert result.config.logging.path == "~/logs/zivo.log"
-    assert result.config.bookmarks.paths == ("/tmp/project", str((Path.home() / "notes").resolve()))
+    assert result.config.bookmarks.paths == (
+        str(Path("/tmp/project").resolve()),
+        str((Path.home() / "notes").resolve()),
+    )
 
 
 def test_loader_keeps_valid_values_and_warns_for_invalid_entries(tmp_path) -> None:

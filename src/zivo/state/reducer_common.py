@@ -161,7 +161,7 @@ def format_go_to_path_completion(
     ):
         rendered = normalized_path
     else:
-        rendered = os.path.relpath(normalized_path, base_path)
+        rendered = os.path.relpath(normalized_path, str(Path(base_path).resolve()))
 
     if append_separator and rendered != os.sep:
         rendered = rendered.rstrip(os.sep)
