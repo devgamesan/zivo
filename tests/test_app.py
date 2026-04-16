@@ -296,10 +296,11 @@ def _assert_region_vertically_centered(region, container_region, tolerance: int 
 
 
 async def _wait_for_snapshot_loaded(app, expected_path: str, timeout: float = 0.5) -> None:
+    resolved_expected = str(Path(expected_path).resolve())
     deadline = asyncio.get_running_loop().time() + timeout
     while True:
         if (
-            app.app_state.current_path == expected_path
+            app.app_state.current_path == resolved_expected
             and app.app_state.pending_browser_snapshot_request_id is None
             and app.app_state.current_pane.entries
         ):
@@ -527,10 +528,11 @@ async def _wait_for_row_count(app, expected_count: int, timeout: float = 0.5) ->
 
 
 async def _wait_for_path(app, expected_path: str, timeout: float = 0.5) -> None:
+    resolved_expected = str(Path(expected_path).resolve())
     deadline = asyncio.get_running_loop().time() + timeout
     while True:
         if (
-            app.app_state.current_path == expected_path
+            app.app_state.current_path == resolved_expected
             and app.app_state.pending_browser_snapshot_request_id is None
         ):
             return
@@ -540,9 +542,10 @@ async def _wait_for_path(app, expected_path: str, timeout: float = 0.5) -> None:
 
 
 async def _wait_for_cursor_path(app, expected_path: str, timeout: float = 0.5) -> None:
+    resolved_expected = str(Path(expected_path).resolve())
     deadline = asyncio.get_running_loop().time() + timeout
     while True:
-        if app.app_state.current_pane.cursor_path == expected_path:
+        if app.app_state.current_pane.cursor_path == resolved_expected:
             return
         if asyncio.get_running_loop().time() >= deadline:
             raise AssertionError(f"cursor path did not become {expected_path}")
@@ -708,7 +711,7 @@ def test_create_app_applies_configured_startup_state() -> None:
 
 @pytest.mark.asyncio
 async def test_app_loads_directory_sizes_when_enabled() -> None:
-    path = "/tmp/zivo-dir-size"
+    path = str(Path("/tmp/zivo-dir-size").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -752,7 +755,7 @@ async def test_app_loads_directory_sizes_when_enabled() -> None:
 async def test_app_applies_directory_size_updates_without_full_current_pane_refresh(
     monkeypatch,
 ) -> None:
-    path = "/tmp/zivo-dir-size-delta"
+    path = str(Path("/tmp/zivo-dir-size-delta").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -817,7 +820,7 @@ async def test_app_applies_directory_size_updates_without_full_current_pane_refr
 
 @pytest.mark.asyncio
 async def test_app_keeps_successful_directory_sizes_when_some_paths_fail() -> None:
-    path = "/tmp/zivo-dir-size-partial"
+    path = str(Path("/tmp/zivo-dir-size-partial").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -920,7 +923,7 @@ async def test_app_live_snapshot_highlights_current_directory_in_parent_pane(tmp
 
 @pytest.mark.asyncio
 async def test_app_can_start_in_narrow_headless_mode() -> None:
-    path = "/tmp/zivo-narrow"
+    path = str(Path("/tmp/zivo-narrow").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -940,7 +943,7 @@ async def test_app_can_start_in_narrow_headless_mode() -> None:
 
 @pytest.mark.asyncio
 async def test_app_renders_text_preview_in_child_pane_for_file_cursor() -> None:
-    path = "/tmp/zivo-preview"
+    path = str(Path("/tmp/zivo-preview").resolve())
     readme = f"{path}/README.md"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -985,7 +988,7 @@ async def test_app_renders_text_preview_in_child_pane_for_file_cursor() -> None:
 
 @pytest.mark.asyncio
 async def test_app_hides_text_preview_in_child_pane_when_preview_disabled() -> None:
-    path = "/tmp/zivo-preview-disabled"
+    path = str(Path("/tmp/zivo-preview-disabled").resolve())
     readme = f"{path}/README.md"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -1033,7 +1036,7 @@ async def test_app_hides_text_preview_in_child_pane_when_preview_disabled() -> N
 
 @pytest.mark.asyncio
 async def test_app_updates_child_preview_when_cursor_moves_between_files() -> None:
-    path = "/tmp/zivo-preview-switch"
+    path = str(Path("/tmp/zivo-preview-switch").resolve())
     readme = f"{path}/README.md"
     config = f"{path}/config.toml"
     loader = FakeBrowserSnapshotLoader(
@@ -1101,7 +1104,7 @@ async def test_app_updates_child_preview_when_cursor_moves_between_files() -> No
 
 @pytest.mark.asyncio
 async def test_app_renders_preview_message_for_unsupported_file_cursor() -> None:
-    path = "/tmp/zivo-preview-unsupported"
+    path = str(Path("/tmp/zivo-preview-unsupported").resolve())
     binary = f"{path}/archive.bin"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -1144,7 +1147,7 @@ async def test_app_renders_preview_message_for_unsupported_file_cursor() -> None
 
 @pytest.mark.asyncio
 async def test_app_renders_preview_message_for_permission_denied_file_cursor() -> None:
-    path = "/tmp/zivo-preview-permission-denied"
+    path = str(Path("/tmp/zivo-preview-permission-denied").resolve())
     readme = f"{path}/README.md"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -1187,7 +1190,7 @@ async def test_app_renders_preview_message_for_permission_denied_file_cursor() -
 
 @pytest.mark.asyncio
 async def test_app_truncates_long_labels_in_all_panes_when_narrow() -> None:
-    path = "/tmp/zivo-narrow-truncate"
+    path = str(Path("/tmp/zivo-narrow-truncate").resolve())
     current_entries = (
         DirectoryEntryState(
             f"{path}/reducer_common_directory",
@@ -1254,7 +1257,7 @@ async def test_app_truncates_long_labels_in_all_panes_when_narrow() -> None:
 
 @pytest.mark.asyncio
 async def test_app_tab_keeps_focus_on_current_pane() -> None:
-    path = "/tmp/zivo-tab-focus"
+    path = str(Path("/tmp/zivo-tab-focus").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -1295,7 +1298,7 @@ async def test_app_tab_keeps_focus_on_current_pane() -> None:
 
 @pytest.mark.asyncio
 async def test_app_hides_tab_bar_until_multiple_tabs_are_open() -> None:
-    path = "/tmp/zivo-single-tab"
+    path = str(Path("/tmp/zivo-single-tab").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -1317,7 +1320,7 @@ async def test_app_hides_tab_bar_until_multiple_tabs_are_open() -> None:
 
 @pytest.mark.asyncio
 async def test_app_tab_shortcuts_switch_between_browser_tabs() -> None:
-    path = "/tmp/zivo-tabs"
+    path = str(Path("/tmp/zivo-tabs").resolve())
     docs_path = f"{path}/docs"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -1372,7 +1375,7 @@ async def test_app_tab_shortcuts_switch_between_browser_tabs() -> None:
 
 @pytest.mark.asyncio
 async def test_app_keyboard_input_updates_selection_and_child_pane() -> None:
-    path = "/tmp/zivo-keyboard"
+    path = str(Path("/tmp/zivo-keyboard").resolve())
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -1435,7 +1438,7 @@ async def test_app_keyboard_input_updates_selection_and_child_pane() -> None:
 
 @pytest.mark.asyncio
 async def test_app_child_pane_updates_immediately_on_rapid_cursor_moves() -> None:
-    path = "/tmp/zivo-child-pane-debounce"
+    path = str(Path("/tmp/zivo-child-pane-debounce").resolve())
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -1481,7 +1484,7 @@ async def test_app_child_pane_updates_immediately_on_rapid_cursor_moves() -> Non
 
 @pytest.mark.asyncio
 async def test_app_hides_stale_child_entries_while_new_child_snapshot_is_pending() -> None:
-    path = "/tmp/zivo-child-pane-pending"
+    path = str(Path("/tmp/zivo-child-pane-pending").resolve())
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -1522,7 +1525,7 @@ async def test_app_hides_stale_child_entries_while_new_child_snapshot_is_pending
 
 @pytest.mark.asyncio
 async def test_app_shift_down_selects_range_and_down_clears_it() -> None:
-    path = "/tmp/zivo-range-selection"
+    path = str(Path("/tmp/zivo-range-selection").resolve())
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -1573,7 +1576,7 @@ async def test_app_shift_down_selects_range_and_down_clears_it() -> None:
 
 @pytest.mark.asyncio
 async def test_app_cut_marks_row_with_dimmed_style() -> None:
-    path = "/tmp/zivo-cut"
+    path = str(Path("/tmp/zivo-cut").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -1610,7 +1613,7 @@ async def test_app_cut_marks_row_with_dimmed_style() -> None:
 
 @pytest.mark.asyncio
 async def test_app_cut_uses_targeted_row_updates(monkeypatch) -> None:
-    path = "/tmp/zivo-cut-row-delta"
+    path = str(Path("/tmp/zivo-cut-row-delta").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -1657,7 +1660,7 @@ async def test_app_cut_uses_targeted_row_updates(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_app_right_enters_directory_and_left_returns_to_parent() -> None:
-    root = "/tmp/zivo-nav"
+    root = str(Path("/tmp/zivo-nav").resolve())
     docs = f"{root}/docs"
     root_entries = (
         DirectoryEntryState(docs, "docs", "dir"),
@@ -1714,8 +1717,8 @@ async def test_app_right_enters_directory_and_left_returns_to_parent() -> None:
 
 @pytest.mark.asyncio
 async def test_app_left_can_move_above_initial_directory() -> None:
-    initial_path = "/tmp/zivo-nav/deeper"
-    parent_path = "/tmp/zivo-nav"
+    initial_path = str(Path("/tmp/zivo-nav/deeper").resolve())
+    parent_path = str(Path("/tmp/zivo-nav").resolve())
     grandparent_path = "/tmp"
     parent_entries = (
         DirectoryEntryState(initial_path, "deeper", "dir"),
@@ -1785,7 +1788,7 @@ async def test_app_left_can_move_above_initial_directory() -> None:
 
 @pytest.mark.asyncio
 async def test_app_capital_R_keeps_cursor_when_entry_still_exists() -> None:
-    path = "/tmp/zivo-reload"
+    path = str(Path("/tmp/zivo-reload").resolve())
     initial_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -1829,7 +1832,7 @@ async def test_app_capital_R_keeps_cursor_when_entry_still_exists() -> None:
 
 @pytest.mark.asyncio
 async def test_app_capital_R_falls_back_to_first_row_when_cursor_disappears() -> None:
-    path = "/tmp/zivo-reload-fallback"
+    path = str(Path("/tmp/zivo-reload-fallback").resolve())
     initial_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -1869,7 +1872,7 @@ async def test_app_capital_R_falls_back_to_first_row_when_cursor_disappears() ->
 
 @pytest.mark.asyncio
 async def test_app_capital_R_drops_selection_for_missing_entries() -> None:
-    path = "/tmp/zivo-reload-selection"
+    path = str(Path("/tmp/zivo-reload-selection").resolve())
     initial_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -1913,7 +1916,7 @@ async def test_app_capital_R_drops_selection_for_missing_entries() -> None:
 
 @pytest.mark.asyncio
 async def test_app_navigation_clears_selection_in_new_directory() -> None:
-    root = "/tmp/zivo-selection-nav"
+    root = str(Path("/tmp/zivo-selection-nav").resolve())
     docs = f"{root}/docs"
     root_entries = (DirectoryEntryState(docs, "docs", "dir"),)
     docs_entries = (DirectoryEntryState(f"{docs}/guide.md", "guide.md", "file", size_bytes=42),)
@@ -1961,7 +1964,7 @@ async def test_app_navigation_clears_selection_in_new_directory() -> None:
 
 @pytest.mark.asyncio
 async def test_app_refresh_updates_widgets_in_place() -> None:
-    path = "/tmp/zivo-refresh"
+    path = str(Path("/tmp/zivo-refresh").resolve())
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -2008,7 +2011,7 @@ async def test_app_refresh_updates_widgets_in_place() -> None:
 
 @pytest.mark.asyncio
 async def test_app_cursor_move_does_not_rebuild_current_table_rows(monkeypatch) -> None:
-    path = "/tmp/zivo-cursor-stable"
+    path = str(Path("/tmp/zivo-cursor-stable").resolve())
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -2066,7 +2069,7 @@ async def test_app_cursor_move_does_not_rebuild_current_table_rows(monkeypatch) 
 
 @pytest.mark.asyncio
 async def test_app_refresh_keeps_parent_pane_items_when_entries_are_unchanged() -> None:
-    path = "/tmp/zivo-parent-stable"
+    path = str(Path("/tmp/zivo-parent-stable").resolve())
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -2103,7 +2106,7 @@ async def test_app_refresh_keeps_parent_pane_items_when_entries_are_unchanged() 
 
 @pytest.mark.asyncio
 async def test_app_selection_toggle_avoids_rebuilding_large_current_pane(monkeypatch) -> None:
-    path = "/tmp/zivo-large-selection"
+    path = str(Path("/tmp/zivo-large-selection").resolve())
     current_entries = tuple(
         DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
         for index in range(1000)
@@ -2180,7 +2183,7 @@ async def test_app_selection_toggle_avoids_rebuilding_large_current_pane(monkeyp
 
 @pytest.mark.asyncio
 async def test_app_directory_size_update_avoids_rebuilding_large_current_pane(monkeypatch) -> None:
-    path = "/tmp/zivo-large-dir-size"
+    path = str(Path("/tmp/zivo-large-dir-size").resolve())
     current_entries = tuple(
         DirectoryEntryState(f"{path}/dir_{index:04d}", f"dir_{index:04d}", "dir")
         for index in range(1000)
@@ -2238,7 +2241,7 @@ async def test_app_directory_size_update_avoids_rebuilding_large_current_pane(mo
 
 @pytest.mark.asyncio
 async def test_app_default_viewport_projection_limits_rendered_rows_for_large_directory() -> None:
-    path = "/tmp/zivo-viewport-large"
+    path = str(Path("/tmp/zivo-viewport-large").resolve())
     current_entries = tuple(
         DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
         for index in range(1000)
@@ -2269,7 +2272,7 @@ async def test_app_default_viewport_projection_limits_rendered_rows_for_large_di
 
 @pytest.mark.asyncio
 async def test_app_default_viewport_projection_shifts_window_after_cursor_crosses_edge() -> None:
-    path = "/tmp/zivo-viewport-scroll"
+    path = str(Path("/tmp/zivo-viewport-scroll").resolve())
     current_entries = tuple(
         DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
         for index in range(40)
@@ -2305,7 +2308,7 @@ async def test_app_default_viewport_projection_shifts_window_after_cursor_crosse
 
 @pytest.mark.asyncio
 async def test_app_default_viewport_projection_pages_and_jumps_without_losing_cursor() -> None:
-    path = "/tmp/zivo-viewport-page-jump"
+    path = str(Path("/tmp/zivo-viewport-page-jump").resolve())
     current_entries = tuple(
         DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
         for index in range(40)
@@ -2360,7 +2363,7 @@ async def test_app_default_viewport_projection_pages_and_jumps_without_losing_cu
 
 @pytest.mark.asyncio
 async def test_app_default_viewport_projection_recalculates_window_after_resize() -> None:
-    path = "/tmp/zivo-viewport-resize"
+    path = str(Path("/tmp/zivo-viewport-resize").resolve())
     current_entries = tuple(
         DirectoryEntryState(f"{path}/file_{index:04d}.txt", f"file_{index:04d}.txt", "file")
         for index in range(40)
@@ -2405,7 +2408,7 @@ async def test_app_default_viewport_projection_recalculates_window_after_resize(
 
 @pytest.mark.asyncio
 async def test_app_file_cursor_clears_child_pane() -> None:
-    path = "/tmp/zivo-file"
+    path = str(Path("/tmp/zivo-file").resolve())
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/README.md", "README.md", "file", size_bytes=120),
@@ -2436,7 +2439,7 @@ async def test_app_file_cursor_clears_child_pane() -> None:
 
 @pytest.mark.asyncio
 async def test_app_child_snapshot_failure_shows_error() -> None:
-    path = "/tmp/zivo-failure"
+    path = str(Path("/tmp/zivo-failure").resolve())
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -2475,7 +2478,7 @@ async def test_app_child_snapshot_failure_shows_error() -> None:
 
 @pytest.mark.asyncio
 async def test_app_displays_browsing_help_bar() -> None:
-    path = "/tmp/zivo-help"
+    path = str(Path("/tmp/zivo-help").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2502,7 +2505,7 @@ async def test_app_displays_browsing_help_bar() -> None:
 
 @pytest.mark.asyncio
 async def test_app_pressing_z_runs_undo() -> None:
-    path = "/tmp/zivo-undo"
+    path = str(Path("/tmp/zivo-undo").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2538,7 +2541,7 @@ async def test_app_pressing_z_runs_undo() -> None:
 
 @pytest.mark.asyncio
 async def test_app_pressing_q_exits_with_current_path() -> None:
-    path = "/tmp/zivo-quit"
+    path = str(Path("/tmp/zivo-quit").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2560,7 +2563,7 @@ async def test_app_pressing_q_exits_with_current_path() -> None:
 
 @pytest.mark.asyncio
 async def test_app_colon_shows_command_palette() -> None:
-    path = "/tmp/zivo-command-palette"
+    path = str(Path("/tmp/zivo-command-palette").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2587,7 +2590,7 @@ async def test_app_colon_shows_command_palette() -> None:
 
 @pytest.mark.asyncio
 async def test_app_command_palette_overlay_stays_top_aligned_without_resizing_main_pane() -> None:
-    path = "/tmp/zivo-command-palette-overlay"
+    path = str(Path("/tmp/zivo-command-palette-overlay").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2621,7 +2624,7 @@ async def test_app_command_palette_overlay_stays_top_aligned_without_resizing_ma
 
 @pytest.mark.asyncio
 async def test_app_command_palette_stays_compact_when_filtered_results_fit() -> None:
-    path = "/tmp/zivo-command-palette-compact"
+    path = str(Path("/tmp/zivo-command-palette-compact").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2653,7 +2656,7 @@ async def test_app_command_palette_stays_compact_when_filtered_results_fit() -> 
 
 @pytest.mark.asyncio
 async def test_app_palette_keeps_current_table_cursor_row() -> None:
-    path = "/tmp/zivo-command-palette-cursor"
+    path = str(Path("/tmp/zivo-command-palette-cursor").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2687,7 +2690,7 @@ async def test_app_palette_keeps_current_table_cursor_row() -> None:
 
 @pytest.mark.asyncio
 async def test_app_command_palette_create_file_opens_context_input() -> None:
-    path = "/tmp/zivo-command-palette-create"
+    path = str(Path("/tmp/zivo-command-palette-create").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -2807,7 +2810,7 @@ async def test_app_go_to_path_submit_after_completion_stays_on_completed_directo
 
 @pytest.mark.asyncio
 async def test_app_command_palette_find_file_jumps_to_matching_parent_directory() -> None:
-    path = "/tmp/zivo-command-palette-find-file"
+    path = str(Path("/tmp/zivo-command-palette-find-file").resolve())
     docs_path = f"{path}/docs"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -2928,7 +2931,7 @@ async def test_app_file_search_long_results_stay_single_line_in_palette(tmp_path
 
 @pytest.mark.asyncio
 async def test_app_file_search_cancel_restores_child_pane_snapshot() -> None:
-    path = "/tmp/zivo-file-search-preview-cancel"
+    path = str(Path("/tmp/zivo-file-search-preview-cancel").resolve())
     docs_path = f"{path}/docs"
     notes_path = f"{path}/notes.txt"
     child_entries = (
@@ -3167,7 +3170,7 @@ async def test_app_file_search_shows_invalid_regex_message_in_palette(tmp_path) 
 
 @pytest.mark.asyncio
 async def test_app_command_palette_grep_jumps_to_matching_parent_directory() -> None:
-    path = "/tmp/zivo-command-palette-grep"
+    path = str(Path("/tmp/zivo-command-palette-grep").resolve())
     docs_path = f"{path}/docs"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -3440,7 +3443,7 @@ async def test_app_grep_search_shows_invalid_regex_message_in_palette(tmp_path) 
 
 @pytest.mark.asyncio
 async def test_app_command_palette_show_attributes_opens_read_only_dialog() -> None:
-    path = "/tmp/zivo-command-palette-attributes"
+    path = str(Path("/tmp/zivo-command-palette-attributes").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -3483,7 +3486,7 @@ async def test_app_command_palette_show_attributes_opens_read_only_dialog() -> N
 
 @pytest.mark.asyncio
 async def test_app_attribute_dialog_overlay_is_centered_without_resizing_main_pane() -> None:
-    path = "/tmp/zivo-attribute-dialog-overlay"
+    path = str(Path("/tmp/zivo-attribute-dialog-overlay").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -3518,7 +3521,7 @@ async def test_app_attribute_dialog_overlay_is_centered_without_resizing_main_pa
 
 @pytest.mark.asyncio
 async def test_app_command_palette_opens_config_dialog_and_saves_changes() -> None:
-    path = "/tmp/zivo-command-palette-config"
+    path = str(Path("/tmp/zivo-command-palette-config").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -3570,7 +3573,7 @@ async def test_app_command_palette_opens_config_dialog_and_saves_changes() -> No
 
 @pytest.mark.asyncio
 async def test_app_config_dialog_save_updates_theme(monkeypatch) -> None:
-    path = "/tmp/zivo-command-palette-theme"
+    path = str(Path("/tmp/zivo-command-palette-theme").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -3662,7 +3665,7 @@ async def test_app_config_dialog_save_updates_theme(monkeypatch) -> None:
 
 @pytest.mark.asyncio
 async def test_app_config_dialog_dismiss_restores_theme_preview() -> None:
-    path = "/tmp/zivo-command-palette-theme-dismiss"
+    path = str(Path("/tmp/zivo-command-palette-theme-dismiss").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -3703,7 +3706,7 @@ async def test_app_config_dialog_dismiss_restores_theme_preview() -> None:
 
 @pytest.mark.asyncio
 async def test_app_config_dialog_theme_preview_updates_auto_syntax_theme() -> None:
-    path = "/tmp/zivo-command-palette-theme-preview"
+    path = str(Path("/tmp/zivo-command-palette-theme-preview").resolve())
     preview_path = f"{path}/README.md"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -3765,7 +3768,7 @@ async def test_app_config_dialog_theme_preview_updates_auto_syntax_theme() -> No
 
 @pytest.mark.asyncio
 async def test_app_config_dialog_save_updates_preview_syntax_theme() -> None:
-    path = "/tmp/zivo-command-palette-preview-theme"
+    path = str(Path("/tmp/zivo-command-palette-preview-theme").resolve())
     preview_path = f"{path}/README.md"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -3855,7 +3858,7 @@ async def test_app_config_dialog_save_updates_preview_syntax_theme() -> None:
 
 @pytest.mark.asyncio
 async def test_app_config_dialog_e_opens_config_file_in_editor() -> None:
-    path = "/tmp/zivo-command-palette-config-editor"
+    path = str(Path("/tmp/zivo-command-palette-config-editor").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -3893,7 +3896,7 @@ async def test_app_config_dialog_e_opens_config_file_in_editor() -> None:
 
 @pytest.mark.asyncio
 async def test_app_config_save_refreshes_live_external_launch_service() -> None:
-    path = "/tmp/zivo-refresh-editor-config"
+    path = str(Path("/tmp/zivo-refresh-editor-config").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -3938,7 +3941,7 @@ async def test_app_config_save_refreshes_live_external_launch_service() -> None:
 
 @pytest.mark.asyncio
 async def test_app_command_palette_toggles_hidden_files() -> None:
-    path = "/tmp/zivo-command-palette-hidden"
+    path = str(Path("/tmp/zivo-command-palette-hidden").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -3976,7 +3979,7 @@ async def test_app_command_palette_toggles_hidden_files() -> None:
 
 @pytest.mark.asyncio
 async def test_app_enter_on_file_launches_default_app() -> None:
-    path = "/tmp/zivo-open-file"
+    path = str(Path("/tmp/zivo-open-file").resolve())
     launch_service = FakeExternalLaunchService()
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4010,7 +4013,7 @@ async def test_app_enter_on_file_launches_default_app() -> None:
 
 @pytest.mark.asyncio
 async def test_app_right_on_file_does_not_launch_default_app() -> None:
-    path = "/tmp/zivo-right-file"
+    path = str(Path("/tmp/zivo-right-file").resolve())
     launch_service = FakeExternalLaunchService()
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4044,7 +4047,7 @@ async def test_app_right_on_file_does_not_launch_default_app() -> None:
 
 @pytest.mark.asyncio
 async def test_app_command_palette_copy_path_copies_cursor_target() -> None:
-    path = "/tmp/zivo-copy-path"
+    path = str(Path("/tmp/zivo-copy-path").resolve())
     launch_service = FakeExternalLaunchService()
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4082,7 +4085,7 @@ async def test_app_command_palette_copy_path_copies_cursor_target() -> None:
 
 @pytest.mark.asyncio
 async def test_app_command_palette_open_terminal_launches_current_directory() -> None:
-    path = "/tmp/zivo-open-terminal"
+    path = str(Path("/tmp/zivo-open-terminal").resolve())
     launch_service = FakeExternalLaunchService()
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4117,7 +4120,7 @@ async def test_app_command_palette_open_terminal_launches_current_directory() ->
 
 @pytest.mark.asyncio
 async def test_app_ctrl_t_opens_split_terminal_and_focuses_it() -> None:
-    path = "/tmp/zivo-split-terminal"
+    path = str(Path("/tmp/zivo-split-terminal").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4155,7 +4158,7 @@ async def test_app_ctrl_t_opens_split_terminal_and_focuses_it() -> None:
 
 @pytest.mark.asyncio
 async def test_app_split_terminal_uses_half_of_body_height_when_visible() -> None:
-    path = "/tmp/zivo-split-terminal-layout"
+    path = str(Path("/tmp/zivo-split-terminal-layout").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4188,7 +4191,7 @@ async def test_app_split_terminal_uses_half_of_body_height_when_visible() -> Non
 
 @pytest.mark.asyncio
 async def test_app_split_terminal_focus_routes_input_to_session() -> None:
-    path = "/tmp/zivo-split-terminal-input"
+    path = str(Path("/tmp/zivo-split-terminal-input").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4217,7 +4220,7 @@ async def test_app_split_terminal_focus_routes_input_to_session() -> None:
 
 @pytest.mark.asyncio
 async def test_app_split_terminal_focus_sends_tab() -> None:
-    path = "/tmp/zivo-split-terminal-tab"
+    path = str(Path("/tmp/zivo-split-terminal-tab").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4247,7 +4250,7 @@ async def test_app_split_terminal_focus_sends_tab() -> None:
 
 @pytest.mark.asyncio
 async def test_app_split_terminal_coalesces_rapid_output_updates() -> None:
-    path = "/tmp/zivo-split-terminal-coalesce"
+    path = str(Path("/tmp/zivo-split-terminal-coalesce").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4295,7 +4298,7 @@ async def test_app_split_terminal_coalesces_rapid_output_updates() -> None:
 
 @pytest.mark.asyncio
 async def test_app_split_terminal_ignores_unsupported_private_sgr_sequences() -> None:
-    path = "/tmp/zivo-split-terminal-private-sgr"
+    path = str(Path("/tmp/zivo-split-terminal-private-sgr").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4330,7 +4333,7 @@ async def test_app_split_terminal_ignores_unsupported_private_sgr_sequences() ->
 
 @pytest.mark.asyncio
 async def test_app_command_palette_open_in_file_manager_launches_current_directory() -> None:
-    path = "/tmp/zivo-open-file-manager"
+    path = str(Path("/tmp/zivo-open-file-manager").resolve())
     launch_service = FakeExternalLaunchService()
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4365,7 +4368,7 @@ async def test_app_command_palette_open_in_file_manager_launches_current_directo
 
 @pytest.mark.asyncio
 async def test_app_command_palette_runs_shell_command_and_notifies() -> None:
-    path = "/tmp/zivo-shell-command"
+    path = str(Path("/tmp/zivo-shell-command").resolve())
     shell_command_service = FakeShellCommandService(
         results={
             (path, "pwd"): ShellCommandResult(exit_code=0, stdout=f"{path}\n"),
@@ -4415,7 +4418,7 @@ async def test_app_command_palette_runs_shell_command_and_notifies() -> None:
 
 @pytest.mark.asyncio
 async def test_app_pressing_bang_opens_shell_command_dialog() -> None:
-    path = "/tmp/zivo-shell-command-keybinding"
+    path = str(Path("/tmp/zivo-shell-command-keybinding").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4445,7 +4448,7 @@ async def test_app_pressing_bang_opens_shell_command_dialog() -> None:
 
 @pytest.mark.asyncio
 async def test_app_shell_command_dialog_overlay_is_centered_without_resizing_main_pane() -> None:
-    path = "/tmp/zivo-shell-dialog-overlay"
+    path = str(Path("/tmp/zivo-shell-dialog-overlay").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4475,7 +4478,7 @@ async def test_app_shell_command_dialog_overlay_is_centered_without_resizing_mai
 
 @pytest.mark.asyncio
 async def test_app_pressing_e_launches_editor_for_file() -> None:
-    path = "/tmp/zivo-open-editor"
+    path = str(Path("/tmp/zivo-open-editor").resolve())
     launch_service = FakeExternalLaunchService()
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4510,7 +4513,7 @@ async def test_app_pressing_e_launches_editor_for_file() -> None:
 
 @pytest.mark.asyncio
 async def test_app_pressing_e_refreshes_after_editor_returns() -> None:
-    path = "/tmp/zivo-open-editor-refresh"
+    path = str(Path("/tmp/zivo-open-editor-refresh").resolve())
     launch_service = FakeExternalLaunchService()
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4550,7 +4553,7 @@ async def test_app_pressing_e_refreshes_after_editor_returns() -> None:
 
 @pytest.mark.asyncio
 async def test_app_external_launch_failure_surfaces_error_notification() -> None:
-    path = "/tmp/zivo-open-failure"
+    path = str(Path("/tmp/zivo-open-failure").resolve())
     request = ExternalLaunchRequest(kind="open_file", path=f"{path}/README.md")
     launch_service = FakeExternalLaunchService(
         failure_messages={request: "Failed to open /tmp/zivo-open-failure/README.md: denied"}
@@ -4587,7 +4590,7 @@ async def test_app_external_launch_failure_surfaces_error_notification() -> None
 
 @pytest.mark.asyncio
 async def test_app_sort_shortcuts_keep_side_panes_fixed_and_update_status_bar() -> None:
-    path = "/tmp/zivo-sort-shortcuts"
+    path = str(Path("/tmp/zivo-sort-shortcuts").resolve())
     parent_path = "/tmp"
     child_path = f"{path}/zeta"
     snapshot = BrowserSnapshot(
@@ -4650,7 +4653,7 @@ async def test_app_sort_shortcuts_keep_side_panes_fixed_and_update_status_bar() 
 
 @pytest.mark.asyncio
 async def test_app_filter_mode_accepts_printable_bound_keys() -> None:
-    path = "/tmp/zivo-filter-keys"
+    path = str(Path("/tmp/zivo-filter-keys").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4679,7 +4682,7 @@ async def test_app_filter_mode_accepts_printable_bound_keys() -> None:
 
 @pytest.mark.asyncio
 async def test_app_action_dispatch_bound_key_uses_dispatcher_character_rules() -> None:
-    path = "/tmp/zivo-palette-bound-space"
+    path = str(Path("/tmp/zivo-palette-bound-space").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4708,7 +4711,7 @@ async def test_app_action_dispatch_bound_key_uses_dispatcher_character_rules() -
 
 @pytest.mark.asyncio
 async def test_app_confirmed_filter_stays_visible_in_current_pane() -> None:
-    path = "/tmp/zivo-filter-confirm"
+    path = str(Path("/tmp/zivo-filter-confirm").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4741,7 +4744,7 @@ async def test_app_confirmed_filter_stays_visible_in_current_pane() -> None:
 
 @pytest.mark.asyncio
 async def test_app_filter_down_confirms_and_returns_to_browsing() -> None:
-    path = "/tmp/zivo-filter-down"
+    path = str(Path("/tmp/zivo-filter-down").resolve())
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(
@@ -4774,7 +4777,7 @@ async def test_app_filter_down_confirms_and_returns_to_browsing() -> None:
 
 @pytest.mark.asyncio
 async def test_app_escape_clears_active_filter_before_selection() -> None:
-    path = "/tmp/zivo-filter-escape-priority"
+    path = str(Path("/tmp/zivo-filter-escape-priority").resolve())
     docs = f"{path}/docs"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4808,7 +4811,7 @@ async def test_app_escape_clears_active_filter_before_selection() -> None:
 
 @pytest.mark.asyncio
 async def test_app_rename_mode_shows_context_input_and_updates_help() -> None:
-    path = "/tmp/zivo-rename-mode"
+    path = str(Path("/tmp/zivo-rename-mode").resolve())
     docs = f"{path}/docs"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4921,7 +4924,7 @@ async def test_app_create_name_conflict_dialog_returns_to_input(tmp_path) -> Non
 
 @pytest.mark.asyncio
 async def test_app_paste_conflict_dialog_round_trip() -> None:
-    path = "/tmp/zivo-paste-conflict"
+    path = str(Path("/tmp/zivo-paste-conflict").resolve())
     docs = f"{path}/docs"
     loader = FakeBrowserSnapshotLoader(
         snapshots={
@@ -4993,7 +4996,7 @@ async def test_app_paste_conflict_dialog_round_trip() -> None:
 
 @pytest.mark.asyncio
 async def test_app_delete_confirmation_round_trip() -> None:
-    path = "/tmp/zivo-delete-confirm"
+    path = str(Path("/tmp/zivo-delete-confirm").resolve())
     docs = f"{path}/docs"
     src = f"{path}/src"
     loader = FakeBrowserSnapshotLoader(
@@ -5048,7 +5051,7 @@ async def test_app_delete_confirmation_round_trip() -> None:
 
 @pytest.mark.asyncio
 async def test_app_delete_skips_confirmation_when_disabled() -> None:
-    path = "/tmp/zivo-delete-without-confirm"
+    path = str(Path("/tmp/zivo-delete-without-confirm").resolve())
     docs = f"{path}/docs"
     src = f"{path}/src"
     loader = FakeBrowserSnapshotLoader(
@@ -5105,7 +5108,7 @@ async def test_app_delete_skips_confirmation_when_disabled() -> None:
 
 @pytest.mark.asyncio
 async def test_app_permanent_delete_always_confirms() -> None:
-    path = "/tmp/zivo-permanent-delete"
+    path = str(Path("/tmp/zivo-permanent-delete").resolve())
     docs = f"{path}/docs"
     src = f"{path}/src"
     loader = FakeBrowserSnapshotLoader(
@@ -5272,7 +5275,7 @@ async def test_app_large_directory_smoke_with_1000_entries(tmp_path) -> None:
 async def test_app_cursor_move_refreshes_large_child_pane_without_remount(
     monkeypatch,
 ) -> None:
-    path = "/tmp/zivo-large-child-pane"
+    path = str(Path("/tmp/zivo-large-child-pane").resolve())
     current_entries = (
         DirectoryEntryState(f"{path}/docs", "docs", "dir"),
         DirectoryEntryState(f"{path}/src", "src", "dir"),
@@ -5339,7 +5342,7 @@ async def test_app_cursor_move_refreshes_large_child_pane_without_remount(
 # --- Pane visibility on narrow terminals (Issue #390) ---
 
 
-def _pane_visibility_app(path: str = "/tmp/zivo-pane-vis"):
+def _pane_visibility_app(path: str = str(Path("/tmp/zivo-pane-vis").resolve())):
     loader = FakeBrowserSnapshotLoader(
         snapshots={
             path: _build_snapshot(

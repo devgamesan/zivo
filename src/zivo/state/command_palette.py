@@ -298,14 +298,15 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
                 enabled=True,
             )
         )
-        items.append(
-            CommandPaletteItem(
-                id="empty_trash",
-                label="Empty trash",
-                shortcut=None,
-                enabled=_is_empty_trash_supported(),
-            )
+
+    items.append(
+        CommandPaletteItem(
+            id="empty_trash",
+            label="Empty trash",
+            shortcut=None,
+            enabled=_is_empty_trash_supported(),
         )
+    )
 
     items.extend(
         [

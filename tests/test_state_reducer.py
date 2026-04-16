@@ -1,4 +1,5 @@
 from dataclasses import replace
+from pathlib import Path
 
 from tests.state_test_helpers import reduce_state
 from zivo.models import (
@@ -40,6 +41,7 @@ from zivo.state import (
     BeginCommandPalette,
     BeginCreateInput,
     BeginDeleteTargets,
+    BeginEmptyTrash,
     BeginExtractArchiveInput,
     BeginFileSearch,
     BeginFilterInput,
@@ -54,6 +56,7 @@ from zivo.state import (
     CancelArchiveExtractConfirmation,
     CancelCommandPalette,
     CancelDeleteConfirmation,
+    CancelEmptyTrashConfirmation,
     CancelFilterInput,
     CancelPasteConflict,
     CancelPendingInput,
@@ -72,6 +75,7 @@ from zivo.state import (
     ConfigSaveFailed,
     ConfirmArchiveExtract,
     ConfirmDeleteTargets,
+    ConfirmEmptyTrash,
     ConfirmFilterInput,
     ConfirmZipCompress,
     CopyPathsToClipboard,
@@ -88,6 +92,7 @@ from zivo.state import (
     DismissAttributeDialog,
     DismissConfigEditor,
     DismissNameConflict,
+    EmptyTrashConfirmationState,
     EnterCursorDirectory,
     ExternalLaunchCompleted,
     ExternalLaunchFailed,
@@ -179,6 +184,7 @@ from zivo.state import (
     reduce_app_state,
     select_browser_tabs,
 )
+from zivo.state.reducer_common import browser_snapshot_invalidation_paths
 
 
 def _reduce_state(state, action):
@@ -722,25 +728,29 @@ def test_go_to_home_directory_navigates_to_home() -> None:
     assert len(result.effects) == 1
     # Home directory path will be expanded and resolved
     assert result.effects[0].blocking is True
-    assert "home" in result.effects[0].path.lower()
+    assert str(Path.home()) in result.effects[0].path
 
 
 def test_reload_directory_requests_snapshot_with_current_cursor() -> None:
     state = build_initial_app_state()
-    state = _reduce_state(state, SetCursorPath("/home/tadashi/develop/zivo/src"))
+    cursor = f"{state.current_path}/src"
+    state = _reduce_state(state, SetCursorPath(cursor))
 
     result = reduce_app_state(state, ReloadDirectory())
 
     assert result.state.pending_browser_snapshot_request_id == 3
     assert result.state.ui_mode == "BUSY"
     assert len(result.effects) == 1
-    assert result.effects[0].path == "/home/tadashi/develop/zivo"
-    assert result.effects[0].cursor_path == "/home/tadashi/develop/zivo/src"
+    assert result.effects[0].path == state.current_path
+    assert result.effects[0].cursor_path == cursor
     assert result.effects[0].blocking is True
-    assert result.effects[0].invalidate_paths == (
-        "/home/tadashi/develop/zivo",
-        "/home/tadashi/develop",
-        "/home/tadashi/develop/zivo/src",
+    assert result.effects[0].invalidate_paths == tuple(
+        str(Path(p).resolve())
+        for p in (
+            state.current_path,
+            str(Path(state.current_path).parent),
+            cursor,
+        )
     )
 
 
@@ -1021,30 +1031,32 @@ def test_submit_command_palette_runs_create_file_flow() -> None:
 
 
 def test_begin_extract_archive_input_sets_default_destination() -> None:
+    archive_path = "/home/tadashi/develop/zivo/archive.tar.gz"
     next_state = _reduce_state(
         build_initial_app_state(),
-        BeginExtractArchiveInput("/home/tadashi/develop/zivo/archive.tar.gz"),
+        BeginExtractArchiveInput(archive_path),
     )
 
     assert next_state.ui_mode == "EXTRACT"
     assert next_state.pending_input == PendingInputState(
         prompt="Extract to: ",
-        value="/home/tadashi/develop/zivo/archive",
-        extract_source_path="/home/tadashi/develop/zivo/archive.tar.gz",
+        value=str(Path("/home/tadashi/develop/zivo/archive").resolve()),
+        extract_source_path=archive_path,
     )
 
 
 def test_begin_zip_compress_input_sets_default_destination() -> None:
+    source_path = "/home/tadashi/develop/zivo/README.md"
     next_state = _reduce_state(
         build_initial_app_state(),
-        BeginZipCompressInput(("/home/tadashi/develop/zivo/README.md",)),
+        BeginZipCompressInput((source_path,)),
     )
 
     assert next_state.ui_mode == "ZIP"
     assert next_state.pending_input == PendingInputState(
         prompt="Compress to: ",
-        value="/home/tadashi/develop/zivo/README.zip",
-        zip_source_paths=("/home/tadashi/develop/zivo/README.md",),
+        value=str(Path("/home/tadashi/develop/zivo/README.zip").resolve()),
+        zip_source_paths=(source_path,),
     )
 
 
@@ -1068,7 +1080,8 @@ def test_submit_command_palette_begins_extract_archive_flow() -> None:
 
     assert next_state.ui_mode == "EXTRACT"
     assert next_state.pending_input is not None
-    assert next_state.pending_input.value == "/home/tadashi/develop/zivo/archive"
+    expected_dest = str(Path("/home/tadashi/develop/zivo/archive").resolve())
+    assert next_state.pending_input.value == expected_dest
     assert next_state.pending_input.extract_source_path == archive_path
 
 
@@ -1092,7 +1105,8 @@ def test_submit_command_palette_begins_zip_compress_flow() -> None:
 
     assert next_state.ui_mode == "ZIP"
     assert next_state.pending_input is not None
-    assert next_state.pending_input.value == "/home/tadashi/develop/zivo/zivo.zip"
+    expected_zip = str(Path("/home/tadashi/develop/zivo/zivo.zip").resolve())
+    assert next_state.pending_input.value == expected_zip
     assert next_state.pending_input.zip_source_paths == (
         "/home/tadashi/develop/zivo/docs",
         "/home/tadashi/develop/zivo/src",
@@ -3242,13 +3256,15 @@ def test_cancel_permanent_delete_confirmation_returns_to_browsing_with_warning()
 
 
 def test_submit_pending_extract_starts_archive_preparation() -> None:
+    source_path = "/home/tadashi/develop/zivo/archive.zip"
+    dest_path = "/tmp/output/archive"
     state = replace(
         build_initial_app_state(),
         ui_mode="EXTRACT",
         pending_input=PendingInputState(
             prompt="Extract to: ",
-            value="/tmp/output/archive",
-            extract_source_path="/home/tadashi/develop/zivo/archive.zip",
+            value=dest_path,
+            extract_source_path=source_path,
         ),
     )
 
@@ -3260,20 +3276,21 @@ def test_submit_pending_extract_starts_archive_preparation() -> None:
         RunArchivePreparationEffect(
             request_id=1,
             request=ExtractArchiveRequest(
-                source_path="/home/tadashi/develop/zivo/archive.zip",
-                destination_path="/tmp/output/archive",
+                source_path=str(Path(source_path).resolve()),
+                destination_path=str(Path(dest_path).resolve()),
             ),
         ),
     )
 
 
 def test_submit_pending_zip_compress_starts_preparation() -> None:
+    dest_path = "/tmp/output.zip"
     state = replace(
         build_initial_app_state(),
         ui_mode="ZIP",
         pending_input=PendingInputState(
             prompt="Compress to: ",
-            value="/tmp/output.zip",
+            value=dest_path,
             zip_source_paths=(
                 "/home/tadashi/develop/zivo/docs",
                 "/home/tadashi/develop/zivo/src",
@@ -3293,7 +3310,7 @@ def test_submit_pending_zip_compress_starts_preparation() -> None:
                     "/home/tadashi/develop/zivo/docs",
                     "/home/tadashi/develop/zivo/src",
                 ),
-                destination_path="/tmp/output.zip",
+                destination_path=str(Path(dest_path).resolve()),
                 root_dir="/home/tadashi/develop/zivo",
             ),
         ),
@@ -3301,13 +3318,14 @@ def test_submit_pending_zip_compress_starts_preparation() -> None:
 
 
 def test_submit_pending_extract_resolves_relative_destination_from_archive_parent() -> None:
+    source_path = "/home/tadashi/develop/zivo/docs/archive.tar.bz2"
     state = replace(
         build_initial_app_state(),
         ui_mode="EXTRACT",
         pending_input=PendingInputState(
             prompt="Extract to: ",
             value="../exports/archive",
-            extract_source_path="/home/tadashi/develop/zivo/docs/archive.tar.bz2",
+            extract_source_path=source_path,
         ),
     )
 
@@ -3317,8 +3335,8 @@ def test_submit_pending_extract_resolves_relative_destination_from_archive_paren
         RunArchivePreparationEffect(
             request_id=1,
             request=ExtractArchiveRequest(
-                source_path="/home/tadashi/develop/zivo/docs/archive.tar.bz2",
-                destination_path="/home/tadashi/develop/zivo/exports/archive",
+                source_path=str(Path(source_path).resolve()),
+                destination_path=str(Path("/home/tadashi/develop/zivo/exports/archive").resolve()),
             ),
         ),
     )
@@ -3577,12 +3595,14 @@ def test_zip_compress_progress_updates_notification() -> None:
 
 
 def test_archive_extract_completed_requests_snapshot_for_destination_parent() -> None:
+    dest_parent = str(Path("/tmp/output").resolve())
+    dest_path = str(Path("/tmp/output/archive").resolve())
     state = replace(
         build_initial_app_state(),
         ui_mode="BUSY",
         pending_input=PendingInputState(
             prompt="Extract to: ",
-            value="/tmp/output/archive",
+            value=dest_path,
             extract_source_path="/home/tadashi/develop/zivo/archive.zip",
         ),
         pending_archive_extract_request_id=9,
@@ -3593,7 +3613,7 @@ def test_archive_extract_completed_requests_snapshot_for_destination_parent() ->
         ArchiveExtractCompleted(
             request_id=9,
             result=ExtractArchiveResult(
-                destination_path="/tmp/output/archive",
+                destination_path=dest_path,
                 extracted_entries=2,
                 total_entries=2,
                 message="Extracted 2 entries to archive",
@@ -3608,21 +3628,25 @@ def test_archive_extract_completed_requests_snapshot_for_destination_parent() ->
     assert result.effects == (
         LoadBrowserSnapshotEffect(
             request_id=1,
-            path="/tmp/output",
-            cursor_path="/tmp/output/archive",
+            path=dest_parent,
+            cursor_path=dest_path,
             blocking=True,
-            invalidate_paths=("/tmp/output", "/tmp", "/tmp/output/archive"),
+            invalidate_paths=browser_snapshot_invalidation_paths(
+                dest_parent, dest_path
+            ),
         ),
     )
 
 
 def test_zip_compress_completed_requests_snapshot_for_destination_parent() -> None:
+    dest_parent = str(Path("/tmp").resolve())
+    dest_path = str(Path("/tmp/output.zip").resolve())
     state = replace(
         build_initial_app_state(),
         ui_mode="BUSY",
         pending_input=PendingInputState(
             prompt="Compress to: ",
-            value="/tmp/output.zip",
+            value=dest_path,
             zip_source_paths=("/home/tadashi/develop/zivo/docs",),
         ),
         pending_zip_compress_request_id=9,
@@ -3633,7 +3657,7 @@ def test_zip_compress_completed_requests_snapshot_for_destination_parent() -> No
         ZipCompressCompleted(
             request_id=9,
             result=CreateZipArchiveResult(
-                destination_path="/tmp/output.zip",
+                destination_path=dest_path,
                 archived_entries=2,
                 total_entries=2,
                 message="Created output.zip with 2 entries",
@@ -3648,10 +3672,12 @@ def test_zip_compress_completed_requests_snapshot_for_destination_parent() -> No
     assert result.effects == (
         LoadBrowserSnapshotEffect(
             request_id=1,
-            path="/tmp",
-            cursor_path="/tmp/output.zip",
+            path=dest_parent,
+            cursor_path=dest_path,
             blocking=True,
-            invalidate_paths=("/tmp", "/", "/tmp/output.zip"),
+            invalidate_paths=browser_snapshot_invalidation_paths(
+                dest_parent, dest_path
+            ),
         ),
     )
 
@@ -4148,10 +4174,13 @@ def test_clipboard_paste_completed_for_cut_clears_clipboard_and_requests_reload(
             path="/home/tadashi/develop/zivo",
             cursor_path="/home/tadashi/develop/zivo/docs",
             blocking=False,
-            invalidate_paths=(
-                "/home/tadashi/develop/zivo",
-                "/home/tadashi/develop",
-                "/home/tadashi/develop/zivo/docs",
+            invalidate_paths=tuple(
+                str(Path(p).resolve())
+                for p in (
+                    "/home/tadashi/develop/zivo",
+                    "/home/tadashi/develop",
+                    "/home/tadashi/develop/zivo/docs",
+                )
             ),
         ),
     )
@@ -4252,16 +4281,16 @@ def test_file_mutation_completed_requests_reload_with_result_cursor() -> None:
             path="/home/tadashi/develop/zivo",
             cursor_path="/home/tadashi/develop/zivo/notes.txt",
             blocking=False,
-            invalidate_paths=(
-                "/home/tadashi/develop/zivo",
-                "/home/tadashi/develop",
-                "/home/tadashi/develop/zivo/notes.txt",
+            invalidate_paths=tuple(
+                str(Path(p).resolve())
+                for p in (
+                    "/home/tadashi/develop/zivo",
+                    "/home/tadashi/develop",
+                    "/home/tadashi/develop/zivo/notes.txt",
+                )
             ),
         ),
     )
-
-
-def test_rename_file_mutation_completed_pushes_undo_entry() -> None:
     state = replace(
         build_initial_app_state(),
         ui_mode="BUSY",
@@ -4330,16 +4359,16 @@ def test_delete_file_mutation_completed_requests_reload_without_deleted_cursor()
             path="/home/tadashi/develop/zivo",
             cursor_path="/home/tadashi/develop/zivo/src",
             blocking=False,
-            invalidate_paths=(
-                "/home/tadashi/develop/zivo",
-                "/home/tadashi/develop",
-                "/home/tadashi/develop/zivo/src",
+            invalidate_paths=tuple(
+                str(Path(p).resolve())
+                for p in (
+                    "/home/tadashi/develop/zivo",
+                    "/home/tadashi/develop",
+                    "/home/tadashi/develop/zivo/src",
+                )
             ),
         ),
     )
-
-
-def test_trash_file_mutation_completed_pushes_undo_entry() -> None:
     state = replace(
         build_initial_app_state(),
         ui_mode="BUSY",
@@ -4430,16 +4459,16 @@ def test_undo_completed_pops_stack_and_requests_reload() -> None:
             path="/home/tadashi/develop/zivo",
             cursor_path="/home/tadashi/develop/zivo/docs",
             blocking=False,
-            invalidate_paths=(
-                "/home/tadashi/develop/zivo",
-                "/home/tadashi/develop",
-                "/home/tadashi/develop/zivo/docs",
+            invalidate_paths=tuple(
+                str(Path(p).resolve())
+                for p in (
+                    "/home/tadashi/develop/zivo",
+                    "/home/tadashi/develop",
+                    "/home/tadashi/develop/zivo/docs",
+                )
             ),
         ),
     )
-
-
-def test_undo_failed_returns_error_notification() -> None:
     entry = UndoEntry(kind="paste_copy", steps=(UndoDeletePathStep(path="/tmp/copied"),))
     state = replace(
         build_initial_app_state(),
@@ -5902,3 +5931,182 @@ def test_browser_snapshot_loaded_updates_inactive_tab_only() -> None:
 
     loaded = _reduce_state(loaded, ActivateNextTab())
     assert loaded.current_path == "/tmp/project"
+
+
+def test_begin_empty_trash_enters_confirm_mode(monkeypatch) -> None:
+    monkeypatch.setattr("platform.system", lambda: "Darwin")
+
+    state = build_initial_app_state()
+
+    next_state = _reduce_state(state, BeginEmptyTrash())
+
+    assert next_state.ui_mode == "CONFIRM"
+    assert next_state.empty_trash_confirmation is not None
+    assert next_state.empty_trash_confirmation.platform == "darwin"
+    assert next_state.command_palette is None
+    assert next_state.pending_input is None
+
+
+def test_cancel_empty_trash_confirmation_returns_to_browsing() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        empty_trash_confirmation=EmptyTrashConfirmationState(platform="darwin"),
+    )
+
+    next_state = _reduce_state(state, CancelEmptyTrashConfirmation())
+
+    assert next_state.ui_mode == "BROWSING"
+    assert next_state.empty_trash_confirmation is None
+    assert next_state.notification is None
+
+
+def test_confirm_empty_trash_shows_notification_on_success(monkeypatch) -> None:
+    from unittest.mock import MagicMock
+
+    from zivo.services.trash_operations import MacOsTrashService
+
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        empty_trash_confirmation=EmptyTrashConfirmationState(platform="darwin"),
+    )
+
+    fake_service = MacOsTrashService()
+    monkeypatch.setattr(
+        "zivo.services.resolve_trash_service",
+        lambda: fake_service,
+    )
+    monkeypatch.setattr(
+        "zivo.services.trash_operations.subprocess.run",
+        lambda *a, **kw: MagicMock(returncode=0, stderr=""),
+    )
+
+    class FakeHome:
+        def __truediv__(self, other):
+            return FakePath()
+
+    class FakePath:
+        def exists(self):
+            return False
+
+    monkeypatch.setattr("pathlib.Path.home", lambda: FakeHome())
+
+    next_state = _reduce_state(state, ConfirmEmptyTrash())
+
+    assert next_state.ui_mode == "BROWSING"
+    assert next_state.empty_trash_confirmation is None
+    assert next_state.notification is not None
+    assert next_state.notification.level == "info"
+
+
+def test_submit_pending_input_case_only_rename_emits_mutation() -> None:
+    """Case-only rename (docs -> Docs) should proceed, not show 'Name unchanged'."""
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="RENAME",
+        pending_input=PendingInputState(
+            prompt="Rename: ",
+            value="Docs",
+            target_path="/home/tadashi/develop/zivo/docs",
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitPendingInput())
+
+    assert result.state.ui_mode == "BUSY"
+    assert result.effects == (
+        RunFileMutationEffect(
+            request_id=1,
+            request=RenameRequest(
+                source_path="/home/tadashi/develop/zivo/docs",
+                new_name="Docs",
+            ),
+        ),
+    )
+
+
+def test_submit_pending_input_case_insensitive_conflict_on_macos(monkeypatch) -> None:
+    """On macOS, renaming to a case-different existing name should conflict."""
+    import zivo.state.reducer_common as rc
+
+    monkeypatch.setattr(rc, "_is_macos", True)
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="RENAME",
+        pending_input=PendingInputState(
+            prompt="Rename: ",
+            value="Src",
+            target_path="/home/tadashi/develop/zivo/docs",
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitPendingInput())
+
+    assert result.state.ui_mode == "CONFIRM"
+    assert result.state.name_conflict == NameConflictState(kind="rename", name="Src")
+
+
+def test_submit_pending_input_case_sensitive_no_conflict_on_linux(monkeypatch) -> None:
+    """On Linux, renaming to a case-different existing name should NOT conflict."""
+    import zivo.state.reducer_common as rc
+
+    monkeypatch.setattr(rc, "_is_macos", False)
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="RENAME",
+        pending_input=PendingInputState(
+            prompt="Rename: ",
+            value="Src",
+            target_path="/home/tadashi/develop/zivo/docs",
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitPendingInput())
+
+    assert result.state.ui_mode == "BUSY"
+    assert result.effects != ()
+
+
+def test_submit_pending_input_rejects_colon_in_name_on_macos(monkeypatch) -> None:
+    """On macOS, names containing ':' should be rejected."""
+    import zivo.state.reducer_common as rc
+
+    monkeypatch.setattr(rc, "_is_macos", True)
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CREATE",
+        pending_input=PendingInputState(
+            prompt="New file: ",
+            value="file:name.txt",
+            create_kind="file",
+        ),
+    )
+
+    next_state = _reduce_state(state, SubmitPendingInput())
+
+    assert next_state.notification is not None
+    assert next_state.notification.level == "error"
+    assert "colons" in next_state.notification.message
+
+
+def test_submit_pending_input_allows_colon_in_name_on_linux(monkeypatch) -> None:
+    """On Linux, names containing ':' should not be rejected."""
+    import zivo.state.reducer_common as rc
+
+    monkeypatch.setattr(rc, "_is_macos", False)
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CREATE",
+        pending_input=PendingInputState(
+            prompt="New file: ",
+            value="file:name.txt",
+            create_kind="file",
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitPendingInput())
+
+    # Should proceed to emit a create effect (not blocked by colon validation)
+    assert result.state.ui_mode == "BUSY"
+    assert result.effects != ()
