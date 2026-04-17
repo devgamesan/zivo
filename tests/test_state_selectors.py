@@ -70,6 +70,7 @@ from zivo.state.selectors import (
     _has_execute_permission,
     _select_command_palette_window,
     compute_current_pane_visible_window,
+    select_input_dialog_state,
 )
 
 
@@ -1728,12 +1729,12 @@ def test_select_input_bar_state_formats_extract_mode() -> None:
         ),
     )
 
-    input_state = select_input_bar_state(state)
+    input_state = select_input_dialog_state(state)
 
     assert input_state is not None
-    assert input_state.mode_label == "EXTRACT"
+    assert input_state.title == "Extract"
     assert input_state.prompt == "Extract to: "
-    assert input_state.hint == "enter extract | esc cancel"
+    assert input_state.hint == "enter apply | esc cancel | ctrl+v paste"
 
 
 def test_select_input_bar_state_formats_zip_mode() -> None:
@@ -1747,12 +1748,12 @@ def test_select_input_bar_state_formats_zip_mode() -> None:
         ),
     )
 
-    input_state = select_input_bar_state(state)
+    input_state = select_input_dialog_state(state)
 
     assert input_state is not None
-    assert input_state.mode_label == "ZIP"
+    assert input_state.title == "Compress"
     assert input_state.prompt == "Compress to: "
-    assert input_state.hint == "enter compress | esc cancel"
+    assert input_state.hint == "enter apply | esc cancel | ctrl+v paste"
 
 
 def test_select_attribute_dialog_state_formats_selected_entry() -> None:
@@ -2036,13 +2037,13 @@ def test_select_input_bar_state_for_create_mode() -> None:
         pending_input=PendingInputState(prompt="New file: ", value="notes.txt", create_kind="file"),
     )
 
-    input_bar = select_input_bar_state(state)
+    input_dialog = select_input_dialog_state(state)
 
-    assert input_bar is not None
-    assert input_bar.mode_label == "NEW FILE"
-    assert input_bar.prompt == "New file: "
-    assert input_bar.value == "notes.txt"
-    assert input_bar.hint == "enter apply | esc cancel"
+    assert input_dialog is not None
+    assert input_dialog.title == "New File"
+    assert input_dialog.prompt == "New file: "
+    assert input_dialog.value == "notes.txt"
+    assert input_dialog.hint == "enter apply | esc cancel | ctrl+v paste"
 
 
 def test_select_input_bar_state_for_filter_mode() -> None:

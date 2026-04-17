@@ -645,7 +645,7 @@ def _dispatch_confirm_input(
     return _warn("Use o, s, r, or Esc while resolving paste conflicts")
 
 
-def _dispatch_pending_input(
+def _dispatch_input_dialog_input(
     state: AppState,
     *,
     key: str,
@@ -661,11 +661,14 @@ def _dispatch_pending_input(
         current_value = state.pending_input.value if state.pending_input is not None else ""
         return _supported(SetPendingInputValue(current_value[:-1]))
 
+    if key == "ctrl+v":
+        return _supported()  # handled by on_key in app.py
+
     if character and character.isprintable():
         current_value = state.pending_input.value if state.pending_input is not None else ""
         return _supported(SetPendingInputValue(f"{current_value}{character}"))
 
-    return _warn("Use Enter to apply or Esc to cancel")
+    return _warn("Use Enter to apply, Esc to cancel, or Ctrl+V to paste")
 
 
 def _dispatch_shell_command_input(
@@ -1042,7 +1045,7 @@ _MODE_DISPATCHERS = (
     (lambda state: state.ui_mode == "PALETTE", _dispatch_command_palette_input),
     (
         lambda state: state.ui_mode in {"RENAME", "CREATE", "EXTRACT", "ZIP"},
-        _dispatch_pending_input,
+        _dispatch_input_dialog_input,
     ),
     (lambda state: state.ui_mode == "SHELL", _dispatch_shell_command_input),
     # デフォルト（BROWSING）

@@ -49,6 +49,7 @@ from .actions import (
     FileMutationCompleted,
     FileMutationFailed,
     PasteClipboard,
+    PasteIntoPendingInput,
     RequestBrowserSnapshot,
     ResolvePasteConflict,
     SelectAllVisibleEntries,
@@ -414,6 +415,25 @@ def _handle_set_pending_input_value(
         replace(
             state,
             pending_input=replace(state.pending_input, value=action.value),
+        )
+    )
+
+
+def _handle_paste_into_pending_input(
+    state: AppState,
+    action: PasteIntoPendingInput,
+    reduce_state: ReducerFn,
+) -> ReduceResult | None:
+    if state.pending_input is None:
+        return finalize(state)
+    pasted = "".join(c for c in action.text if c.isprintable())
+    if not pasted:
+        return finalize(state)
+    new_value = state.pending_input.value + pasted
+    return finalize(
+        replace(
+            state,
+            pending_input=replace(state.pending_input, value=new_value),
         )
     )
 
@@ -1459,6 +1479,7 @@ _MUTATION_HANDLERS: dict[type[Action], _MutationHandler] = {
     BeginCreateInput: _handle_begin_create_input,
     BeginEmptyTrash: _handle_begin_empty_trash,
     SetPendingInputValue: _handle_set_pending_input_value,
+    PasteIntoPendingInput: _handle_paste_into_pending_input,
     CancelPendingInput: _handle_cancel_pending_input,
     SubmitPendingInput: _handle_submit_pending_input,
     ToggleSelection: _handle_toggle_selection,

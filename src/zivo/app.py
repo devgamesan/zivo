@@ -80,6 +80,7 @@ from zivo.ui import (
     ConflictDialog,
     CurrentPathBar,
     HelpBar,
+    InputDialog,
     MainPane,
     ShellCommandDialog,
     SplitTerminalPane,
@@ -228,6 +229,11 @@ class zivoApp(App[None]):
             id="shell-command-dialog-layer",
             classes="overlay-layer dialog-layer",
         )
+        yield Container(
+            InputDialog(shell.input_dialog, id="input-dialog"),
+            id="input-dialog-layer",
+            classes="overlay-layer dialog-layer",
+        )
         yield HelpBar(shell.help, id="help-bar")
         yield StatusBar(shell.status, id="status-bar")
 
@@ -305,6 +311,28 @@ class zivoApp(App[None]):
             row_region.y,
         )
 
+    def _update_input_dialog_geometry(self) -> None:
+        """Constrain the input dialog overlay to the current pane."""
+
+        try:
+            input_dialog_layer = self.query_one("#input-dialog-layer", Container)
+            current_pane = self.query_one("#current-pane", MainPane)
+            browser_row = self.query_one("#browser-row")
+        except NoMatches:
+            return
+
+        pane_region = current_pane.region
+        row_region = browser_row.region
+        if pane_region.width <= 0 or pane_region.height <= 0:
+            return
+
+        input_dialog_layer.styles.width = pane_region.width
+        input_dialog_layer.styles.height = pane_region.height
+        input_dialog_layer.styles.offset = (
+            pane_region.x,
+            row_region.y,
+        )
+
     async def on_mount(self) -> None:
         """Load the initial directory snapshot after the UI mounts."""
 
@@ -326,10 +354,37 @@ class zivoApp(App[None]):
     async def on_key(self, event: events.Key) -> None:
         """Normalize keyboard input into reducer actions."""
 
+        if (
+            event.key == "ctrl+v"
+            and self._app_state.ui_mode in {"RENAME", "CREATE", "EXTRACT", "ZIP"}
+            and self._app_state.pending_input is not None
+        ):
+            text = self._external_launch_service.get_from_clipboard()
+            if text:
+                from zivo.state import PasteIntoPendingInput
+
+                await self.dispatch_actions((PasteIntoPendingInput(text=text),))
+            event.stop()
+            event.prevent_default()
+            return
+
         handled = await self._dispatch_key_press(event.key, character=event.character)
         if handled:
             event.stop()
             event.prevent_default()
+
+    async def on_paste(self, event: events.Paste) -> None:
+        """Handle clipboard paste in input dialog modes."""
+
+        if self._app_state.ui_mode not in {"RENAME", "CREATE", "EXTRACT", "ZIP"}:
+            return
+        if self._app_state.pending_input is None:
+            return
+        from zivo.state import PasteIntoPendingInput
+
+        await self.dispatch_actions((PasteIntoPendingInput(text=event.text),))
+        event.stop()
+        event.prevent_default()
 
     async def action_dispatch_bound_key(self, key: str) -> None:
         """Handle priority key bindings through the central dispatcher."""
@@ -478,6 +533,7 @@ class zivoApp(App[None]):
         self._update_pane_visibility(self.size.width if width is None else width)
         self._update_command_palette_geometry()
         self._update_config_dialog_geometry()
+        self._update_input_dialog_geometry()
 
     def _resize_split_terminal_session(self) -> None:
         resize_split_terminal_session(

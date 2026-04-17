@@ -907,6 +907,13 @@ class SetTerminalHeight:
     height: int
 
 
+@dataclass(frozen=True)
+class PasteIntoPendingInput:
+    """Paste clipboard text into the pending input value."""
+
+    text: str
+
+
 Action = (
     InitializeState
     | SetUiMode
@@ -1033,4 +1040,5 @@ Action = (
     | ConfigSaveCompleted
     | ConfigSaveFailed
     | SetTerminalHeight
+    | PasteIntoPendingInput
 )

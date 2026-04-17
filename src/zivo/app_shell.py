@@ -16,6 +16,7 @@ from zivo.ui import (
     ConflictDialog,
     CurrentPathBar,
     HelpBar,
+    InputDialog,
     MainPane,
     ShellCommandDialog,
     SidePane,
@@ -90,10 +91,12 @@ async def refresh_shell(
         attribute_dialog_layer = app.query_one("#attribute-dialog-layer", Container)
         config_dialog_layer = app.query_one("#config-dialog-layer", Container)
         shell_command_dialog_layer = app.query_one("#shell-command-dialog-layer", Container)
+        input_dialog_layer = app.query_one("#input-dialog-layer", Container)
         conflict_dialog = app.query_one("#conflict-dialog", ConflictDialog)
         attribute_dialog = app.query_one("#attribute-dialog", AttributeDialog)
         config_dialog = app.query_one("#config-dialog", ConfigDialog)
         shell_command_dialog = app.query_one("#shell-command-dialog", ShellCommandDialog)
+        input_dialog = app.query_one("#input-dialog", InputDialog)
     except NoMatches:
         selectors = (
             "#current-path-bar",
@@ -112,6 +115,8 @@ async def refresh_shell(
             "#config-dialog-layer",
             "#shell-command-dialog",
             "#shell-command-dialog-layer",
+            "#input-dialog",
+            "#input-dialog-layer",
         )
         for selector in selectors:
             try:
@@ -154,6 +159,13 @@ async def refresh_shell(
             Container(
                 ShellCommandDialog(shell.shell_command_dialog, id="shell-command-dialog"),
                 id="shell-command-dialog-layer",
+                classes="overlay-layer dialog-layer",
+            )
+        )
+        await app.mount(
+            Container(
+                InputDialog(shell.input_dialog, id="input-dialog"),
+                id="input-dialog-layer",
                 classes="overlay-layer dialog-layer",
             )
         )
@@ -207,6 +219,8 @@ async def refresh_shell(
     config_dialog.set_state(shell.config_dialog)
     shell_command_dialog_layer.display = shell.shell_command_dialog is not None
     shell_command_dialog.set_state(shell.shell_command_dialog)
+    input_dialog_layer.display = shell.input_dialog is not None
+    input_dialog.set_state(shell.input_dialog)
 
     if app_state.ui_mode == "BROWSING":
         if app_state.split_terminal.visible and app_state.split_terminal.focus_target == "terminal":

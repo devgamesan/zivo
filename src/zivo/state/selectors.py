@@ -21,6 +21,7 @@ from zivo.models import (
     CurrentSummaryState,
     HelpBarState,
     InputBarState,
+    InputDialogState,
     PaneEntry,
     ShellCommandDialogState,
     SplitTerminalViewState,
@@ -143,6 +144,7 @@ def select_shell_data(state: AppState) -> ThreePaneShellData:
         attribute_dialog=select_attribute_dialog_state(state),
         config_dialog=select_config_dialog_state(state),
         shell_command_dialog=select_shell_command_dialog_state(state),
+        input_dialog=select_input_dialog_state(state),
     )
 
 
@@ -487,7 +489,7 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
 
 
 def select_input_bar_state(state: AppState) -> InputBarState | None:
-    """Return contextual input state for the active mode."""
+    """Return contextual input state for the filter mode."""
 
     if state.ui_mode == "FILTER" or (state.filter.active and state.filter.query):
         hint = "esc clear"
@@ -500,28 +502,31 @@ def select_input_bar_state(state: AppState) -> InputBarState | None:
             hint=hint,
         )
 
+    return None
+
+
+def select_input_dialog_state(state: AppState) -> InputDialogState | None:
+    """Return dialog content when the app is in an input mode."""
+
     if state.ui_mode not in {"RENAME", "CREATE", "EXTRACT", "ZIP"}:
         return None
     if state.pending_input is None:
         return None
-    mode_label = "RENAME"
-    if state.ui_mode == "CREATE":
-        mode_label = "NEW FILE" if state.pending_input.create_kind == "file" else "NEW DIR"
-    if state.ui_mode == "EXTRACT":
-        mode_label = "EXTRACT"
-    if state.ui_mode == "ZIP":
-        mode_label = "ZIP"
-    return InputBarState(
-        mode_label=mode_label,
+    if state.ui_mode == "RENAME":
+        title = "Rename"
+    elif state.ui_mode == "EXTRACT":
+        title = "Extract"
+    elif state.ui_mode == "ZIP":
+        title = "Compress"
+    elif state.pending_input.create_kind == "file":
+        title = "New File"
+    else:
+        title = "New Directory"
+    return InputDialogState(
+        title=title,
         prompt=state.pending_input.prompt,
         value=state.pending_input.value,
-        hint=(
-            "enter extract | esc cancel"
-            if state.ui_mode == "EXTRACT"
-            else "enter compress | esc cancel"
-            if state.ui_mode == "ZIP"
-            else "enter apply | esc cancel"
-        ),
+        hint="enter apply | esc cancel | ctrl+v paste",
     )
 
 

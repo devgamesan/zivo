@@ -157,6 +157,10 @@ Screen {
     align-horizontal: center;
 }
 
+#input-dialog-layer {
+    align-horizontal: center;
+}
+
 .dialog-layer {
     align: center middle;
 }
@@ -266,6 +270,32 @@ Screen {
     padding: 0 1;
     background: $boost;
     color: $accent;
+    text-style: bold;
+}
+
+#input-dialog {
+    display: none;
+    height: auto;
+    min-height: 6;
+    margin: 0 2;
+    padding: 1 2;
+    border: round $accent;
+    background: $surface;
+}
+
+#input-dialog-title {
+    text-style: bold;
+    color: $accent;
+}
+
+#input-dialog-value {
+    margin: 1 0;
+}
+
+#input-dialog-hint {
+    padding: 0 1;
+    background: $boost;
+    color: $text-muted;
     text-style: bold;
 }
 

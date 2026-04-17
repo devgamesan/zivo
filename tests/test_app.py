@@ -70,6 +70,7 @@ from zivo.ui import (
     CurrentPathBar,
     HelpBar,
     InputBar,
+    InputDialog,
     ShellCommandDialog,
     SidePane,
     SplitTerminalPane,
@@ -222,6 +223,20 @@ async def _wait_for_context_input(app, timeout: float = 0.5) -> InputBar:
             if asyncio.get_running_loop().time() >= deadline:
                 raise
             await asyncio.sleep(0.01)
+
+
+async def _wait_for_input_dialog(app, timeout: float = 0.5) -> InputDialog:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
+        try:
+            dialog = app.query_one("#input-dialog", InputDialog)
+            if dialog.display:
+                return dialog
+        except NoMatches:
+            pass
+        if asyncio.get_running_loop().time() >= deadline:
+            raise
+        await asyncio.sleep(0.01)
 
 
 async def _wait_for_summary_bar(app, timeout: float = 0.5) -> SummaryBar:
@@ -2709,11 +2724,14 @@ async def test_app_command_palette_create_file_opens_context_input() -> None:
         await pilot.press("enter")
         await asyncio.sleep(0.05)
 
-        input_bar = await _wait_for_context_input(app)
+        input_dialog = await _wait_for_input_dialog(app)
 
         assert app.app_state.ui_mode == "CREATE"
-        assert input_bar.display is True
-        assert str(input_bar.renderable) == "[NEW FILE] New file: _  enter apply | esc cancel"
+        assert input_dialog.display is True
+        assert input_dialog.state is not None
+        assert input_dialog.state.title == "New File"
+        assert input_dialog.state.prompt == "New file: "
+        assert input_dialog.state.hint == "enter apply | esc cancel | ctrl+v paste"
 
 
 @pytest.mark.asyncio
@@ -4830,12 +4848,15 @@ async def test_app_rename_mode_shows_context_input_and_updates_help() -> None:
         await asyncio.sleep(0.05)
 
         help_bar = app.query_one("#help-bar", HelpBar)
-        input_bar = await _wait_for_context_input(app)
+        input_dialog = await _wait_for_input_dialog(app)
 
         assert app.app_state.ui_mode == "RENAME"
         assert str(help_bar.renderable) == "type name | enter apply | esc cancel"
-        assert input_bar.display is True
-        assert str(input_bar.renderable) == "[RENAME] Rename: docs  enter apply | esc cancel"
+        assert input_dialog.display is True
+        assert input_dialog.state is not None
+        assert input_dialog.state.title == "Rename"
+        assert input_dialog.state.prompt == "Rename: "
+        assert input_dialog.state.hint == "enter apply | esc cancel | ctrl+v paste"
 
 
 @pytest.mark.asyncio
@@ -4863,11 +4884,15 @@ async def test_app_rename_name_conflict_dialog_returns_to_input(tmp_path) -> Non
         await pilot.press("enter")
         await asyncio.sleep(0.05)
 
-        input_bar = await _wait_for_context_input(app)
+        input_dialog = await _wait_for_input_dialog(app)
 
         assert app.app_state.ui_mode == "RENAME"
         assert dialog.display is False
-        assert str(input_bar.renderable) == "[RENAME] Rename: src  enter apply | esc cancel"
+        assert input_dialog.display is True
+        assert input_dialog.state is not None
+        assert input_dialog.state.title == "Rename"
+        assert input_dialog.state.prompt == "Rename: "
+        assert input_dialog.state.value == "src"
 
 
 @pytest.mark.asyncio
@@ -4915,11 +4940,15 @@ async def test_app_create_name_conflict_dialog_returns_to_input(tmp_path) -> Non
         await pilot.press("escape")
         await asyncio.sleep(0.05)
 
-        input_bar = await _wait_for_context_input(app)
+        input_dialog = await _wait_for_input_dialog(app)
 
         assert app.app_state.ui_mode == "CREATE"
         assert dialog.display is False
-        assert str(input_bar.renderable) == "[NEW FILE] New file: docs  enter apply | esc cancel"
+        assert input_dialog.display is True
+        assert input_dialog.state is not None
+        assert input_dialog.state.title == "New File"
+        assert input_dialog.state.prompt == "New file: "
+        assert input_dialog.state.value == "docs"
 
 
 @pytest.mark.asyncio

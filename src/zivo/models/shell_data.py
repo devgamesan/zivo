@@ -222,6 +222,16 @@ class ShellCommandDialogState:
 
 
 @dataclass(frozen=True)
+class InputDialogState:
+    """Display data for the rename/create input dialog overlay."""
+
+    title: str
+    prompt: str
+    value: str
+    hint: str
+
+
+@dataclass(frozen=True)
 class ThreePaneShellData:
     """Complete display state for the shell UI."""
 
@@ -243,6 +253,7 @@ class ThreePaneShellData:
     attribute_dialog: AttributeDialogState | None = None
     config_dialog: ConfigDialogState | None = None
     shell_command_dialog: ShellCommandDialogState | None = None
+    input_dialog: InputDialogState | None = None
 
 
 def build_dummy_shell_data() -> ThreePaneShellData:
