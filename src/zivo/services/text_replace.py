@@ -1,5 +1,6 @@
 """Preview and apply text replacement across selected files."""
 
+import difflib
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -36,6 +37,7 @@ class LiveTextReplaceService:
     def preview(self, request: TextReplaceRequest) -> TextReplacePreviewResult:
         matcher = _compile_pattern(request.find_text)
         changed_entries: list[TextReplacePreviewEntry] = []
+        diff_chunks: list[str] = []
         skipped_paths: list[str] = []
         total_match_count = 0
 
@@ -57,6 +59,13 @@ class LiveTextReplaceService:
                 continue
 
             changed_entries.append(preview_entry)
+            diff_chunks.append(
+                _build_unified_diff(
+                    path,
+                    original,
+                    replaced,
+                )
+            )
             total_match_count += match_count
 
         changed_entries.sort(key=lambda entry: entry.path.casefold())
@@ -64,6 +73,7 @@ class LiveTextReplaceService:
             request=request,
             changed_entries=tuple(changed_entries),
             total_match_count=total_match_count,
+            diff_text="".join(diff_chunks),
             skipped_paths=tuple(skipped_paths),
         )
 
@@ -123,6 +133,7 @@ class FakeTextReplaceService:
                 request=request,
                 changed_entries=(),
                 total_match_count=0,
+                diff_text="",
             ),
         )
 
@@ -184,3 +195,19 @@ def _build_preview_entry(
             first_match_after=replaced_lines[index],
         )
     return None
+
+
+def _build_unified_diff(
+    path: Path,
+    original: str,
+    replaced: str,
+) -> str:
+    return "".join(
+        difflib.unified_diff(
+            original.splitlines(keepends=True),
+            replaced.splitlines(keepends=True),
+            fromfile=str(path),
+            tofile=f"{path} (replaced)",
+            lineterm="\n",
+        )
+    )

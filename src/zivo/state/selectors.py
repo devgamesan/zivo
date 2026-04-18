@@ -288,6 +288,8 @@ def _select_command_palette_preview_pane(
         return _select_file_search_preview_pane(state, syntax_theme)
     if state.command_palette.source == "grep_search":
         return _select_grep_preview_pane(state, syntax_theme)
+    if state.command_palette.source == "replace_text":
+        return _select_replace_preview_pane(state, syntax_theme)
     return None
 
 
@@ -350,6 +352,29 @@ def _select_grep_preview_pane(
     return _build_child_preview_view(
         state.child_pane.preview_title,
         state.child_pane.preview_path or selected_result.path,
+        state.child_pane.preview_content,
+        state.child_pane.preview_message,
+        state.child_pane.preview_truncated,
+        state.child_pane.preview_start_line,
+        state.child_pane.preview_highlight_line,
+        syntax_theme,
+    )
+
+
+def _select_replace_preview_pane(
+    state: AppState,
+    syntax_theme: str,
+) -> ChildPaneViewState:
+    if not state.config.display.show_preview:
+        return _build_child_entries_view((), syntax_theme)
+    if (
+        state.child_pane.mode != "preview"
+        or state.child_pane.preview_title != "Replace Preview"
+    ):
+        return _build_child_entries_view((), syntax_theme)
+    return _build_child_preview_view(
+        state.child_pane.preview_title,
+        state.child_pane.preview_path or state.current_path,
         state.child_pane.preview_content,
         state.child_pane.preview_message,
         state.child_pane.preview_truncated,
@@ -591,28 +616,13 @@ def select_command_palette_state(state: AppState) -> CommandPaletteViewState | N
             has_more_items=len(state.command_palette.grep_search_results) > len(visible_results),
         )
     if state.command_palette.source == "replace_text":
-        visible_results, title = _select_replace_preview_window(
-            state,
-            state.command_palette.replace_preview_results,
-            cursor_index,
-        )
         return CommandPaletteViewState(
-            title=title,
+            title="Replace Text",
             query=state.command_palette.replace_find_text,
-            items=tuple(
-                CommandPaletteItemViewState(
-                    label=result.display_label,
-                    shortcut=None,
-                    enabled=True,
-                    selected=index == cursor_index,
-                )
-                for index, result in visible_results
-            ),
+            items=(),
             empty_message=_replace_text_empty_message(state),
             input_fields=_build_replace_input_fields(state.command_palette),
-            has_more_items=(
-                len(state.command_palette.replace_preview_results) > len(visible_results)
-            ),
+            has_more_items=False,
         )
     if state.command_palette.source == "history":
         return _build_command_palette_items_view(
@@ -1570,15 +1580,17 @@ def _grep_search_empty_message(state: AppState) -> str:
 
 def _replace_text_empty_message(state: AppState) -> str:
     if state.pending_replace_preview_request_id is not None:
-        return "Previewing replacements..."
+        return "Previewing diff in right pane..."
     if state.command_palette is None or state.command_palette.source != "replace_text":
-        return "No replacement preview"
+        return ""
     if state.command_palette.replace_error_message is not None:
         return state.command_palette.replace_error_message
     if not state.command_palette.replace_find_text.strip():
         return "Type text to find"
     if state.command_palette.replace_status_message is not None:
         return state.command_palette.replace_status_message
+    if state.command_palette.replace_total_match_count > 0:
+        return "Preview shown in right pane. Press Enter to apply."
     return "No matching files"
 
 

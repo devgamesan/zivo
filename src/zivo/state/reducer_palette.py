@@ -83,6 +83,7 @@ from .models import (
     GrepSearchFieldId,
     GrepSearchResultState,
     NotificationState,
+    PaneState,
     ReplaceFieldId,
     ReplacePreviewResultState,
 )
@@ -473,6 +474,7 @@ def _handle_set_replace_field(
                     replace_preview_results=(),
                     replace_total_match_count=0,
                 ),
+                child_pane=PaneState(directory_path=state.current_path, entries=()),
                 pending_replace_preview_request_id=None,
             )
         )
@@ -964,11 +966,18 @@ def _run_select_all_command(
 
 
 def _selected_current_file_paths(state: AppState) -> tuple[str, ...]:
-    return tuple(
+    selected_paths = tuple(
         entry.path
         for entry in select_visible_current_entry_states(state)
         if entry.path in state.current_pane.selected_paths and entry.kind == "file"
     )
+    if state.current_pane.selected_paths:
+        return selected_paths
+
+    entry = single_target_entry(state)
+    if entry is None or entry.kind != "file":
+        return ()
+    return (entry.path,)
 
 
 def _run_replace_text_command(
@@ -981,7 +990,10 @@ def _run_replace_text_command(
         return _notify(
             next_state,
             level="warning",
-            message="Replace text requires selected files in the current directory",
+            message=(
+                "Replace text requires a selected file or file selection "
+                "in the current directory"
+            ),
         )
     return reduce_state(next_state, BeginTextReplace(target_paths=target_paths))
 
@@ -1363,6 +1375,19 @@ def _handle_text_replace_preview_completed(
                 replace_total_match_count=action.result.total_match_count,
                 cursor_index=0,
             ),
+            child_pane=PaneState(
+                directory_path=state.current_path,
+                entries=(),
+                mode="preview",
+                preview_path=state.current_path,
+                preview_title="Replace Preview",
+                preview_content=action.result.diff_text,
+                preview_message=(
+                    "No matching files"
+                    if not action.result.diff_text and status_message is None
+                    else status_message
+                ),
+            ),
             pending_replace_preview_request_id=None,
         )
     )
@@ -1387,6 +1412,7 @@ def _handle_text_replace_preview_failed(
                     replace_total_match_count=0,
                     cursor_index=0,
                 ),
+                child_pane=PaneState(directory_path=state.current_path, entries=()),
                 pending_replace_preview_request_id=None,
             )
         )
@@ -1623,6 +1649,7 @@ def _handle_cancel_command_palette(
     if state.command_palette is not None and state.command_palette.source in {
         "file_search",
         "grep_search",
+        "replace_text",
     }:
         return sync_child_pane(next_state, next_state.current_pane.cursor_path, reduce_state)
     return finalize(next_state)

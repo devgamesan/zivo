@@ -2677,6 +2677,7 @@ def test_text_replace_preview_completed_updates_palette_results() -> None:
                     ),
                 ),
                 total_match_count=2,
+                diff_text="--- before\n+++ after\n@@\n-todo item\n+done item\n",
             ),
         ),
     )
@@ -2684,6 +2685,10 @@ def test_text_replace_preview_completed_updates_palette_results() -> None:
     assert next_state.command_palette is not None
     assert next_state.command_palette.replace_total_match_count == 2
     assert next_state.command_palette.replace_preview_results[0].display_path == "README.md"
+    assert next_state.child_pane.preview_title == "Replace Preview"
+    assert next_state.child_pane.preview_content == (
+        "--- before\n+++ after\n@@\n-todo item\n+done item\n"
+    )
     assert next_state.pending_replace_preview_request_id is None
 
 
@@ -2810,6 +2815,27 @@ def test_text_replace_apply_failed_sets_error_notification() -> None:
     assert next_state.notification == NotificationState(
         level="error",
         message="permission denied",
+    )
+
+
+def test_run_replace_text_command_uses_cursor_file_when_nothing_is_selected() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = replace(
+        state,
+        command_palette=replace(state.command_palette, query="replace text"),
+        current_pane=replace(
+            state.current_pane,
+            selected_paths=frozenset(),
+            cursor_path="/home/tadashi/develop/zivo/README.md",
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.source == "replace_text"
+    assert result.state.command_palette.replace_target_paths == (
+        "/home/tadashi/develop/zivo/README.md",
     )
 
 

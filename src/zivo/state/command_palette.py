@@ -125,7 +125,7 @@ def normalize_command_palette_cursor(state: AppState, cursor_index: int) -> int:
 
 def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, ...]:
     target_paths = _select_target_paths(state)
-    selected_file_paths = _selected_current_file_paths(state)
+    replace_target_paths = _replace_target_file_paths(state)
     single_target_entry = _single_target_entry(state, target_paths)
     has_target = bool(target_paths)
     has_single_target = single_target_entry is not None
@@ -234,7 +234,7 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             id="replace_text",
             label="Replace text in selected files",
             shortcut=None,
-            enabled=bool(selected_file_paths),
+            enabled=bool(replace_target_paths),
         ),
     ]
 
@@ -451,12 +451,19 @@ def _has_visible_current_entries(state: AppState) -> bool:
     return False
 
 
-def _selected_current_file_paths(state: AppState) -> tuple[str, ...]:
-    return tuple(
+def _replace_target_file_paths(state: AppState) -> tuple[str, ...]:
+    selected_paths = tuple(
         entry.path
         for entry in _active_current_entries(state)
         if entry.path in state.current_pane.selected_paths and entry.kind == "file"
     )
+    if state.current_pane.selected_paths:
+        return selected_paths
+
+    cursor_entry = _current_entry(state)
+    if cursor_entry is None or cursor_entry.kind != "file":
+        return ()
+    return (cursor_entry.path,)
 
 
 def _is_empty_trash_supported() -> bool:

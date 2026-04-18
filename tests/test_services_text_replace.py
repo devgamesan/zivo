@@ -25,6 +25,8 @@ def test_live_text_replace_service_previews_and_applies_plain_text(tmp_path: Pat
     assert preview.changed_entries[0].first_match_line_number == 1
     assert preview.changed_entries[0].first_match_before == "todo item"
     assert preview.changed_entries[0].first_match_after == "done item"
+    assert "--- " in preview.diff_text
+    assert "+++ " in preview.diff_text
 
     result = service.apply(request)
 

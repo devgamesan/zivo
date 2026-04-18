@@ -148,6 +148,7 @@ class TextReplacePreviewResult:
     request: TextReplaceRequest
     changed_entries: tuple[TextReplacePreviewEntry, ...]
     total_match_count: int
+    diff_text: str = ""
     skipped_paths: tuple[str, ...] = ()
 
 

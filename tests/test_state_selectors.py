@@ -1539,11 +1539,12 @@ def test_select_command_palette_state_for_text_replace_includes_input_fields() -
     palette_state = select_command_palette_state(state)
 
     assert palette_state is not None
-    assert palette_state.title == "Replace Text (1 file(s), 2 match(es)) (1-1 / 1)"
+    assert palette_state.title == "Replace Text"
     assert [field.label for field in palette_state.input_fields] == ["Find", "Replace"]
     assert [field.value for field in palette_state.input_fields] == ["todo", "done"]
     assert [field.active for field in palette_state.input_fields] == [False, True]
-    assert palette_state.items[0].label == "README.md (2): 8: todo item -> done item"
+    assert palette_state.items == ()
+    assert palette_state.empty_message == "Preview shown in right pane. Press Enter to apply."
 
 
 def test_select_command_palette_state_go_to_path_can_show_candidates_without_selection() -> None:
@@ -1764,6 +1765,26 @@ def test_select_command_palette_state_shows_replace_text_for_selected_files() ->
             ),
             cursor_path="/home/tadashi/develop/zivo/README.md",
             selected_paths=frozenset({"/home/tadashi/develop/zivo/README.md"}),
+        ),
+    )
+    palette_state = select_command_palette_state(
+        replace(
+            _reduce_state(state, BeginCommandPalette()),
+            command_palette=replace(CommandPaletteState(), query="replace text"),
+        )
+    )
+
+    assert palette_state is not None
+    assert [item.label for item in palette_state.items] == ["Replace text in selected files"]
+    assert palette_state.items[0].enabled is True
+
+
+def test_select_command_palette_state_shows_replace_text_for_cursor_file() -> None:
+    state = replace(
+        build_initial_app_state(),
+        current_pane=replace(
+            build_initial_app_state().current_pane,
+            cursor_path="/home/tadashi/develop/zivo/README.md",
         ),
     )
     palette_state = select_command_palette_state(

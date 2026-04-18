@@ -3544,6 +3544,13 @@ async def test_app_command_palette_replace_text_previews_and_applies_selected_fi
                     ),
                 ),
                 total_match_count=2,
+                diff_text=(
+                    f"--- {target_path}\n"
+                    f"+++ {target_path} (replaced)\n"
+                    "@@ -1,1 +1,1 @@\n"
+                    "-todo item\n"
+                    "+done item\n"
+                ),
             ),
         },
         apply_results={
@@ -3595,7 +3602,15 @@ async def test_app_command_palette_replace_text_previews_and_applies_selected_fi
 
         palette_state = select_command_palette_state(app.app_state)
         assert palette_state is not None
-        assert palette_state.items[0].label == "README.md (2): 4: todo item -> done item"
+        assert palette_state.items == ()
+
+        child_pane = select_shell_data(app.app_state).child_pane
+        assert child_pane.preview_title == "Replace Preview"
+        assert child_pane.preview_content is not None
+        assert "--- " in child_pane.preview_content
+        assert "+++ " in child_pane.preview_content
+        assert "-todo item" in child_pane.preview_content
+        assert "+done item" in child_pane.preview_content
 
         await pilot.press("enter")
 
