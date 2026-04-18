@@ -37,9 +37,16 @@ zivo aims to be usable by everyone without complex configuration, plugin install
 
 - Multiple tabs let you keep separate working directories open in one zivo session. You can open a new tab, switch to the next or previous tab, and close the current tab without leaving the TUI.
 
-- An embedded terminal can be opened below the browser panes, to the right, or as an overlay above the browser area. `t` switches quickly between the browser and terminal, and the terminal starts in the current directory so you can move between browsing and shell work without changing directories manually.
+- An embedded terminal can be opened below the browser panes, to the right, or as an overlay above the browser area. `t` switches quickly between the browser and terminal, and the terminal starts in the current directory so you can move between browsing and shell work without changing directories manually. See [Notes](#notes) for limitations.
 
+Bottom display:
   ![](docs/resources/screen-split-terminal.png)
+
+Right display:
+  ![](docs/resources/screen-split-terminal-right.png)
+
+Overlay display:
+  ![](docs/resources/screen-split-terminal-overlay.png)
 
 - Recursive file search makes it easy to jump to the file you want. Just type part of the name to instantly filter through thousands of files and reach your target without drilling through the directory tree manually. Search results also support file preview, making it easy to find what you are looking for.
 
@@ -68,7 +75,6 @@ zivo aims to be usable by everyone without complex configuration, plugin install
 - Multiple themes are available so you can choose your preferred look.
 
   ![](docs/resources/screen-theme1.png)
-
   ![](docs/resources/screen-theme2.png)
 
 - Files and directories can be opened with the OS default application. For example, you can open the current directory in the OS file manager, open a file in VS Code if it is associated on the OS side, or launch an external terminal window rooted at the current directory.
