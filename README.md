@@ -249,8 +249,10 @@ When a file is focused, press `e` to switch into a terminal editor in the curren
 | `m` | Open current directory in file manager |
 | `:` | Open command palette |
 | `q` | Quit |
-| `[` | Go back in history |
-| `]` | Go forward in history |
+| `[` | Scroll the right-pane text preview up by a page |
+| `]` | Scroll the right-pane text preview down by a page |
+| `{` | Go back in history |
+| `}` | Go forward in history |
 
 ### Split Terminal Mode
 
@@ -297,6 +299,8 @@ When a file is focused, press `e` to switch into a terminal editor in the curren
 | Key | Action |
 | --- | ------ |
 | Text input / `↑` / `↓` / `Ctrl+n` / `Ctrl+p` / `k` / `j` / `Enter` / `Esc` | Filter, select, run, or cancel commands. In `Find files` and `Grep search`, `j` / `k` are treated as text input and result navigation uses `↑` / `↓` or `Ctrl+n` / `Ctrl+p`. |
+
+When the `Replace text` preview is open in the right pane, `Shift+↑` / `Shift+↓` scroll that preview.
 
 ### Config Editor Mode
 

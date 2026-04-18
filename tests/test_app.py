@@ -1008,6 +1008,58 @@ async def test_app_renders_text_preview_in_child_pane_for_file_cursor() -> None:
 
 
 @pytest.mark.asyncio
+async def test_app_browsing_preview_scrolls_with_brackets() -> None:
+    path = str(Path("/tmp/zivo-preview-scroll").resolve())
+    readme = f"{path}/README.md"
+    preview_body = "\n".join(f"line {index:03d}" for index in range(160))
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: BrowserSnapshot(
+                current_path=path,
+                parent_pane=PaneState(
+                    directory_path="/tmp",
+                    entries=(
+                        DirectoryEntryState(path, "zivo-preview-scroll", "dir"),
+                        DirectoryEntryState("/tmp/sibling", "sibling", "dir"),
+                    ),
+                    cursor_path=path,
+                ),
+                current_pane=PaneState(
+                    directory_path=path,
+                    entries=(DirectoryEntryState(readme, "README.md", "file"),),
+                    cursor_path=readme,
+                ),
+                child_pane=PaneState(
+                    directory_path=path,
+                    entries=(),
+                    mode="preview",
+                    preview_path=readme,
+                    preview_content=preview_body,
+                ),
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test():
+        await _wait_for_snapshot_loaded(app, path)
+        await _wait_for_row_count(app, 1)
+        await _wait_for_child_preview(app, "Preview: README.md", "line 000")
+
+        child_preview_scroll = app.query_one("#child-pane-preview-scroll", VerticalScroll)
+        initial_scroll_y = child_preview_scroll.scroll_y
+
+        await app.action_dispatch_bound_key("]")
+        await asyncio.sleep(0.05)
+        assert child_preview_scroll.scroll_y > initial_scroll_y
+
+        scrolled_down_y = child_preview_scroll.scroll_y
+        await app.action_dispatch_bound_key("[")
+        await asyncio.sleep(0.05)
+        assert child_preview_scroll.scroll_y < scrolled_down_y
+
+
+@pytest.mark.asyncio
 async def test_app_hides_text_preview_in_child_pane_when_preview_disabled() -> None:
     path = str(Path("/tmp/zivo-preview-disabled").resolve())
     readme = f"{path}/README.md"
@@ -2513,7 +2565,7 @@ async def test_app_displays_browsing_help_bar() -> None:
     expected_help = (
         "enter open | e edit | i info | space select | c copy | x cut | v paste | "
         "d delete | r rename | z undo\n"
-        "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to\n"
+        "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to | [ ] preview\n"
         "n new-file | N new-dir | H history | b bookmarks | t term | : palette | q quit"
     )
 

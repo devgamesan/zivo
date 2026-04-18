@@ -104,7 +104,12 @@ def _active_app_theme(state: AppState) -> str:
     return state.config.display.theme
 
 
-_PREVIEW_SCROLL_KEYS: dict[str, int] = {
+_BROWSING_PREVIEW_SCROLL_KEYS: dict[str, int] = {
+    "[": -20,
+    "]": 20,
+}
+
+_REPLACE_PREVIEW_SCROLL_KEYS: dict[str, int] = {
     "shift+up": -20,
     "shift+down": 20,
 }
@@ -113,11 +118,12 @@ _PREVIEW_SCROLL_KEYS: dict[str, int] = {
 def _preview_scroll_delta(state: AppState, key: str) -> int | None:
     """Return scroll delta for preview key bindings, or None if not applicable."""
 
-    if state.ui_mode != "PALETTE" or state.command_palette is None:
-        return None
-    if state.command_palette.source != "replace_text":
-        return None
-    return _PREVIEW_SCROLL_KEYS.get(key)
+    if state.ui_mode == "BROWSING" and state.child_pane.mode == "preview":
+        return _BROWSING_PREVIEW_SCROLL_KEYS.get(key)
+    if state.ui_mode == "PALETTE" and state.command_palette is not None:
+        if state.command_palette.source == "replace_text":
+            return _REPLACE_PREVIEW_SCROLL_KEYS.get(key)
+    return None
 
 
 class zivoApp(App[None]):

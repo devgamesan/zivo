@@ -125,6 +125,12 @@ class _BrowsingCtx:
 
 _BrowsingHandler = Callable[[AppState, _BrowsingCtx], DispatchedActions]
 
+
+def _noop_browsing_handler(_state: AppState, _ctx: _BrowsingCtx) -> DispatchedActions:
+    """Consume a browsing key that is handled elsewhere in the UI layer."""
+
+    return ()
+
 BROWSING_KEYMAP = {
     "up": "cursor_up",
     "shift+up": "cursor_up_selecting",
@@ -169,8 +175,10 @@ BROWSING_KEYMAP = {
     "G": "begin_go_to_path",
     "n": "create_file",
     "N": "create_dir",
-    "[": "go_back",
-    "]": "go_forward",
+    "[": "preview_pageup",
+    "]": "preview_pagedown",
+    "{": "go_back",
+    "}": "go_forward",
     "m": "open_file_manager",
     "T": "open_terminal",
     "home": "jump_cursor_start",
@@ -1123,6 +1131,8 @@ _BROWSING_PARAM_DISPATCH: dict[str, _BrowsingHandler] = {
     "create_dir": _handle_create_dir,
     "open_terminal": _handle_open_terminal,
     "open_file_manager": _handle_open_file_manager,
+    "preview_pageup": _noop_browsing_handler,
+    "preview_pagedown": _noop_browsing_handler,
 }
 
 _BROWSING_COMPLEX_DISPATCH: dict[str, _BrowsingHandler] = {
