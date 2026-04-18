@@ -37,7 +37,7 @@ zivo aims to be usable by everyone without complex configuration, plugin install
 
 - Multiple tabs let you keep separate working directories open in one zivo session. You can open a new tab, switch to the next or previous tab, and close the current tab without leaving the TUI.
 
-- An embedded terminal can be opened below the browser panes, to the right, or as an overlay above the browser area. `t` switches quickly between the browser and terminal, and the terminal starts in the current directory so you can move between browsing and shell work without changing directories manually.
+- An embedded terminal can be opened below the browser panes, to the right, or as an overlay above the browser area. `t` switches quickly between the browser and terminal, and the terminal starts in the current directory so you can move between browsing and shell work without changing directories manually. See [Notes](#notes) for limitations.
 
   ![](docs/resources/screen-split-terminal.png)
 
