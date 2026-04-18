@@ -51,7 +51,11 @@ Screen {
 }
 
 .pane-preview {
-    overflow: hidden hidden;
+    height: auto;
+}
+
+.pane-preview-scroll {
+    height: 1fr;
 }
 
 .pane-entry {
