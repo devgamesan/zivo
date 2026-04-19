@@ -7167,8 +7167,12 @@ def test_grs_grep_search_completed_filters_to_target_paths() -> None:
     )
 
     assert len(result.state.command_palette.grs_grep_results) == 2
-    assert result.state.command_palette.grs_grep_results[0].path == "/home/tadashi/develop/zivo/a.py"
-    assert result.state.command_palette.grs_grep_results[1].path == "/home/tadashi/develop/zivo/c.py"
+    assert result.state.command_palette.grs_grep_results[0].path == (
+        "/home/tadashi/develop/zivo/a.py"
+    )
+    assert result.state.command_palette.grs_grep_results[1].path == (
+        "/home/tadashi/develop/zivo/c.py"
+    )
     assert result.state.pending_grep_search_request_id is None
 
 
@@ -7425,6 +7429,8 @@ def test_grs_grep_search_completed_filters_non_target_results() -> None:
     )
 
     assert len(result.state.command_palette.grs_grep_results) == 1
-    assert result.state.command_palette.grs_grep_results[0].path == "/home/tadashi/develop/zivo/a.py"
+    assert result.state.command_palette.grs_grep_results[0].path == (
+        "/home/tadashi/develop/zivo/a.py"
+    )
     # Preview is triggered even with empty replace text to show find matches
     assert result.state.pending_replace_preview_request_id is not None
