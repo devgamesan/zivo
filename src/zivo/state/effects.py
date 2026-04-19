@@ -11,6 +11,7 @@ from zivo.models import (
     ExtractArchiveRequest,
     PasteRequest,
     RenameRequest,
+    TextReplaceRequest,
     UndoEntry,
 )
 
@@ -35,6 +36,7 @@ class LoadChildPaneSnapshotEffect:
     request_id: int
     current_path: str
     cursor_path: str
+    preview_max_bytes: int = 64 * 1024
     grep_result: GrepSearchResultState | None = None
     grep_context_lines: int = 3
 
@@ -134,6 +136,22 @@ class RunGrepSearchEffect:
 
 
 @dataclass(frozen=True)
+class RunTextReplacePreviewEffect:
+    """Preview text replacement across selected files."""
+
+    request_id: int
+    request: TextReplaceRequest
+
+
+@dataclass(frozen=True)
+class RunTextReplaceApplyEffect:
+    """Apply text replacement across selected files."""
+
+    request_id: int
+    request: TextReplaceRequest
+
+
+@dataclass(frozen=True)
 class StartSplitTerminalEffect:
     """Start a new embedded split-terminal session."""
 
@@ -147,13 +165,6 @@ class WriteSplitTerminalInputEffect:
 
     session_id: int
     data: str
-
-
-@dataclass(frozen=True)
-class PasteFromClipboardEffect:
-    """Paste clipboard contents into the active split-terminal session."""
-
-    session_id: int
 
 
 @dataclass(frozen=True)
@@ -195,9 +206,10 @@ Effect = (
     | RunExternalLaunchEffect
     | RunFileSearchEffect
     | RunGrepSearchEffect
+    | RunTextReplacePreviewEffect
+    | RunTextReplaceApplyEffect
     | StartSplitTerminalEffect
     | WriteSplitTerminalInputEffect
-    | PasteFromClipboardEffect
     | CloseSplitTerminalEffect
     | RunConfigSaveEffect
     | RunShellCommandEffect

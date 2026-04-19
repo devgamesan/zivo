@@ -122,6 +122,50 @@ FileMutationRequest = RenameRequest | CreatePathRequest | DeleteRequest
 
 
 @dataclass(frozen=True)
+class TextReplaceRequest:
+    """A request to preview or apply text replacement across files."""
+
+    paths: tuple[str, ...]
+    find_text: str
+    replace_text: str
+
+
+@dataclass(frozen=True)
+class TextReplacePreviewEntry:
+    """Preview details for a single file that would be changed."""
+
+    path: str
+    diff_text: str
+    match_count: int
+    first_match_line_number: int
+    first_match_before: str
+    first_match_after: str
+
+
+@dataclass(frozen=True)
+class TextReplacePreviewResult:
+    """Preview payload returned before applying text replacement."""
+
+    request: TextReplaceRequest
+    changed_entries: tuple[TextReplacePreviewEntry, ...]
+    total_match_count: int
+    diff_text: str = ""
+    skipped_paths: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class TextReplaceResult:
+    """Completed text replacement payload returned from the service."""
+
+    request: TextReplaceRequest
+    changed_paths: tuple[str, ...]
+    total_match_count: int
+    message: str
+    level: MutationResultLevel = "info"
+    skipped_paths: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class ExtractArchiveRequest:
     """A request to extract a supported archive into a destination directory."""
 

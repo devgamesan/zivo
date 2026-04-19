@@ -38,6 +38,8 @@ from zivo.state import (
     PaneState,
     PasteConflictState,
     PendingInputState,
+    PendingKeySequenceState,
+    ReplacePreviewResultState,
     SetCursorPath,
     SetFilterQuery,
     SetNotification,
@@ -70,6 +72,7 @@ from zivo.state.selectors import (
     _has_execute_permission,
     _select_command_palette_window,
     compute_current_pane_visible_window,
+    select_input_dialog_state,
 )
 
 
@@ -580,15 +583,20 @@ def test_select_shell_data_emits_size_delta_updates_for_directory_size_changes()
     )
 
     shell = select_shell_data(state)
+    row_index = next(
+        index
+        for index, entry in enumerate(select_current_entries(state))
+        if entry.path == "/home/tadashi/develop/zivo/docs"
+    )
 
     assert shell.current_entries is None
     assert shell.current_pane_update.mode == "size_delta"
     assert shell.current_pane_update.revision == 3
     assert [
-        (update.path, update.size_label)
+        (update.path, update.size_label, update.row_index)
         for update in shell.current_pane_update.size_updates
     ] == [
-        ("/home/tadashi/develop/zivo/docs", "4.1KiB")
+        ("/home/tadashi/develop/zivo/docs", "4.1KiB", row_index)
     ]
 
 
@@ -607,15 +615,18 @@ def test_select_shell_data_emits_row_delta_updates_for_selection_changes() -> No
     )
 
     shell = select_shell_data(state)
+    row_index = next(
+        index for index, entry in enumerate(select_current_entries(state)) if entry.path == path
+    )
 
     assert shell.current_entries is None
     assert shell.current_pane_update.mode == "row_delta"
     assert shell.current_pane_update.revision == 2
     assert [
-        (update.path, update.entry.selected)
+        (update.path, update.entry.selected, update.row_index)
         for update in shell.current_pane_update.row_updates
     ] == [
-        (path, True)
+        (path, True, row_index)
     ]
 
 
@@ -631,15 +642,18 @@ def test_select_shell_data_emits_row_delta_updates_for_cut_changes() -> None:
     )
 
     shell = select_shell_data(state)
+    row_index = next(
+        index for index, entry in enumerate(select_current_entries(state)) if entry.path == path
+    )
 
     assert shell.current_entries is None
     assert shell.current_pane_update.mode == "row_delta"
     assert shell.current_pane_update.revision == 4
     assert [
-        (update.path, update.entry.cut)
+        (update.path, update.entry.cut, update.row_index)
         for update in shell.current_pane_update.row_updates
     ] == [
-        (path, True)
+        (path, True, row_index)
     ]
 
 
@@ -1068,13 +1082,13 @@ def test_select_shell_data_viewport_projection_shifts_window_after_cursor_crosse
 
     assert moved_shell.current_entries is not initial_shell.current_entries
     assert [entry.name for entry in moved_shell.current_entries] == [
-        "item_01",
         "item_02",
         "item_03",
         "item_04",
         "item_05",
+        "item_06",
     ]
-    assert moved_shell.current_cursor_index == 4
+    assert moved_shell.current_cursor_index == 3
 
 
 def test_select_shell_data_viewport_projection_skips_offscreen_row_delta_updates() -> None:
@@ -1211,14 +1225,14 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
 
     assert help_state.lines == (
         "enter open | e edit | i info | space select | c copy | x cut | v paste | "
-        "r rename | z undo",
-        "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to",
+        "d delete | r rename | z undo",
+        "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to | [ ] preview",
         "n new-file | N new-dir | H history | b bookmarks | t term | : palette | q quit",
     )
     assert help_state.text == (
         "enter open | e edit | i info | space select | c copy | x cut | v paste | "
-        "r rename | z undo\n"
-        "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to\n"
+        "d delete | r rename | z undo\n"
+        "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to | [ ] preview\n"
         "n new-file | N new-dir | H history | b bookmarks | t term | : palette | q quit"
     )
 
@@ -1244,7 +1258,7 @@ def test_select_help_bar_for_split_terminal_focus() -> None:
 
     help_state = select_help_bar_state(state)
 
-    assert help_state.text == "type in terminal | ctrl+q close | ctrl+v paste"
+    assert help_state.text == "type in terminal | ctrl+q close"
 
 
 def test_select_status_bar_shows_split_terminal_focus_when_idle() -> None:
@@ -1492,6 +1506,7 @@ def test_select_command_palette_state_for_grep_search_includes_input_fields() ->
             source="grep_search",
             query="todo",
             grep_search_keyword="todo",
+            grep_search_filename_filter="main",
             grep_search_include_extensions="py,ts",
             grep_search_exclude_extensions="log",
             grep_search_active_field="exclude",
@@ -1503,11 +1518,50 @@ def test_select_command_palette_state_for_grep_search_includes_input_fields() ->
     assert palette_state is not None
     assert [field.label for field in palette_state.input_fields] == [
         "Keyword",
-        "Include",
-        "Exclude",
+        "Filter: Filename",
+        "Filter: Include",
+        "Filter: Exclude",
     ]
-    assert [field.value for field in palette_state.input_fields] == ["todo", "py,ts", "log"]
-    assert [field.active for field in palette_state.input_fields] == [False, False, True]
+    assert [field.value for field in palette_state.input_fields] == ["todo", "main", "py,ts", "log"]
+    assert [field.active for field in palette_state.input_fields] == [False, False, False, True]
+
+
+def test_select_command_palette_state_for_text_replace_includes_input_fields() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="replace_text",
+            replace_find_text="todo",
+            replace_replacement_text="done",
+            replace_active_field="replace",
+            replace_preview_results=(
+                ReplacePreviewResultState(
+                    path="/home/tadashi/develop/zivo/README.md",
+                    display_path="README.md",
+                    diff_text="--- before\n+++ after\n@@\n-todo item\n+done item\n",
+                    match_count=2,
+                    first_match_line_number=8,
+                    first_match_before="todo item",
+                    first_match_after="done item",
+                ),
+            ),
+            replace_total_match_count=2,
+            replace_target_paths=("/home/tadashi/develop/zivo/README.md",),
+        ),
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert palette_state.title == "Replace Text (1 file(s), 2 match(es)) (1-1 / 1)"
+    assert [field.label for field in palette_state.input_fields] == ["Find", "Replace"]
+    assert [field.value for field in palette_state.input_fields] == ["todo", "done"]
+    assert [field.active for field in palette_state.input_fields] == [False, True]
+    assert [item.label for item in palette_state.items] == [
+        "README.md (2): 8: todo item -> done item"
+    ]
+    assert palette_state.empty_message == "Preview shown in right pane. Press Enter to apply."
 
 
 def test_select_command_palette_state_go_to_path_can_show_candidates_without_selection() -> None:
@@ -1717,6 +1771,59 @@ def test_select_command_palette_state_shows_compress_as_zip_for_multiple_targets
     assert [item.label for item in palette_state.items] == ["Compress as zip"]
 
 
+def test_select_command_palette_state_shows_replace_text_for_selected_files() -> None:
+    state = replace(
+        build_initial_app_state(),
+        current_pane=PaneState(
+            directory_path="/home/tadashi/develop/zivo",
+            entries=(
+                DirectoryEntryState("/home/tadashi/develop/zivo/README.md", "README.md", "file"),
+                DirectoryEntryState("/home/tadashi/develop/zivo/src", "src", "dir"),
+            ),
+            cursor_path="/home/tadashi/develop/zivo/README.md",
+            selected_paths=frozenset({"/home/tadashi/develop/zivo/README.md"}),
+        ),
+    )
+    palette_state = select_command_palette_state(
+        replace(
+            _reduce_state(state, BeginCommandPalette()),
+            command_palette=replace(CommandPaletteState(), query="replace text"),
+        )
+    )
+
+    assert palette_state is not None
+    assert [item.label for item in palette_state.items] == [
+        "Replace text in selected files",
+        "Replace text in found files",
+        "Replace text in grep results",
+    ]
+    assert palette_state.items[0].enabled is True
+
+
+def test_select_command_palette_state_shows_replace_text_for_cursor_file() -> None:
+    state = replace(
+        build_initial_app_state(),
+        current_pane=replace(
+            build_initial_app_state().current_pane,
+            cursor_path="/home/tadashi/develop/zivo/README.md",
+        ),
+    )
+    palette_state = select_command_palette_state(
+        replace(
+            _reduce_state(state, BeginCommandPalette()),
+            command_palette=replace(CommandPaletteState(), query="replace text"),
+        )
+    )
+
+    assert palette_state is not None
+    assert [item.label for item in palette_state.items] == [
+        "Replace text in selected files",
+        "Replace text in found files",
+        "Replace text in grep results",
+    ]
+    assert palette_state.items[0].enabled is True
+
+
 def test_select_input_bar_state_formats_extract_mode() -> None:
     state = replace(
         build_initial_app_state(),
@@ -1728,12 +1835,12 @@ def test_select_input_bar_state_formats_extract_mode() -> None:
         ),
     )
 
-    input_state = select_input_bar_state(state)
+    input_state = select_input_dialog_state(state)
 
     assert input_state is not None
-    assert input_state.mode_label == "EXTRACT"
+    assert input_state.title == "Extract"
     assert input_state.prompt == "Extract to: "
-    assert input_state.hint == "enter extract | esc cancel"
+    assert input_state.hint == "enter apply | esc cancel"
 
 
 def test_select_input_bar_state_formats_zip_mode() -> None:
@@ -1747,12 +1854,12 @@ def test_select_input_bar_state_formats_zip_mode() -> None:
         ),
     )
 
-    input_state = select_input_bar_state(state)
+    input_state = select_input_dialog_state(state)
 
     assert input_state is not None
-    assert input_state.mode_label == "ZIP"
+    assert input_state.title == "Compress"
     assert input_state.prompt == "Compress to: "
-    assert input_state.hint == "enter compress | esc cancel"
+    assert input_state.hint == "enter apply | esc cancel"
 
 
 def test_select_attribute_dialog_state_formats_selected_entry() -> None:
@@ -1804,6 +1911,7 @@ def test_select_config_dialog_state_formats_editor_lines() -> None:
     assert "  ── Display ──" in dialog.lines
     assert "> Theme: textual-dark" in dialog.lines
     assert "  Preview syntax theme: auto" in dialog.lines
+    assert "  Preview max KiB: 64 KiB" in dialog.lines
     assert "  Show preview: true" in dialog.lines
     assert "  ── Sorting ──" in dialog.lines
     assert "  Default sort field: name" in dialog.lines
@@ -2036,13 +2144,13 @@ def test_select_input_bar_state_for_create_mode() -> None:
         pending_input=PendingInputState(prompt="New file: ", value="notes.txt", create_kind="file"),
     )
 
-    input_bar = select_input_bar_state(state)
+    input_dialog = select_input_dialog_state(state)
 
-    assert input_bar is not None
-    assert input_bar.mode_label == "NEW FILE"
-    assert input_bar.prompt == "New file: "
-    assert input_bar.value == "notes.txt"
-    assert input_bar.hint == "enter apply | esc cancel"
+    assert input_dialog is not None
+    assert input_dialog.title == "New File"
+    assert input_dialog.prompt == "New file: "
+    assert input_dialog.value == "notes.txt"
+    assert input_dialog.hint == "enter apply | esc cancel"
 
 
 def test_select_input_bar_state_for_filter_mode() -> None:
@@ -2070,6 +2178,25 @@ def test_select_input_bar_state_keeps_active_filter_visible_after_confirm() -> N
     assert input_bar.prompt == "Filter: "
     assert input_bar.value == "spec"
     assert input_bar.hint == "esc clear"
+
+
+def test_select_input_bar_state_for_pending_key_sequence() -> None:
+    state = replace(
+        build_initial_app_state(),
+        pending_key_sequence=PendingKeySequenceState(
+            keys=("y",),
+            possible_next_keys=("y",),
+        ),
+        filter=replace(build_initial_app_state().filter, query="spec", active=True),
+    )
+
+    input_bar = select_input_bar_state(state)
+
+    assert input_bar is not None
+    assert input_bar.mode_label == "KEYS"
+    assert input_bar.prompt == "Prefix: "
+    assert input_bar.value == "y"
+    assert input_bar.hint == "await y | esc cancel"
 
 
 def test_select_help_bar_state_for_filter_mode() -> None:

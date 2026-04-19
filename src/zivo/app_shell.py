@@ -16,6 +16,7 @@ from zivo.ui import (
     ConflictDialog,
     CurrentPathBar,
     HelpBar,
+    InputDialog,
     MainPane,
     ShellCommandDialog,
     SidePane,
@@ -23,6 +24,27 @@ from zivo.ui import (
     StatusBar,
     TabBar,
 )
+
+
+def build_split_terminal_layer(
+    shell: ThreePaneShellData,
+    *,
+    terminal_position: str = "bottom",
+) -> Container:
+    children: tuple[Any, ...] = ()
+    if terminal_position == "overlay":
+        children = (
+            SplitTerminalPane(
+                shell.split_terminal,
+                id="split-terminal",
+                classes="split-terminal-overlay",
+            ),
+        )
+    return Container(
+        *children,
+        id="split-terminal-layer",
+        classes="overlay-layer split-terminal-overlay-layer",
+    )
 
 
 def build_body(shell: ThreePaneShellData, *, terminal_position: str = "bottom") -> Vertical:
@@ -60,7 +82,7 @@ def build_body(shell: ThreePaneShellData, *, terminal_position: str = "bottom") 
     body_children: list[Any] = [
         Horizontal(*browser_row_children, id="browser-row"),
     ]
-    if terminal_position != "right":
+    if terminal_position not in {"right", "overlay"}:
         body_children.append(
             SplitTerminalPane(shell.split_terminal, id="split-terminal")
         )
@@ -85,20 +107,24 @@ async def refresh_shell(
         command_palette = app.query_one("#command-palette", CommandPalette)
         help_bar = app.query_one("#help-bar", HelpBar)
         status_bar = app.query_one("#status-bar", StatusBar)
+        split_terminal_layer = app.query_one("#split-terminal-layer", Container)
         command_palette_layer = app.query_one("#command-palette-layer", Container)
         conflict_dialog_layer = app.query_one("#conflict-dialog-layer", Container)
         attribute_dialog_layer = app.query_one("#attribute-dialog-layer", Container)
         config_dialog_layer = app.query_one("#config-dialog-layer", Container)
         shell_command_dialog_layer = app.query_one("#shell-command-dialog-layer", Container)
+        input_dialog_layer = app.query_one("#input-dialog-layer", Container)
         conflict_dialog = app.query_one("#conflict-dialog", ConflictDialog)
         attribute_dialog = app.query_one("#attribute-dialog", AttributeDialog)
         config_dialog = app.query_one("#config-dialog", ConfigDialog)
         shell_command_dialog = app.query_one("#shell-command-dialog", ShellCommandDialog)
+        input_dialog = app.query_one("#input-dialog", InputDialog)
     except NoMatches:
         selectors = (
             "#current-path-bar",
             "#tab-bar",
             "#body",
+            "#split-terminal-layer",
             "#command-palette",
             "#command-palette-layer",
             "#split-terminal",
@@ -112,6 +138,8 @@ async def refresh_shell(
             "#config-dialog-layer",
             "#shell-command-dialog",
             "#shell-command-dialog-layer",
+            "#input-dialog",
+            "#input-dialog-layer",
         )
         for selector in selectors:
             try:
@@ -122,6 +150,12 @@ async def refresh_shell(
         await app.mount(CurrentPathBar(shell.current_path, id="current-path-bar"))
         terminal_position = app_state.config.display.split_terminal_position
         await app.mount(build_body(shell, terminal_position=terminal_position))
+        await app.mount(
+            build_split_terminal_layer(
+                shell,
+                terminal_position=terminal_position,
+            )
+        )
         await app.mount(
             Container(
                 CommandPalette(shell.command_palette, id="command-palette"),
@@ -157,6 +191,13 @@ async def refresh_shell(
                 classes="overlay-layer dialog-layer",
             )
         )
+        await app.mount(
+            Container(
+                InputDialog(shell.input_dialog, id="input-dialog"),
+                id="input-dialog-layer",
+                classes="overlay-layer dialog-layer",
+            )
+        )
         await app.mount(HelpBar(shell.help, id="help-bar"))
         await app.mount(StatusBar(shell.status, id="status-bar"))
         return
@@ -172,7 +213,6 @@ async def refresh_shell(
     current_pane.set_cursor_state(
         shell.current_cursor_index,
         shell.current_cursor_visible,
-        force_sync=True,
     )
     current_pane.set_summary(shell.current_summary)
     current_pane.set_context_input(shell.current_context_input)
@@ -181,6 +221,9 @@ async def refresh_shell(
     terminal_position = app_state.config.display.split_terminal_position
     if terminal_position == "right":
         child_pane.display = not app_state.split_terminal.visible
+    split_terminal_layer.display = (
+        terminal_position == "overlay" and shell.split_terminal.visible
+    )
     if theme_changed:
         def _refresh_themed_panes() -> None:
             parent_pane.refresh_styles()
@@ -207,6 +250,8 @@ async def refresh_shell(
     config_dialog.set_state(shell.config_dialog)
     shell_command_dialog_layer.display = shell.shell_command_dialog is not None
     shell_command_dialog.set_state(shell.shell_command_dialog)
+    input_dialog_layer.display = shell.input_dialog is not None
+    input_dialog.set_state(shell.input_dialog)
 
     if app_state.ui_mode == "BROWSING":
         if app_state.split_terminal.visible and app_state.split_terminal.focus_target == "terminal":

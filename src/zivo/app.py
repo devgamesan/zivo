@@ -21,7 +21,12 @@ from zivo.app_runtime import (
     schedule_effects,
     sync_runtime_state,
 )
-from zivo.app_shell import build_body, refresh_shell, resize_split_terminal_session
+from zivo.app_shell import (
+    build_body,
+    build_split_terminal_layer,
+    refresh_shell,
+    resize_split_terminal_session,
+)
 from zivo.models import (
     AppConfig,
     ThreePaneShellData,
@@ -47,11 +52,13 @@ from zivo.services import (
     LiveGrepSearchService,
     LiveShellCommandService,
     LiveSplitTerminalService,
+    LiveTextReplaceService,
     LiveUndoService,
     LiveZipCompressService,
     ShellCommandService,
     SplitTerminalService,
     SplitTerminalSession,
+    TextReplaceService,
     UndoService,
     ZipCompressService,
     resolve_config_path,
@@ -75,11 +82,13 @@ from zivo.state import (
 )
 from zivo.ui import (
     AttributeDialog,
+    ChildPane,
     CommandPalette,
     ConfigDialog,
     ConflictDialog,
     CurrentPathBar,
     HelpBar,
+    InputDialog,
     MainPane,
     ShellCommandDialog,
     SplitTerminalPane,
@@ -93,6 +102,37 @@ def _active_app_theme(state: AppState) -> str:
     if state.ui_mode == "CONFIG" and state.config_editor is not None:
         return state.config_editor.draft.display.theme
     return state.config.display.theme
+
+
+_BROWSING_PREVIEW_SCROLL_KEYS: dict[str, int] = {
+    "[": -20,
+    "]": 20,
+}
+
+_REPLACE_PREVIEW_SCROLL_KEYS: dict[str, int] = {
+    "shift+up": -20,
+    "shift+down": 20,
+}
+
+_REPLACE_PREVIEW_SCROLL_SOURCES = frozenset(
+    {
+        "replace_text",
+        "replace_in_found_files",
+        "replace_in_grep_files",
+        "grep_replace_selected",
+    }
+)
+
+
+def _preview_scroll_delta(state: AppState, key: str) -> int | None:
+    """Return scroll delta for preview key bindings, or None if not applicable."""
+
+    if state.ui_mode == "BROWSING" and state.child_pane.mode == "preview":
+        return _BROWSING_PREVIEW_SCROLL_KEYS.get(key)
+    if state.ui_mode == "PALETTE" and state.command_palette is not None:
+        if state.command_palette.source in _REPLACE_PREVIEW_SCROLL_SOURCES:
+            return _REPLACE_PREVIEW_SCROLL_KEYS.get(key)
+    return None
 
 
 class zivoApp(App[None]):
@@ -137,6 +177,7 @@ class zivoApp(App[None]):
         external_launch_service: ExternalLaunchService | None = None,
         file_search_service: FileSearchService | None = None,
         grep_search_service: GrepSearchService | None = None,
+        text_replace_service: TextReplaceService | None = None,
         shell_command_service: ShellCommandService | None = None,
         split_terminal_service: SplitTerminalService | None = None,
         undo_service: UndoService | None = None,
@@ -176,6 +217,7 @@ class zivoApp(App[None]):
         )
         self._file_search_service = file_search_service or LiveFileSearchService()
         self._grep_search_service = grep_search_service or LiveGrepSearchService()
+        self._text_replace_service = text_replace_service or LiveTextReplaceService()
         self._shell_command_service = shell_command_service or LiveShellCommandService()
         self._split_terminal_service = split_terminal_service or LiveSplitTerminalService()
         self._undo_service = undo_service or LiveUndoService()
@@ -203,6 +245,10 @@ class zivoApp(App[None]):
         shell = select_shell_data(self._app_state)
         yield CurrentPathBar(shell.current_path, id="current-path-bar")
         yield self._build_body(shell)
+        yield build_split_terminal_layer(
+            shell,
+            terminal_position=self._app_state.config.display.split_terminal_position,
+        )
         yield Container(
             CommandPalette(shell.command_palette, id="command-palette"),
             id="command-palette-layer",
@@ -226,6 +272,11 @@ class zivoApp(App[None]):
         yield Container(
             ShellCommandDialog(shell.shell_command_dialog, id="shell-command-dialog"),
             id="shell-command-dialog-layer",
+            classes="overlay-layer dialog-layer",
+        )
+        yield Container(
+            InputDialog(shell.input_dialog, id="input-dialog"),
+            id="input-dialog-layer",
             classes="overlay-layer dialog-layer",
         )
         yield HelpBar(shell.help, id="help-bar")
@@ -305,6 +356,51 @@ class zivoApp(App[None]):
             row_region.y,
         )
 
+    def _update_input_dialog_geometry(self) -> None:
+        """Constrain the input dialog overlay to the current pane."""
+
+        try:
+            input_dialog_layer = self.query_one("#input-dialog-layer", Container)
+            current_pane = self.query_one("#current-pane", MainPane)
+            browser_row = self.query_one("#browser-row")
+        except NoMatches:
+            return
+
+        pane_region = current_pane.region
+        row_region = browser_row.region
+        if pane_region.width <= 0 or pane_region.height <= 0:
+            return
+
+        input_dialog_layer.styles.width = pane_region.width
+        input_dialog_layer.styles.height = pane_region.height
+        input_dialog_layer.styles.offset = (
+            pane_region.x,
+            row_region.y,
+        )
+
+    def _update_split_terminal_overlay_geometry(self) -> None:
+        """Constrain the overlay terminal above the help and status bars."""
+
+        try:
+            split_terminal_layer = self.query_one("#split-terminal-layer", Container)
+            body = self.query_one("#body")
+            help_bar = self.query_one("#help-bar", HelpBar)
+        except NoMatches:
+            return
+
+        body_region = body.region
+        help_bar_region = help_bar.region
+        overlay_height = help_bar_region.y - body_region.y
+        if body_region.width <= 0 or overlay_height <= 0:
+            return
+
+        split_terminal_layer.styles.width = body_region.width
+        split_terminal_layer.styles.height = overlay_height
+        split_terminal_layer.styles.offset = (
+            body_region.x,
+            body_region.y,
+        )
+
     async def on_mount(self) -> None:
         """Load the initial directory snapshot after the UI mounts."""
 
@@ -326,13 +422,75 @@ class zivoApp(App[None]):
     async def on_key(self, event: events.Key) -> None:
         """Normalize keyboard input into reducer actions."""
 
+        if (
+            event.key == "ctrl+v"
+            and self._app_state.ui_mode in {"RENAME", "CREATE", "EXTRACT", "ZIP"}
+            and self._app_state.pending_input is not None
+        ):
+            text = self._external_launch_service.get_from_clipboard()
+            if text:
+                from zivo.state import PasteIntoPendingInput
+
+                await self.dispatch_actions((PasteIntoPendingInput(text=text),))
+            event.stop()
+            event.prevent_default()
+            return
+
+        scroll_delta = _preview_scroll_delta(self._app_state, event.key)
+        if scroll_delta is not None:
+            try:
+                child_pane = self.query_one("#child-pane", ChildPane)
+            except NoMatches:
+                return
+            child_pane.scroll_preview(scroll_delta)
+            event.stop()
+            event.prevent_default()
+            return
+
         handled = await self._dispatch_key_press(event.key, character=event.character)
         if handled:
             event.stop()
             event.prevent_default()
 
+    async def on_paste(self, event: events.Paste) -> None:
+        """Handle clipboard paste in input dialog and split terminal modes."""
+
+        if self._app_state.ui_mode in {"RENAME", "CREATE", "EXTRACT", "ZIP"}:
+            if self._app_state.pending_input is not None:
+                from zivo.state import PasteIntoPendingInput
+
+                await self.dispatch_actions(
+                    (PasteIntoPendingInput(text=event.text),)
+                )
+                event.stop()
+                event.prevent_default()
+            return
+
+        st = self._app_state.split_terminal
+        if (
+            st.visible
+            and st.status == "running"
+            and st.focus_target == "terminal"
+        ):
+            from zivo.state import SendSplitTerminalInput
+
+            await self.dispatch_actions(
+                (SendSplitTerminalInput(event.text),)
+            )
+            event.stop()
+            event.prevent_default()
+
     async def action_dispatch_bound_key(self, key: str) -> None:
         """Handle priority key bindings through the central dispatcher."""
+
+        scroll_delta = _preview_scroll_delta(self._app_state, key)
+        if scroll_delta is not None:
+            try:
+                child_pane = self.query_one("#child-pane", ChildPane)
+            except NoMatches:
+                return
+            child_pane.scroll_preview(scroll_delta)
+            return
 
         await self._dispatch_key_press(key)
 
@@ -378,6 +536,10 @@ class zivoApp(App[None]):
         if layout_changed:
             try:
                 await self.query_one("#body").remove()
+            except NoMatches:
+                pass
+            try:
+                await self.query_one("#split-terminal-layer").remove()
             except NoMatches:
                 pass
         if changed or theme_changed or layout_changed:
@@ -478,6 +640,8 @@ class zivoApp(App[None]):
         self._update_pane_visibility(self.size.width if width is None else width)
         self._update_command_palette_geometry()
         self._update_config_dialog_geometry()
+        self._update_input_dialog_geometry()
+        self._update_split_terminal_overlay_geometry()
 
     def _resize_split_terminal_session(self) -> None:
         resize_split_terminal_session(
@@ -498,6 +662,7 @@ def create_app(
     external_launch_service: ExternalLaunchService | None = None,
     file_search_service: FileSearchService | None = None,
     grep_search_service: GrepSearchService | None = None,
+    text_replace_service: TextReplaceService | None = None,
     shell_command_service: ShellCommandService | None = None,
     split_terminal_service: SplitTerminalService | None = None,
     undo_service: UndoService | None = None,
@@ -525,6 +690,7 @@ def create_app(
         external_launch_service=external_launch_service,
         file_search_service=file_search_service,
         grep_search_service=grep_search_service,
+        text_replace_service=text_replace_service,
         shell_command_service=shell_command_service,
         split_terminal_service=split_terminal_service,
         undo_service=undo_service,

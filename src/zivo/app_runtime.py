@@ -21,9 +21,15 @@ from zivo.models import (
     PasteConflictPrompt,
     PasteExecutionResult,
     ShellCommandResult,
+    TextReplacePreviewResult,
+    TextReplaceResult,
     UndoResult,
 )
-from zivo.services import InvalidFileSearchQueryError, InvalidGrepSearchQueryError
+from zivo.services import (
+    InvalidFileSearchQueryError,
+    InvalidGrepSearchQueryError,
+    InvalidTextReplaceQueryError,
+)
 from zivo.state import (
     ArchiveExtractCompleted,
     ArchiveExtractFailed,
@@ -53,8 +59,6 @@ from zivo.state import (
     GrepSearchFailed,
     LoadBrowserSnapshotEffect,
     LoadChildPaneSnapshotEffect,
-    NotificationState,
-    PasteFromClipboardEffect,
     RunArchiveExtractEffect,
     RunArchivePreparationEffect,
     RunClipboardPasteEffect,
@@ -65,15 +69,20 @@ from zivo.state import (
     RunFileSearchEffect,
     RunGrepSearchEffect,
     RunShellCommandEffect,
+    RunTextReplaceApplyEffect,
+    RunTextReplacePreviewEffect,
     RunUndoEffect,
     RunZipCompressEffect,
     RunZipCompressPreparationEffect,
-    SetNotification,
     ShellCommandCompleted,
     ShellCommandFailed,
     SplitTerminalStarted,
     SplitTerminalStartFailed,
     StartSplitTerminalEffect,
+    TextReplaceApplied,
+    TextReplaceApplyFailed,
+    TextReplacePreviewCompleted,
+    TextReplacePreviewFailed,
     UndoCompleted,
     UndoFailed,
     WriteSplitTerminalInputEffect,
@@ -84,7 +93,7 @@ from zivo.state import (
     ZipCompressProgress,
 )
 
-CHILD_PANE_DEBOUNCE_SECONDS = 0.0
+CHILD_PANE_DEBOUNCE_SECONDS = 0.03
 FILE_SEARCH_DEBOUNCE_SECONDS = 0.2
 GREP_SEARCH_DEBOUNCE_SECONDS = 0.2
 
@@ -294,6 +303,7 @@ def start_child_pane_snapshot(app: Any, effect: LoadChildPaneSnapshotEffect) -> 
         app._snapshot_loader.load_child_pane_snapshot,
         effect.current_path,
         effect.cursor_path,
+        preview_max_bytes=effect.preview_max_bytes,
     )
     if effect.grep_result is not None:
         loader = partial(
@@ -301,6 +311,7 @@ def start_child_pane_snapshot(app: Any, effect: LoadChildPaneSnapshotEffect) -> 
             effect.current_path,
             effect.grep_result,
             context_lines=effect.grep_context_lines,
+            preview_max_bytes=effect.preview_max_bytes,
         )
     _run_worker(
         app,
@@ -502,6 +513,34 @@ def schedule_grep_search(app: Any, effect: RunGrepSearchEffect) -> None:
     _schedule_search_effect(app, effect, _GREP_SEARCH_RUNTIME)
 
 
+def schedule_text_replace_preview(app: Any, effect: RunTextReplacePreviewEffect) -> None:
+    _run_worker(
+        app,
+        effect,
+        partial(app._text_replace_service.preview, effect.request),
+        _WorkerSpec(
+            name=f"text-replace-preview:{effect.request_id}",
+            group="text-replace-preview",
+            description="preview replacement",
+            exclusive=True,
+        ),
+    )
+
+
+def schedule_text_replace_apply(app: Any, effect: RunTextReplaceApplyEffect) -> None:
+    _run_worker(
+        app,
+        effect,
+        partial(app._text_replace_service.apply, effect.request),
+        _WorkerSpec(
+            name=f"text-replace-apply:{effect.request_id}",
+            group="text-replace-apply",
+            description="apply replacement",
+            exclusive=True,
+        ),
+    )
+
+
 def start_grep_search_worker(app: Any, effect: RunGrepSearchEffect) -> None:
     _start_search_worker(app, effect, _GREP_SEARCH_RUNTIME)
 
@@ -649,22 +688,6 @@ def write_split_terminal_input(app: Any, effect: WriteSplitTerminalInputEffect) 
                     message=str(error) or "Failed to write to split terminal",
                 ),
             ),
-        )
-
-
-def paste_from_clipboard(app: Any, effect: PasteFromClipboardEffect) -> None:
-    if app._app_state.split_terminal.session_id != effect.session_id:
-        return
-    if app._split_terminal_session is None:
-        return
-    try:
-        clipboard_text = app._external_launch_service.get_from_clipboard()
-        app._split_terminal_session.write(clipboard_text)
-    except OSError as error:
-        message = str(error) or "Failed to read clipboard"
-        app.call_next(
-            app.dispatch_actions,
-            (SetNotification(NotificationState(level="warning", message=message)),),
         )
 
 
@@ -850,9 +873,10 @@ _EFFECT_SCHEDULERS = (
     (RunShellCommandEffect, schedule_shell_command),
     (RunFileSearchEffect, schedule_file_search),
     (RunGrepSearchEffect, schedule_grep_search),
+    (RunTextReplacePreviewEffect, schedule_text_replace_preview),
+    (RunTextReplaceApplyEffect, schedule_text_replace_apply),
     (StartSplitTerminalEffect, start_split_terminal),
     (WriteSplitTerminalInputEffect, write_split_terminal_input),
-    (PasteFromClipboardEffect, paste_from_clipboard),
     (CloseSplitTerminalEffect, _close_split_terminal_effect),
 )
 
@@ -1051,6 +1075,30 @@ def _complete_grep_search(effect: RunGrepSearchEffect, result: object) -> tuple[
     )
 
 
+def _complete_text_replace_preview(
+    effect: RunTextReplacePreviewEffect,
+    result: TextReplacePreviewResult,
+) -> tuple[Any, ...]:
+    return (
+        TextReplacePreviewCompleted(
+            request_id=effect.request_id,
+            result=result,
+        ),
+    )
+
+
+def _complete_text_replace_apply(
+    effect: RunTextReplaceApplyEffect,
+    result: TextReplaceResult,
+) -> tuple[Any, ...]:
+    return (
+        TextReplaceApplied(
+            request_id=effect.request_id,
+            result=result,
+        ),
+    )
+
+
 ExtraFieldBuilder = Callable[[Effect, BaseException | None, str], Any]
 
 
@@ -1106,6 +1154,13 @@ _failed_grep_search = _make_failed_handler(
         "invalid_query": lambda _e, err, _msg: isinstance(err, InvalidGrepSearchQueryError),
     },
 )
+_failed_text_replace_preview = _make_failed_handler(
+    TextReplacePreviewFailed,
+    extra_field_builders={
+        "invalid_query": lambda _e, err, _msg: isinstance(err, InvalidTextReplaceQueryError),
+    },
+)
+_failed_text_replace_apply = _make_failed_handler(TextReplaceApplyFailed)
 
 
 _RESULT_COMPLETE_HANDLERS: tuple[tuple[type[Any], CompleteActionHandler], ...] = (
@@ -1128,6 +1183,8 @@ _COMPLETE_ACTION_HANDLERS: tuple[tuple[type[Any], CompleteActionHandler], ...] =
     (RunShellCommandEffect, _complete_shell_command),
     (RunFileSearchEffect, _complete_file_search),
     (RunGrepSearchEffect, _complete_grep_search),
+    (RunTextReplacePreviewEffect, _complete_text_replace_preview),
+    (RunTextReplaceApplyEffect, _complete_text_replace_apply),
 )
 
 _FAILED_ACTION_HANDLERS: tuple[tuple[type[Any], FailureActionHandler], ...] = (
@@ -1146,6 +1203,8 @@ _FAILED_ACTION_HANDLERS: tuple[tuple[type[Any], FailureActionHandler], ...] = (
     (RunUndoEffect, _failed_undo),
     (RunFileSearchEffect, _failed_file_search),
     (RunGrepSearchEffect, _failed_grep_search),
+    (RunTextReplacePreviewEffect, _failed_text_replace_preview),
+    (RunTextReplaceApplyEffect, _failed_text_replace_apply),
 )
 
 

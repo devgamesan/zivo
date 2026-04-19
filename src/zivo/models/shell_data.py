@@ -43,6 +43,7 @@ class CurrentPaneSizeUpdate:
 
     path: str
     size_label: str
+    row_index: int = -1
 
 
 @dataclass(frozen=True)
@@ -51,6 +52,7 @@ class CurrentPaneRowUpdate:
 
     path: str
     entry: PaneEntry
+    row_index: int = -1
 
 
 @dataclass(frozen=True)
@@ -148,6 +150,7 @@ class InputBarState:
     mode_label: str
     prompt: str
     value: str
+    cursor_pos: int
     hint: str
 
 
@@ -222,6 +225,17 @@ class ShellCommandDialogState:
 
 
 @dataclass(frozen=True)
+class InputDialogState:
+    """Display data for the rename/create input dialog overlay."""
+
+    title: str
+    prompt: str
+    value: str
+    cursor_pos: int
+    hint: str
+
+
+@dataclass(frozen=True)
 class ThreePaneShellData:
     """Complete display state for the shell UI."""
 
@@ -243,6 +257,7 @@ class ThreePaneShellData:
     attribute_dialog: AttributeDialogState | None = None
     config_dialog: ConfigDialogState | None = None
     shell_command_dialog: ShellCommandDialogState | None = None
+    input_dialog: InputDialogState | None = None
 
 
 def build_dummy_shell_data() -> ThreePaneShellData:

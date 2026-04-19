@@ -26,11 +26,22 @@ class InputBar(Static):
 
         if state is None:
             return ""
-        value = state.value if state.value else "_"
         text = Text()
         text.append(f"[{state.mode_label}] ", style="bold reverse")
         text.append(state.prompt, style="bold")
-        text.append(value, style="underline")
+        if not state.value:
+            text.append("_", style="reverse")
+        else:
+            pos = state.cursor_pos
+            before = state.value[:pos]
+            at_cursor = state.value[pos] if pos < len(state.value) else None
+            after = state.value[pos + 1 :]
+            text.append(before, style="underline")
+            if at_cursor is not None:
+                text.append(at_cursor, style="reverse underline")
+                text.append(after, style="underline")
+            else:
+                text.append("_", style="reverse")
         text.append(f"  {state.hint}", style="dim")
         return text
 

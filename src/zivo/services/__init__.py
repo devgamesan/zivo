@@ -82,6 +82,12 @@ from .split_terminal import (
     SplitTerminalService,
     SplitTerminalSession,
 )
+from .text_replace import (
+    FakeTextReplaceService,
+    InvalidTextReplaceQueryError,
+    LiveTextReplaceService,
+    TextReplaceService,
+)
 from .trash_operations import (
     LinuxTrashService,
     MacOsTrashService,
@@ -144,6 +150,7 @@ __all__ = [
     "FakeSplitTerminalService",
     "SplitTerminalService",
     "SplitTerminalSession",
+    "TextReplaceService",
     "configure_file_logging",
     "default_extract_destination",
     "detect_archive_format",
@@ -163,6 +170,9 @@ __all__ = [
     "UnsupportedPlatformTrashService",
     "resolve_trash_service",
     "FakeUndoService",
+    "FakeTextReplaceService",
     "LiveUndoService",
+    "InvalidTextReplaceQueryError",
+    "LiveTextReplaceService",
     "UndoService",
 ]

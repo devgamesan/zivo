@@ -74,6 +74,8 @@ class CommandPalette(Container):
             if state.title.startswith("Find File")
             else "type text or re:pattern"
             if state.title.startswith("Grep")
+            else "type text or re:pattern"
+            if state.title.startswith("Replace Text")
             else "type a path"
             if state.title.startswith("Directory History") or state.title.startswith("Go to path")
             else "type a command"

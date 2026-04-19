@@ -51,7 +51,12 @@ Screen {
 }
 
 .pane-preview {
-    overflow: hidden hidden;
+    height: auto;
+}
+
+.pane-preview-scroll {
+    height: 1fr;
+    scrollbar-size: 1 1;
 }
 
 .pane-entry {
@@ -155,6 +160,14 @@ Screen {
 
 #config-dialog-layer {
     align-horizontal: center;
+}
+
+#input-dialog-layer {
+    align-horizontal: center;
+}
+
+.split-terminal-overlay-layer {
+    align: center middle;
 }
 
 .dialog-layer {
@@ -269,6 +282,32 @@ Screen {
     text-style: bold;
 }
 
+#input-dialog {
+    display: none;
+    height: auto;
+    min-height: 6;
+    margin: 0 2;
+    padding: 1 2;
+    border: round $accent;
+    background: $surface;
+}
+
+#input-dialog-title {
+    text-style: bold;
+    color: $accent;
+}
+
+#input-dialog-value {
+    margin: 1 0;
+}
+
+#input-dialog-hint {
+    padding: 0 1;
+    background: $boost;
+    color: $text-muted;
+    text-style: bold;
+}
+
 #split-terminal {
     display: none;
     height: 1fr;
@@ -299,6 +338,25 @@ Screen {
 }
 
 #split-terminal.split-terminal-right.-focused {
+    background: $boost;
+}
+
+#split-terminal.split-terminal-overlay {
+    display: none;
+    width: 1fr;
+    height: 1fr;
+    min-width: 20;
+    min-height: 6;
+    margin: 1 2;
+    border: round $surface;
+    background: $surface;
+}
+
+#split-terminal.split-terminal-overlay.-visible {
+    display: block;
+}
+
+#split-terminal.split-terminal-overlay.-focused {
     background: $boost;
 }
 

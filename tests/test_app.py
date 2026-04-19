@@ -8,10 +8,12 @@ from pathlib import Path
 import pytest
 from rich.style import Style
 from rich.text import Text
+from textual.containers import VerticalScroll
 from textual.css.query import NoMatches
 from textual.widgets import DataTable, Label, Static
 
 from zivo import create_app
+from zivo.app import _preview_scroll_delta
 from zivo.models import (
     AppConfig,
     BehaviorConfig,
@@ -27,6 +29,10 @@ from zivo.models import (
     PasteSummary,
     ShellCommandResult,
     TerminalConfig,
+    TextReplacePreviewEntry,
+    TextReplacePreviewResult,
+    TextReplaceRequest,
+    TextReplaceResult,
     UndoDeletePathStep,
     UndoEntry,
     UndoResult,
@@ -41,11 +47,13 @@ from zivo.services import (
     FakeGrepSearchService,
     FakeShellCommandService,
     FakeSplitTerminalService,
+    FakeTextReplaceService,
     FakeUndoService,
     LiveExternalLaunchService,
 )
 from zivo.state import (
     BrowserSnapshot,
+    CommandPaletteState,
     ConfigSaveCompleted,
     DirectoryEntryState,
     FileSearchResultState,
@@ -54,6 +62,7 @@ from zivo.state import (
     MoveCursor,
     PaneState,
     SetTerminalHeight,
+    build_initial_app_state,
 )
 from zivo.state.selectors import (
     compute_current_pane_visible_window,
@@ -70,6 +79,7 @@ from zivo.ui import (
     CurrentPathBar,
     HelpBar,
     InputBar,
+    InputDialog,
     ShellCommandDialog,
     SidePane,
     SplitTerminalPane,
@@ -222,6 +232,20 @@ async def _wait_for_context_input(app, timeout: float = 0.5) -> InputBar:
             if asyncio.get_running_loop().time() >= deadline:
                 raise
             await asyncio.sleep(0.01)
+
+
+async def _wait_for_input_dialog(app, timeout: float = 0.5) -> InputDialog:
+    deadline = asyncio.get_running_loop().time() + timeout
+    while True:
+        try:
+            dialog = app.query_one("#input-dialog", InputDialog)
+            if dialog.display:
+                return dialog
+        except NoMatches:
+            pass
+        if asyncio.get_running_loop().time() >= deadline:
+            raise
+        await asyncio.sleep(0.01)
 
 
 async def _wait_for_summary_bar(app, timeout: float = 0.5) -> SummaryBar:
@@ -980,10 +1004,62 @@ async def test_app_renders_text_preview_in_child_pane_for_file_cursor() -> None:
         await _wait_for_child_preview(app, "Preview: README.md", "# Title")
 
         child_list = app.query_one("#child-pane-list", Static)
-        child_preview = app.query_one("#child-pane-preview", Static)
+        child_preview_scroll = app.query_one("#child-pane-preview-scroll", VerticalScroll)
 
         assert child_list.display is False
-        assert child_preview.display is True
+        assert child_preview_scroll.display is True
+
+
+@pytest.mark.asyncio
+async def test_app_browsing_preview_scrolls_with_brackets() -> None:
+    path = str(Path("/tmp/zivo-preview-scroll").resolve())
+    readme = f"{path}/README.md"
+    preview_body = "\n".join(f"line {index:03d}" for index in range(160))
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: BrowserSnapshot(
+                current_path=path,
+                parent_pane=PaneState(
+                    directory_path="/tmp",
+                    entries=(
+                        DirectoryEntryState(path, "zivo-preview-scroll", "dir"),
+                        DirectoryEntryState("/tmp/sibling", "sibling", "dir"),
+                    ),
+                    cursor_path=path,
+                ),
+                current_pane=PaneState(
+                    directory_path=path,
+                    entries=(DirectoryEntryState(readme, "README.md", "file"),),
+                    cursor_path=readme,
+                ),
+                child_pane=PaneState(
+                    directory_path=path,
+                    entries=(),
+                    mode="preview",
+                    preview_path=readme,
+                    preview_content=preview_body,
+                ),
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test():
+        await _wait_for_snapshot_loaded(app, path)
+        await _wait_for_row_count(app, 1)
+        await _wait_for_child_preview(app, "Preview: README.md", "line 000")
+
+        child_preview_scroll = app.query_one("#child-pane-preview-scroll", VerticalScroll)
+        initial_scroll_y = child_preview_scroll.scroll_y
+
+        await app.action_dispatch_bound_key("]")
+        await asyncio.sleep(0.05)
+        assert child_preview_scroll.scroll_y > initial_scroll_y
+
+        scrolled_down_y = child_preview_scroll.scroll_y
+        await app.action_dispatch_bound_key("[")
+        await asyncio.sleep(0.05)
+        assert child_preview_scroll.scroll_y < scrolled_down_y
 
 
 @pytest.mark.asyncio
@@ -1028,10 +1104,10 @@ async def test_app_hides_text_preview_in_child_pane_when_preview_disabled() -> N
         await _wait_for_row_count(app, 1)
 
         child_list = app.query_one("#child-pane-list", Static)
-        child_preview = app.query_one("#child-pane-preview", Static)
+        child_preview_scroll = app.query_one("#child-pane-preview-scroll", VerticalScroll)
 
         assert child_list.display is True
-        assert child_preview.display is False
+        assert child_preview_scroll.display is False
 
 
 @pytest.mark.asyncio
@@ -2296,14 +2372,14 @@ async def test_app_default_viewport_projection_shifts_window_after_cursor_crosse
         for _ in range(visible_window):
             await pilot.press("down")
         await _wait_for_cursor_path(app, current_entries[visible_window].path, timeout=2.0)
-        await _wait_for_table_cell(app, "file_0001.txt", 0, 1, timeout=2.0)
+        await _wait_for_table_cell(app, "file_0002.txt", 0, 1, timeout=2.0)
 
         last_row = table.get_row_at(table.row_count - 1)
 
         assert table.row_count == visible_window
         assert isinstance(last_row[1], Text)
-        assert last_row[1].plain == f"file_{visible_window:04d}.txt"
-        assert app.app_state.current_pane_window_start == 1
+        assert last_row[1].plain == f"file_{visible_window + 1:04d}.txt"
+        assert app.app_state.current_pane_window_start == 2
 
 
 @pytest.mark.asyncio
@@ -2333,8 +2409,8 @@ async def test_app_default_viewport_projection_pages_and_jumps_without_losing_cu
             (MoveCursor(delta=visible_window, visible_paths=visible_paths),)
         )
         await _wait_for_cursor_path(app, current_entries[visible_window].path, timeout=2.0)
-        await _wait_for_table_cell(app, "file_0001.txt", 0, 1, timeout=2.0)
-        assert app.app_state.current_pane_window_start == 1
+        await _wait_for_table_cell(app, "file_0002.txt", 0, 1, timeout=2.0)
+        assert app.app_state.current_pane_window_start == 2
 
         await app.dispatch_actions(
             (MoveCursor(delta=-visible_window, visible_paths=visible_paths),)
@@ -2491,8 +2567,8 @@ async def test_app_displays_browsing_help_bar() -> None:
     app = create_app(snapshot_loader=loader, initial_path=path)
     expected_help = (
         "enter open | e edit | i info | space select | c copy | x cut | v paste | "
-        "r rename | z undo\n"
-        "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to\n"
+        "d delete | r rename | z undo\n"
+        "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to | [ ] preview\n"
         "n new-file | N new-dir | H history | b bookmarks | t term | : palette | q quit"
     )
 
@@ -2709,11 +2785,14 @@ async def test_app_command_palette_create_file_opens_context_input() -> None:
         await pilot.press("enter")
         await asyncio.sleep(0.05)
 
-        input_bar = await _wait_for_context_input(app)
+        input_dialog = await _wait_for_input_dialog(app)
 
         assert app.app_state.ui_mode == "CREATE"
-        assert input_bar.display is True
-        assert str(input_bar.renderable) == "[NEW FILE] New file: _  enter apply | esc cancel"
+        assert input_dialog.display is True
+        assert input_dialog.state is not None
+        assert input_dialog.state.title == "New File"
+        assert input_dialog.state.prompt == "New file: "
+        assert input_dialog.state.hint == "enter apply | esc cancel"
 
 
 @pytest.mark.asyncio
@@ -3346,17 +3425,59 @@ async def test_app_grep_search_passes_include_and_exclude_extensions(tmp_path) -
         await _wait_for_snapshot_loaded(app, path)
         await pilot.press("g")
         await pilot.press("t", "o", "d", "o")
-        await pilot.press("tab", "m", "d")
+        await pilot.press("tab", "tab", "m", "d")
         await pilot.press("tab", "l", "o", "g")
 
-        await _wait_for_request_count(grep_search_service, 1, timeout=1.0)
-        assert grep_search_service.executed_requests[-1] == (
+        expected_request = (
             path,
             "todo",
             ("*.md",),
             ("*.log",),
             False,
         )
+        deadline = asyncio.get_running_loop().time() + 1.0
+        while True:
+            if expected_request in grep_search_service.executed_requests:
+                break
+            if asyncio.get_running_loop().time() >= deadline:
+                raise AssertionError(
+                    "grep request with include/exclude filters was not executed"
+                )
+            await asyncio.sleep(0.01)
+
+
+@pytest.mark.asyncio
+async def test_app_grep_search_filters_results_by_filename(tmp_path) -> None:
+    path = str(tmp_path)
+    (tmp_path / "README.md").write_text("TODO: readme\n", encoding="utf-8")
+    (tmp_path / "notes.txt").write_text("TODO: notes\n", encoding="utf-8")
+    grep_search_service = FakeGrepSearchService(
+        results_by_query={
+            (path, "todo", (), (), False): (
+                GrepSearchResultState(
+                    path=f"{path}/README.md",
+                    display_path="README.md",
+                    line_number=1,
+                    line_text="TODO: readme",
+                ),
+                GrepSearchResultState(
+                    path=f"{path}/notes.txt",
+                    display_path="notes.txt",
+                    line_number=1,
+                    line_text="TODO: notes",
+                ),
+            )
+        }
+    )
+    app = create_app(grep_search_service=grep_search_service, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("g")
+        await pilot.press("t", "o", "d", "o")
+        await pilot.press("tab", "R", "E", "A", "D")
+
+        await _wait_for_request_count(grep_search_service, 1, timeout=1.0)
         assert app.app_state.command_palette is not None
         assert [
             result.display_label for result in app.app_state.command_palette.grep_search_results
@@ -3482,6 +3603,210 @@ async def test_app_command_palette_show_attributes_opens_read_only_dialog() -> N
         await asyncio.sleep(0.05)
 
         assert app.app_state.ui_mode == "BROWSING"
+
+
+@pytest.mark.asyncio
+async def test_app_command_palette_replace_text_previews_and_applies_selected_files() -> None:
+    path = str(Path("/tmp/zivo-command-palette-replace").resolve())
+    target_path = f"{path}/README.md"
+    second_target_path = f"{path}/docs.md"
+    current_entries = (
+        DirectoryEntryState(target_path, "README.md", "file"),
+        DirectoryEntryState(second_target_path, "docs.md", "file"),
+        DirectoryEntryState(f"{path}/docs", "docs", "dir"),
+    )
+    snapshot = _build_snapshot(path, current_entries)
+    preview_request_variants = (
+        TextReplaceRequest(
+            paths=(target_path,),
+            find_text="todo",
+            replace_text="done",
+        ),
+        TextReplaceRequest(
+            paths=(second_target_path,),
+            find_text="todo",
+            replace_text="done",
+        ),
+        TextReplaceRequest(
+            paths=(target_path, second_target_path),
+            find_text="todo",
+            replace_text="done",
+        ),
+        TextReplaceRequest(
+            paths=(second_target_path, target_path),
+            find_text="todo",
+            replace_text="done",
+        ),
+    )
+    preview_result = TextReplacePreviewResult(
+        request=TextReplaceRequest(
+            paths=(target_path, second_target_path),
+            find_text="todo",
+            replace_text="done",
+        ),
+        changed_entries=(
+            TextReplacePreviewEntry(
+                path=target_path,
+                diff_text=(
+                    f"--- {target_path}\n"
+                    f"+++ {target_path} (replaced)\n"
+                    "@@ -1,1 +1,1 @@\n"
+                    "-todo item\n"
+                    "+done item\n"
+                ),
+                match_count=2,
+                first_match_line_number=4,
+                first_match_before="todo item",
+                first_match_after="done item",
+            ),
+            TextReplacePreviewEntry(
+                path=second_target_path,
+                diff_text=(
+                    f"--- {second_target_path}\n"
+                    f"+++ {second_target_path} (replaced)\n"
+                    "@@ -1,1 +1,1 @@\n"
+                    "-todo second\n"
+                    "+done second\n"
+                ),
+                match_count=1,
+                first_match_line_number=2,
+                first_match_before="todo second",
+                first_match_after="done second",
+            ),
+        ),
+        total_match_count=3,
+        diff_text=(
+            f"--- {target_path}\n"
+            f"+++ {target_path} (replaced)\n"
+            "@@ -1,1 +1,1 @@\n"
+            "-todo item\n"
+            "+done item\n"
+            f"--- {second_target_path}\n"
+            f"+++ {second_target_path} (replaced)\n"
+            "@@ -1,1 +1,1 @@\n"
+            "-todo second\n"
+            "+done second\n"
+        ),
+    )
+    apply_result = TextReplaceResult(
+        request=TextReplaceRequest(
+            paths=(target_path, second_target_path),
+            find_text="todo",
+            replace_text="done",
+        ),
+        changed_paths=(target_path, second_target_path),
+        total_match_count=3,
+        message="Replaced 3 match(es) in 2 file(s)",
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: replace(
+                snapshot,
+                current_pane=replace(
+                    snapshot.current_pane,
+                    selected_paths=frozenset({target_path, second_target_path}),
+                ),
+            )
+        },
+    )
+    text_replace_service = FakeTextReplaceService(
+        preview_results={request: preview_result for request in preview_request_variants},
+        apply_results={request: apply_result for request in preview_request_variants},
+    )
+    app = create_app(
+        snapshot_loader=loader,
+        text_replace_service=text_replace_service,
+        initial_path=path,
+    )
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press(":")
+        await pilot.press("r", "e", "p", "l", "a", "c", "e")
+        await pilot.press("enter")
+        await pilot.press("t", "o", "d", "o")
+        await pilot.press("tab")
+        await pilot.press("d", "o", "n", "e")
+
+        await _wait_for_predicate(
+            lambda: len(text_replace_service.preview_requests) >= 1,
+            timeout=0.5,
+            message="text replace preview was not requested",
+        )
+        await _wait_for_predicate(
+            lambda: (
+                app.app_state.command_palette is not None
+                and len(app.app_state.command_palette.replace_preview_results) == 2
+            ),
+            timeout=0.5,
+            message="replace preview results did not appear",
+        )
+
+        palette_state = select_command_palette_state(app.app_state)
+        assert palette_state is not None
+        assert [item.label for item in palette_state.items] == [
+            "README.md (2): 4: todo item -> done item",
+            "docs.md (1): 2: todo second -> done second",
+        ]
+
+        child_pane = select_shell_data(app.app_state).child_pane
+        assert child_pane.preview_title == "Replace Preview"
+        assert child_pane.preview_content is not None
+        assert "--- " in child_pane.preview_content
+        assert "+++ " in child_pane.preview_content
+        assert "-todo item" in child_pane.preview_content
+        assert "+done item" in child_pane.preview_content
+        assert second_target_path not in child_pane.preview_content
+
+        await pilot.press("ctrl+n")
+
+        await _wait_for_predicate(
+            lambda: select_shell_data(app.app_state).child_pane.preview_path == second_target_path,
+            timeout=0.5,
+            message="replace preview did not move to second file",
+        )
+
+        second_child_pane = select_shell_data(app.app_state).child_pane
+        assert second_child_pane.preview_content is not None
+        assert "-todo second" in second_child_pane.preview_content
+        assert "+done second" in second_child_pane.preview_content
+
+        await pilot.press("enter")
+
+        await _wait_for_predicate(
+            lambda: len(text_replace_service.apply_requests) == 1,
+            timeout=0.5,
+            message="text replace apply was not requested",
+        )
+        await _wait_for_predicate(
+            lambda: (
+                app.app_state.notification is not None
+                and app.app_state.notification.message == "Replaced 3 match(es) in 2 file(s)"
+            ),
+            timeout=0.5,
+            message="replacement completion notification did not appear",
+        )
+        assert app.app_state.ui_mode == "BROWSING"
+
+
+@pytest.mark.parametrize(
+    "source",
+    (
+        "replace_text",
+        "replace_in_found_files",
+        "replace_in_grep_files",
+        "grep_replace_selected",
+    ),
+)
+def test_preview_scroll_delta_accepts_replace_preview_palette_sources(source: str) -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(source=source),
+    )
+
+    assert _preview_scroll_delta(state, "shift+up") == -20
+    assert _preview_scroll_delta(state, "shift+down") == 20
 
 
 @pytest.mark.asyncio
@@ -4190,6 +4515,52 @@ async def test_app_split_terminal_uses_half_of_body_height_when_visible() -> Non
 
 
 @pytest.mark.asyncio
+async def test_app_overlay_split_terminal_keeps_help_and_status_visible() -> None:
+    path = str(Path("/tmp/zivo-split-terminal-overlay").resolve())
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (
+                    DirectoryEntryState(f"{path}/docs", "docs", "dir"),
+                    DirectoryEntryState(f"{path}/README.md", "README.md", "file"),
+                ),
+                child_path=f"{path}/docs",
+            )
+        }
+    )
+    split_terminal_service = FakeSplitTerminalService()
+    app = create_app(
+        snapshot_loader=loader,
+        split_terminal_service=split_terminal_service,
+        app_config=AppConfig(
+            display=DisplayConfig(split_terminal_position="overlay"),
+        ),
+        initial_path=path,
+    )
+
+    async with app.run_test(size=(100, 30)) as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        child_pane = app.query_one("#child-pane", ChildPane)
+        body = app.query_one("#body")
+        help_bar = app.query_one("#help-bar", HelpBar)
+        status_bar = app.query_one("#status-bar", StatusBar)
+
+        await pilot.press("t")
+        await asyncio.sleep(0.05)
+
+        split_terminal = await _wait_for_split_terminal(app)
+        split_terminal_layer = app.query_one("#split-terminal-layer")
+
+        assert split_terminal.display is True
+        assert split_terminal_layer.display is True
+        assert child_pane.display is True
+        assert split_terminal.region.y > body.region.y
+        assert split_terminal.region.bottom < help_bar.region.y
+        assert help_bar.region.bottom <= status_bar.region.y
+
+
+@pytest.mark.asyncio
 async def test_app_split_terminal_focus_routes_input_to_session() -> None:
     path = str(Path("/tmp/zivo-split-terminal-input").resolve())
     loader = FakeBrowserSnapshotLoader(
@@ -4622,13 +4993,18 @@ async def test_app_sort_shortcuts_keep_side_panes_fixed_and_update_status_bar() 
         ),
     )
     loader = FakeBrowserSnapshotLoader(snapshots={path: snapshot})
-    app = create_app(snapshot_loader=loader, initial_path=path)
+    app = create_app(
+        snapshot_loader=loader,
+        initial_path=path,
+        app_config=AppConfig(
+            display=DisplayConfig(directories_first=False),
+        ),
+    )
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
         await _wait_for_row_count(app, 3)
 
-        await pilot.press("d")
         await pilot.press("s")
         await asyncio.sleep(0.05)
 
@@ -4677,7 +5053,7 @@ async def test_app_filter_mode_accepts_printable_bound_keys() -> None:
         assert app.app_state.ui_mode == "FILTER"
         assert app.app_state.filter.query == "yxp"
         assert current_table.show_cursor is False
-        assert str(input_bar.renderable) == "[FILTER] Filter: yxp  enter/down apply | esc clear"
+        assert str(input_bar.renderable) == "[FILTER] Filter: yxp_  enter/down apply | esc clear"
 
 
 @pytest.mark.asyncio
@@ -4739,7 +5115,7 @@ async def test_app_confirmed_filter_stays_visible_in_current_pane() -> None:
         assert app.app_state.filter.active is True
         assert app.app_state.filter.query == "docs"
         assert input_bar.display is True
-        assert str(input_bar.renderable) == "[FILTER] Filter: docs  esc clear"
+        assert str(input_bar.renderable) == "[FILTER] Filter: docs_  esc clear"
 
 
 @pytest.mark.asyncio
@@ -4772,7 +5148,7 @@ async def test_app_filter_down_confirms_and_returns_to_browsing() -> None:
         assert app.app_state.filter.active is True
         assert app.app_state.filter.query == "docs"
         assert input_bar.display is True
-        assert str(input_bar.renderable) == "[FILTER] Filter: docs  esc clear"
+        assert str(input_bar.renderable) == "[FILTER] Filter: docs_  esc clear"
 
 
 @pytest.mark.asyncio
@@ -4830,12 +5206,15 @@ async def test_app_rename_mode_shows_context_input_and_updates_help() -> None:
         await asyncio.sleep(0.05)
 
         help_bar = app.query_one("#help-bar", HelpBar)
-        input_bar = await _wait_for_context_input(app)
+        input_dialog = await _wait_for_input_dialog(app)
 
         assert app.app_state.ui_mode == "RENAME"
         assert str(help_bar.renderable) == "type name | enter apply | esc cancel"
-        assert input_bar.display is True
-        assert str(input_bar.renderable) == "[RENAME] Rename: docs  enter apply | esc cancel"
+        assert input_dialog.display is True
+        assert input_dialog.state is not None
+        assert input_dialog.state.title == "Rename"
+        assert input_dialog.state.prompt == "Rename: "
+        assert input_dialog.state.hint == "enter apply | esc cancel"
 
 
 @pytest.mark.asyncio
@@ -4863,11 +5242,15 @@ async def test_app_rename_name_conflict_dialog_returns_to_input(tmp_path) -> Non
         await pilot.press("enter")
         await asyncio.sleep(0.05)
 
-        input_bar = await _wait_for_context_input(app)
+        input_dialog = await _wait_for_input_dialog(app)
 
         assert app.app_state.ui_mode == "RENAME"
         assert dialog.display is False
-        assert str(input_bar.renderable) == "[RENAME] Rename: src  enter apply | esc cancel"
+        assert input_dialog.display is True
+        assert input_dialog.state is not None
+        assert input_dialog.state.title == "Rename"
+        assert input_dialog.state.prompt == "Rename: "
+        assert input_dialog.state.value == "src"
 
 
 @pytest.mark.asyncio
@@ -4882,13 +5265,15 @@ async def test_app_rename_round_trip_updates_status_bar(tmp_path) -> None:
         for _ in range(4):
             await pilot.press("backspace")
         await pilot.press("m", "a", "n", "u", "a", "l", "s", "enter")
-        await asyncio.sleep(0.1)
-
-        status_bar = await _wait_for_status_bar(app)
+        await _wait_for_predicate(
+            lambda: app.app_state.ui_mode == "BROWSING",
+            timeout=1.0,
+            message="rename did not return to browsing mode",
+        )
+        await _wait_for_status_message(app, "info: Renamed to manuals", timeout=1.0)
 
         assert (tmp_path / "manuals").is_dir()
         assert app.app_state.ui_mode == "BROWSING"
-        assert str(status_bar.renderable) == "info: Renamed to manuals"
 
 
 @pytest.mark.asyncio
@@ -4915,11 +5300,15 @@ async def test_app_create_name_conflict_dialog_returns_to_input(tmp_path) -> Non
         await pilot.press("escape")
         await asyncio.sleep(0.05)
 
-        input_bar = await _wait_for_context_input(app)
+        input_dialog = await _wait_for_input_dialog(app)
 
         assert app.app_state.ui_mode == "CREATE"
         assert dialog.display is False
-        assert str(input_bar.renderable) == "[NEW FILE] New file: docs  enter apply | esc cancel"
+        assert input_dialog.display is True
+        assert input_dialog.state is not None
+        assert input_dialog.state.title == "New File"
+        assert input_dialog.state.prompt == "New file: "
+        assert input_dialog.state.value == "docs"
 
 
 @pytest.mark.asyncio
@@ -5235,11 +5624,10 @@ async def test_app_main_flow_round_trip_on_live_filesystem(tmp_path) -> None:
         assert app.app_state.filter.active is False
 
         await pilot.press("s")
-        await pilot.press("d")
         await asyncio.sleep(0.05)
 
         summary_bar = await _wait_for_summary_bar(app)
-        assert str(summary_bar.renderable) == ("4 items | 0 selected | sort: name desc dirs:off")
+        assert str(summary_bar.renderable) == ("4 items | 0 selected | sort: name desc dirs:on")
 
 
 @pytest.mark.asyncio

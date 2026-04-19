@@ -72,7 +72,7 @@ class _RecordingTimer:
 class _RecordingSnapshotLoader:
     invalidated_paths: list[tuple[str, ...]] = field(default_factory=list)
     load_browser_snapshot_calls: list[tuple[str, str | None]] = field(default_factory=list)
-    load_child_pane_snapshot_calls: list[tuple[str, str | None]] = field(default_factory=list)
+    load_child_pane_snapshot_calls: list[tuple[str, str | None, int]] = field(default_factory=list)
 
     def invalidate_directory_listing_cache(self, paths: tuple[str, ...] = ()) -> None:
         self.invalidated_paths.append(paths)
@@ -89,8 +89,10 @@ class _RecordingSnapshotLoader:
         self,
         current_path: str,
         cursor_path: str | None,
+        *,
+        preview_max_bytes: int = 64 * 1024,
     ) -> PaneState:
-        self.load_child_pane_snapshot_calls.append((current_path, cursor_path))
+        self.load_child_pane_snapshot_calls.append((current_path, cursor_path, preview_max_bytes))
         return PaneState(directory_path=current_path, entries=())
 
 
@@ -432,10 +434,31 @@ def test_schedule_child_pane_snapshot_replaces_existing_timer() -> None:
     )
 
     assert existing_timer.stopped is True
-    assert app.set_timer_calls == []
-    assert app._child_pane_timer is None
+    assert len(app.set_timer_calls) == 1
+    assert app.set_timer_calls[0]["name"] == "child-pane-snapshot-debounce:5"
+    assert app._child_pane_timer is app.set_timer_calls[0]["timer"]
+    assert app.run_worker_calls == []
+
+
+def test_start_child_pane_snapshot_passes_preview_max_bytes_to_loader() -> None:
+    app = _RecordingApp(
+        _app_state=replace(build_initial_app_state(), pending_child_pane_request_id=5),
+    )
+    effect = LoadChildPaneSnapshotEffect(
+        request_id=5,
+        current_path="/tmp/project",
+        cursor_path="/tmp/project/README.md",
+        preview_max_bytes=128 * 1024,
+    )
+
+    start_child_pane_snapshot(app, effect)
+
     assert len(app.run_worker_calls) == 1
-    assert app.run_worker_calls[0]["name"] == "child-pane-snapshot:5"
+    worker_fn = app.run_worker_calls[0]["worker_fn"]
+    worker_fn()
+    assert app._snapshot_loader.load_child_pane_snapshot_calls == [
+        ("/tmp/project", "/tmp/project/README.md", 128 * 1024)
+    ]
 
 
 def test_cancel_pending_runtime_helpers_clear_active_tracking() -> None:

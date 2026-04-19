@@ -19,6 +19,8 @@ from zivo.models import (
     PasteRequest,
     PasteSummary,
     ShellCommandResult,
+    TextReplacePreviewResult,
+    TextReplaceResult,
     UndoEntry,
     UndoResult,
 )
@@ -27,10 +29,14 @@ from .models import (
     AppState,
     BrowserSnapshot,
     FileSearchResultState,
+    FindReplaceFieldId,
+    GrepReplaceFieldId,
+    GrepReplaceSelectedFieldId,
     GrepSearchFieldId,
     GrepSearchResultState,
     NotificationState,
     PaneState,
+    ReplaceFieldId,
     SortField,
     SplitTerminalFocusTarget,
     UiMode,
@@ -128,6 +134,30 @@ class BeginGoToPath:
 
 
 @dataclass(frozen=True)
+class BeginTextReplace:
+    """Open the command palette in text-replace mode for selected files."""
+
+    target_paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class BeginFindAndReplace:
+    """Open the command palette in find-and-replace mode."""
+
+
+@dataclass(frozen=True)
+class BeginGrepReplace:
+    """Open the command palette in grep-and-replace mode."""
+
+
+@dataclass(frozen=True)
+class BeginGrepReplaceSelected:
+    """Open the command palette in grep-and-replace-selected mode."""
+
+    target_paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class BeginCommandPalette:
     """Open the command palette."""
 
@@ -187,6 +217,66 @@ class SetGrepSearchField:
 @dataclass(frozen=True)
 class CycleGrepSearchField:
     """Move focus between grep-search input fields."""
+
+    delta: int
+
+
+@dataclass(frozen=True)
+class SetReplaceField:
+    """Update one text-replace input field."""
+
+    field: ReplaceFieldId
+    value: str
+
+
+@dataclass(frozen=True)
+class CycleReplaceField:
+    """Move focus between text-replace input fields."""
+
+    delta: int
+
+
+@dataclass(frozen=True)
+class SetFindReplaceField:
+    """Update one find-and-replace input field."""
+
+    field: FindReplaceFieldId
+    value: str
+
+
+@dataclass(frozen=True)
+class CycleFindReplaceField:
+    """Move focus between find-and-replace input fields."""
+
+    delta: int
+
+
+@dataclass(frozen=True)
+class SetGrepReplaceField:
+    """Update one grep-and-replace input field."""
+
+    field: GrepReplaceFieldId
+    value: str
+
+
+@dataclass(frozen=True)
+class CycleGrepReplaceField:
+    """Move focus between grep-and-replace input fields."""
+
+    delta: int
+
+
+@dataclass(frozen=True)
+class SetGrepReplaceSelectedField:
+    """Update one grep-replace-selected input field."""
+
+    field: GrepReplaceSelectedFieldId
+    value: str
+
+
+@dataclass(frozen=True)
+class CycleGrepReplaceSelectedField:
+    """Move focus between grep-replace-selected input fields."""
 
     delta: int
 
@@ -264,10 +354,63 @@ class GrepSearchFailed:
 
 
 @dataclass(frozen=True)
+class TextReplacePreviewCompleted:
+    """Apply completed text-replace preview results to the command palette."""
+
+    request_id: int
+    result: TextReplacePreviewResult
+
+
+@dataclass(frozen=True)
+class TextReplacePreviewFailed:
+    """Apply a terminal text-replace preview failure."""
+
+    request_id: int
+    message: str
+    invalid_query: bool = False
+
+
+@dataclass(frozen=True)
+class TextReplaceApplied:
+    """Apply a completed text replacement."""
+
+    request_id: int
+    result: TextReplaceResult
+
+
+@dataclass(frozen=True)
+class TextReplaceApplyFailed:
+    """Apply a terminal text-replace execution failure."""
+
+    request_id: int
+    message: str
+
+
+@dataclass(frozen=True)
 class SetPendingInputValue:
-    """Update the rename/create text input value."""
+    """Update the rename/create text input value and cursor position."""
 
     value: str
+    cursor_pos: int
+
+
+@dataclass(frozen=True)
+class MovePendingInputCursor:
+    """Move the pending input cursor by a relative delta."""
+
+    delta: int
+
+
+@dataclass(frozen=True)
+class SetPendingInputCursor:
+    """Set the pending input cursor to an absolute position."""
+
+    cursor_pos: int
+
+
+@dataclass(frozen=True)
+class DeletePendingInputForward:
+    """Delete the character at the cursor position (forward delete)."""
 
 
 @dataclass(frozen=True)
@@ -275,6 +418,19 @@ class SetShellCommandValue:
     """Update the pending shell command input."""
 
     command: str
+
+
+@dataclass(frozen=True)
+class SetPendingKeySequence:
+    """Store the currently active multi-key prefix."""
+
+    keys: tuple[str, ...]
+    possible_next_keys: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ClearPendingKeySequence:
+    """Clear the currently active multi-key prefix."""
 
 
 @dataclass(frozen=True)
@@ -447,11 +603,6 @@ class SendSplitTerminalInput:
     """Write input bytes into the active split terminal session."""
 
     data: str
-
-
-@dataclass(frozen=True)
-class PasteFromClipboardToTerminal:
-    """Paste clipboard contents into the active split terminal session."""
 
 
 @dataclass(frozen=True)
@@ -907,6 +1058,13 @@ class SetTerminalHeight:
     height: int
 
 
+@dataclass(frozen=True)
+class PasteIntoPendingInput:
+    """Paste clipboard text into the pending input value."""
+
+    text: str
+
+
 Action = (
     InitializeState
     | SetUiMode
@@ -921,6 +1079,9 @@ Action = (
     | BeginGrepSearch
     | BeginHistorySearch
     | BeginBookmarkSearch
+    | BeginTextReplace
+    | BeginFindAndReplace
+    | BeginGrepReplace
     | BeginCommandPalette
     | OpenNewTab
     | ActivateNextTab
@@ -931,7 +1092,15 @@ Action = (
     | MoveCommandPaletteCursor
     | SetCommandPaletteQuery
     | SetGrepSearchField
+    | SetReplaceField
     | CycleGrepSearchField
+    | CycleReplaceField
+    | SetFindReplaceField
+    | CycleFindReplaceField
+    | SetGrepReplaceField
+    | CycleGrepReplaceField
+    | SetGrepReplaceSelectedField
+    | CycleGrepReplaceSelectedField
     | SubmitCommandPalette
     | DismissConfigEditor
     | MoveConfigEditorCursor
@@ -942,8 +1111,17 @@ Action = (
     | FileSearchFailed
     | GrepSearchCompleted
     | GrepSearchFailed
+    | TextReplacePreviewCompleted
+    | TextReplacePreviewFailed
+    | TextReplaceApplied
+    | TextReplaceApplyFailed
     | SetPendingInputValue
+    | MovePendingInputCursor
+    | SetPendingInputCursor
+    | DeletePendingInputForward
     | SetShellCommandValue
+    | SetPendingKeySequence
+    | ClearPendingKeySequence
     | SubmitPendingInput
     | SubmitShellCommand
     | CancelPendingInput
@@ -971,7 +1149,6 @@ Action = (
     | ToggleSplitTerminal
     | FocusSplitTerminal
     | SendSplitTerminalInput
-    | PasteFromClipboardToTerminal
     | ToggleSelection
     | ToggleSelectionAndAdvance
     | ClearSelection
@@ -1033,4 +1210,5 @@ Action = (
     | ConfigSaveCompleted
     | ConfigSaveFailed
     | SetTerminalHeight
+    | PasteIntoPendingInput
 )

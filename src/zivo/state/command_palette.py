@@ -96,6 +96,30 @@ def get_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, ...]
             for index, path in enumerate(state.command_palette.go_to_path_candidates)
         )
 
+    if state.command_palette.source == "replace_in_grep_files":
+        return tuple(
+            CommandPaletteItem(
+                id=f"grf_preview_result:{index}",
+                label=result.display_label,
+                shortcut=None,
+                enabled=True,
+                path=result.path,
+            )
+            for index, result in enumerate(state.command_palette.grf_preview_results)
+        )
+
+    if state.command_palette.source == "grep_replace_selected":
+        return tuple(
+            CommandPaletteItem(
+                id=f"grs_preview_result:{index}",
+                label=result.display_label,
+                shortcut=None,
+                enabled=True,
+                path=result.path,
+            )
+            for index, result in enumerate(state.command_palette.grs_preview_results)
+        )
+
     query = state.command_palette.query
 
     return tuple(
@@ -112,6 +136,14 @@ def normalize_command_palette_cursor(state: AppState, cursor_index: int) -> int:
         item_count = len(state.command_palette.file_search_results)
     elif state.command_palette.source == "grep_search":
         item_count = len(state.command_palette.grep_search_results)
+    elif state.command_palette.source == "replace_text":
+        item_count = len(state.command_palette.replace_preview_results)
+    elif state.command_palette.source == "replace_in_found_files":
+        item_count = len(state.command_palette.rff_preview_results)
+    elif state.command_palette.source == "replace_in_grep_files":
+        item_count = len(state.command_palette.grf_preview_results)
+    elif state.command_palette.source == "grep_replace_selected":
+        item_count = len(state.command_palette.grs_preview_results)
     elif state.command_palette.source == "history":
         item_count = len(get_command_palette_items(state))
     else:
@@ -123,6 +155,7 @@ def normalize_command_palette_cursor(state: AppState, cursor_index: int) -> int:
 
 def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, ...]:
     target_paths = _select_target_paths(state)
+    replace_target_paths = _replace_target_file_paths(state)
     single_target_entry = _single_target_entry(state, target_paths)
     has_target = bool(target_paths)
     has_single_target = single_target_entry is not None
@@ -227,6 +260,30 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             shortcut="a",
             enabled=has_visible_entries,
         ),
+        CommandPaletteItem(
+            id="replace_text",
+            label="Replace text in selected files",
+            shortcut=None,
+            enabled=bool(replace_target_paths),
+        ),
+        CommandPaletteItem(
+            id="replace_in_found_files",
+            label="Replace text in found files",
+            shortcut=None,
+            enabled=True,
+        ),
+        CommandPaletteItem(
+            id="replace_in_grep_files",
+            label="Replace text in grep results",
+            shortcut=None,
+            enabled=True,
+        ),
+        CommandPaletteItem(
+            id="grep_replace_selected",
+            label="Grep and replace in selected files",
+            shortcut=None,
+            enabled=bool(replace_target_paths),
+        ),
     ]
 
     if has_single_target:
@@ -294,7 +351,7 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             CommandPaletteItem(
                 id="delete_targets",
                 label="Move to trash",
-                shortcut="Del",
+                shortcut="d",
                 enabled=True,
             )
         )
@@ -440,6 +497,21 @@ def _has_visible_current_entries(state: AppState) -> bool:
             continue
         return True
     return False
+
+
+def _replace_target_file_paths(state: AppState) -> tuple[str, ...]:
+    selected_paths = tuple(
+        entry.path
+        for entry in _active_current_entries(state)
+        if entry.path in state.current_pane.selected_paths and entry.kind == "file"
+    )
+    if state.current_pane.selected_paths:
+        return selected_paths
+
+    cursor_entry = _current_entry(state)
+    if cursor_entry is None or cursor_entry.kind != "file":
+        return ()
+    return (cursor_entry.path,)
 
 
 def _is_empty_trash_supported() -> bool:

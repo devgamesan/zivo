@@ -23,7 +23,7 @@ zivo aims to be usable by everyone without complex configuration, plugin install
 
 ## Features
 
-- Simple three-pane layout for parent / current / right panes. When the cursor is on a directory, the right pane shows its children. When the cursor is on a common text file, the right pane shows a syntax-highlighted text preview. You can navigate directories, multi-select items, copy, cut, paste, undo recent file operations, move items to trash, delete files, copy paths, rename, create files or directories, extract archives, create zip archives, search for files, run grep searches, and execute one-line shell commands entirely from the keyboard. Common actions stay visible in the help bar at the bottom.
+- Simple three-pane layout for parent / current / right panes. When the cursor is on a directory, the right pane shows its children. When the cursor is on a common text file, the right pane shows a syntax-highlighted text preview. You can navigate directories, multi-select items, copy, cut, paste, undo recent file operations, move items to trash, delete files, copy paths, rename, create files or directories, extract archives, create zip archives, replace text across selected files with a preview, replace text in files found by file search or grep search, search for files, run grep searches, and execute one-line shell commands entirely from the keyboard. Common actions stay visible in the help bar at the bottom.
 
   ![](docs/resources/screen-entire-screen.png)
 
@@ -31,21 +31,28 @@ zivo aims to be usable by everyone without complex configuration, plugin install
 
   ![](docs/resources/screen-command-palette.png)
 
-- The beginning of a text file can be previewed directly in the right pane, so you can quickly inspect the file without opening it.
+- The beginning of a text file can be previewed directly in the right pane, so you can quickly inspect the file without opening it. The preview size limit is configurable from `64 KiB` up to `1024 KiB`.
 
   ![](docs/resources/screen-text-preview.png)
 
 - Multiple tabs let you keep separate working directories open in one zivo session. You can open a new tab, switch to the next or previous tab, and close the current tab without leaving the TUI.
 
-- An embedded terminal can be opened below the browser panes. `t` switches quickly between the browser and terminal, and the terminal starts in the current directory so you can move between browsing and shell work without changing directories manually.
+- An embedded terminal can be opened below the browser panes, to the right, or as an overlay above the browser area. `t` switches quickly between the browser and terminal, and the terminal starts in the current directory so you can move between browsing and shell work without changing directories manually. See [Notes](#notes) for limitations.
 
+Bottom display:
   ![](docs/resources/screen-split-terminal.png)
+
+Right display:
+  ![](docs/resources/screen-split-terminal-right.png)
+
+Overlay display:
+  ![](docs/resources/screen-split-terminal-overlay.png)
 
 - Recursive file search makes it easy to jump to the file you want. Just type part of the name to instantly filter through thousands of files and reach your target without drilling through the directory tree manually. Search results also support file preview, making it easy to find what you are looking for.
 
   ![](docs/resources/screen-find-command.png)
 
-- Recursive grep search is available under the current directory. You can jump from search results directly to the matching file. Context lines around each match can be previewed, making it easy to find what you are looking for. You can also open the matching location directly in a terminal editor.
+- Recursive grep search is available under the current directory. You can jump from search results directly to the matching file. Context lines around each match can be previewed, making it easy to find what you are looking for. The palette now includes `Filter: Filename`, `Filter: Include`, and `Filter: Exclude` fields so you can narrow matches before opening them. You can also open the matching location directly in a terminal editor.
 
   ![](docs/resources/screen-grep-command.png)
 
@@ -68,7 +75,6 @@ zivo aims to be usable by everyone without complex configuration, plugin install
 - Multiple themes are available so you can choose your preferred look.
 
   ![](docs/resources/screen-theme1.png)
-
   ![](docs/resources/screen-theme2.png)
 
 - Files and directories can be opened with the OS default application. For example, you can open the current directory in the OS file manager, open a file in VS Code if it is associated on the OS side, or launch an external terminal window rooted at the current directory.
@@ -216,6 +222,8 @@ When a file is focused, press `e` to switch into a terminal editor in the curren
 | `r` | Rename selected item |
 | `n` | Create new file |
 | `N` | Create new directory |
+| `d` | Move selected items to trash |
+| `D` | Permanently delete selected items |
 | `Delete` | Move selected items to trash (fn + Delete on macOS) |
 | `Shift+Delete` | Permanently delete selected items (fn + Shift + Delete on macOS) |
 | `i` | Show file attributes |
@@ -231,7 +239,6 @@ When a file is focused, press `e` to switch into a terminal editor in the curren
 | `~` | Go to home directory |
 | `.` | Toggle hidden files |
 | `s` | Cycle sort |
-| `d` | Toggle directories-first |
 | `R` | Reload directory |
 | `t` | Toggle split terminal |
 | `T` | Open terminal at current directory |
@@ -242,15 +249,17 @@ When a file is focused, press `e` to switch into a terminal editor in the curren
 | `m` | Open current directory in file manager |
 | `:` | Open command palette |
 | `q` | Quit |
-| `[` | Go back in history |
-| `]` | Go forward in history |
+| `[` | Scroll the right-pane text preview up by a page |
+| `]` | Scroll the right-pane text preview down by a page |
+| `{` | Go back in history |
+| `}` | Go forward in history |
 
 ### Split Terminal Mode
 
 | Key | Action |
 | --- | ------ |
 | Any printable character | Send to terminal |
-| `Ctrl+v` | Paste from clipboard |
+| `Cmd+v` (macOS) / `Ctrl+shift+v` (Linux) | Paste from clipboard |
 | `Esc` | Close split terminal |
 
 ### Input Dialogs
@@ -291,6 +300,8 @@ When a file is focused, press `e` to switch into a terminal editor in the curren
 | --- | ------ |
 | Text input / `↑` / `↓` / `Ctrl+n` / `Ctrl+p` / `k` / `j` / `Enter` / `Esc` | Filter, select, run, or cancel commands. In `Find files` and `Grep search`, `j` / `k` are treated as text input and result navigation uses `↑` / `↓` or `Ctrl+n` / `Ctrl+p`. |
 
+When the `Replace text` preview is open in the right pane, `Shift+↑` / `Shift+↓` scroll that preview.
+
 ### Config Editor Mode
 
 | Key | Action |
@@ -327,7 +338,7 @@ The tab strip is only shown when two or more browser tabs are open.
 | `Previous tab` | Two or more tabs are open | Activates the previous browser tab. Also available with `shift+tab`. |
 | `Close current tab` | Two or more tabs are open | Closes the active browser tab. The last remaining tab cannot be closed. Also available with `w`. |
 | `Find files` | Always | Opens recursive file search. |
-| `Grep search` | Always | Opens recursive grep search (`ripgrep` / `rg` required on `PATH`). |
+| `Grep search` | Always | Opens recursive grep search (`ripgrep` / `rg` required on `PATH`) with keyword, filename, include-extension, and exclude-extension filters. |
 | `History search` | Always | Opens directory history list and jump to a selected directory. |
 | `Show bookmarks` | Always | Opens the saved bookmark list and jumps to the selected directory. |
 | `Go back` | Directory history has a previous entry | Moves to the previous directory in history. |
@@ -338,6 +349,10 @@ The tab strip is only shown when two or more browser tabs are open.
 | `Undo last file operation` | Undo history is not empty | Reverses the most recent undoable rename, paste, or trash operation. Also available with `z`. Trash restore is currently Linux-only. |
 | `Toggle split terminal` | Always | Opens or closes the embedded split terminal. |
 | `Select all` | Current directory has at least one visible entry | Selects every currently visible entry in the current directory, respecting hidden-file visibility and any active filter. |
+| `Replace text in selected files` | A file is focused or one or more files are selected in the current directory | Opens a two-field replacement palette for the selected files, or the focused file when nothing is explicitly selected. Matching files appear in the palette, `↑↓` and `Ctrl+n` / `Ctrl+p` move between them, and the right pane shows the selected file's diff before `Enter` applies the replacement. `Shift+↑` / `Shift+↓` scrolls the diff preview. |
+| `Replace text in found files` | Always | Opens a three-field replacement palette (filename, find, replace). Type a filename pattern to search for files, then type find/replace text to preview replacements. `Tab` / `Shift+Tab` cycle between fields. The right pane shows the diff preview, and `Enter` applies the replacement. |
+| `Replace text in grep results` | Always | Opens a five-field replacement palette (keyword, replace, filename filter, include extensions, exclude extensions). The keyword is both the grep search term and the text to replace. Type a keyword to grep search, then type a replacement to preview changes. Optional filename/include/exclude filters narrow which matched files are affected. `Tab` / `Shift+Tab` cycle between fields. The right pane shows the diff preview, and `Enter` applies the replacement. |
+| `Grep and replace in selected files` | A file is focused or one or more files are selected in the current directory | Opens a two-field replacement palette (keyword, replace) for the selected files, or the focused file when nothing is explicitly selected. The keyword searches within those files via grep, matching lines appear in the palette, and the right pane shows the selected file's diff before `Enter` applies the replacement. `Tab` / `Shift+Tab` cycle between fields. |
 | `Show attributes` | Exactly one target is selected or focused | Opens the read-only attribute dialog for the selected item. Also available with `i`. |
 | `Rename` | Exactly one target is selected or focused | Starts rename input for a single target. |
 | `Compress as zip` | At least one target is selected or focused | Starts zip compression for the selected items, or the focused item when nothing is selected. The destination input accepts absolute and relative paths resolved from the current directory, defaults to a `.zip` path next to the selected content, and asks for confirmation before overwriting an existing zip file. |
@@ -351,7 +366,7 @@ The tab strip is only shown when two or more browser tabs are open.
 | `Run shell command` | Always | Opens a one-line shell command dialog, runs the command in the current directory in the background, and returns the first output line or failure summary in the status bar. Also available with `!`. |
 | `Bookmark this directory` / `Remove bookmark` | Always | Saves or removes the current directory in `[bookmarks].paths`. The label reflects whether the current directory is already bookmarked. Also available with `B`. |
 | `Show hidden files` / `Hide hidden files` | Always | Toggles hidden-file visibility for the browser panes. The label reflects the current visibility state. Also available with `.`. |
-| `Edit config` | Always | Opens the settings overlay for startup defaults. You can edit the preferred terminal editor, hidden-file visibility, directory-size visibility, text preview visibility, theme, sorting, default paste-conflict behavior, and delete confirmation. Theme changes are previewed immediately. Use `↑` / `↓` or `Ctrl+n` / `Ctrl+p` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
+| `Edit config` | Always | Opens the settings overlay for startup defaults. You can edit the preferred terminal editor, hidden-file visibility, directory-size visibility, text preview visibility, preview size limit, theme, sorting, default paste-conflict behavior, and delete confirmation. Theme changes are previewed immediately. Use `↑` / `↓` or `Ctrl+n` / `Ctrl+p` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
 | `Create file` | Always | Starts the inline create-file flow in the current directory. |
 | `Create directory` | Always | Starts the inline create-directory flow in the current directory. |
 
@@ -378,10 +393,12 @@ The supported settings are:
 | `display` | `show_help_bar` | `true` / `false` | Shows the help bar at the bottom of the screen. Defaults to `true`. The help bar is always shown when the command palette or split terminal is open, regardless of this setting. |
 | `display` | `theme` | Any built-in Textual theme, for example `textual-dark`, `textual-light`, `dracula`, or `tokyo-night` | Default UI theme applied on startup. In the settings editor, theme changes are previewed immediately and are persisted when you save. |
 | `display` | `preview_syntax_theme` | `auto` or a supported Pygments style, for example `one-dark`, `xcode`, `nord`, or `gruvbox-dark` | Syntax-highlighting colors used by the right-pane text preview. `auto` keeps the current light/dark-based default selection. In the settings editor, changes are previewed immediately when a text preview is visible. |
+| `display` | `preview_max_kib` | `64` / `128` / `256` / `512` / `1024` | Maximum amount of text read for right-pane file previews and preview sampling. Defaults to `64`. Larger values allow deeper previews at the cost of more I/O. |
 | `display` | `default_sort_field` | `name` / `modified` / `size` | Default sort field for the main pane. |
 | `display` | `default_sort_descending` | `true` / `false` | Starts the main-pane sort in descending order when enabled. |
 | `display` | `directories_first` | `true` / `false` | Keeps directories grouped before files in the main pane. |
-| `behavior` | `confirm_delete` | `true` / `false` | Shows a confirmation dialog before moving items to trash. Permanent delete via `Shift+Delete` always asks for confirmation. |
+| `display` | `split_terminal_position` | `bottom` / `right` / `overlay` | Chooses where the embedded terminal opens. `overlay` keeps the help bar and status message visible while placing the terminal over the browser area with a margin. |
+| `behavior` | `confirm_delete` | `true` / `false` | Shows a confirmation dialog before moving items to trash. Permanent delete via `D` / `Shift+Delete` always asks for confirmation. |
 | `behavior` | `paste_conflict_action` | `prompt` / `overwrite` / `skip` / `rename` | Chooses the default paste-conflict behavior. `prompt` keeps the conflict dialog enabled. |
 | `logging` | `enabled` | `true` / `false` | Enables file output for startup failures and unhandled exceptions. |
 | `logging` | `level` | `DEBUG` / `INFO` / `WARNING` / `ERROR` / `CRITICAL` | Log level for file output. Defaults to `ERROR`. Requires app restart to take effect. |
@@ -406,6 +423,7 @@ show_preview = true
 show_help_bar = true
 theme = "textual-dark"
 preview_syntax_theme = "auto"
+preview_max_kib = 64
 default_sort_field = "name"
 default_sort_descending = false
 directories_first = true
@@ -438,6 +456,10 @@ The accepted `display.preview_syntax_theme` values are `auto` plus the Pygments 
 - On WSL, zivo prefers Windows-side bridges such as `wslview`, `explorer.exe`, and `clip.exe` when available, while keeping Linux-side fallbacks for WSLg and desktop Linux environments.
 - Behavior and keybindings may change in future revisions.
 - File mutations operate on the selected directory entry. If the selected item is a symlink, zivo mutates the symlink itself instead of silently following and mutating the link target.
+- The embedded split terminal uses [pyte](https://pyte.readthedocs.io/) for terminal emulation, which has the following limitations:
+  - TUI applications that use an alternate screen buffer (e.g. lazygit, htop, vim) generally do not work correctly.
+  - Certain escape sequences (DCS, OSC, and private SGR) are stripped during output sanitization, so features relying on them are unavailable.
+  - Mouse events are not forwarded, so mouse-driven applications cannot be used.
 
 ## Related Documents
 

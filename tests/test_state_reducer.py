@@ -18,6 +18,10 @@ from zivo.models import (
     PasteRequest,
     PasteSummary,
     RenameRequest,
+    TextReplacePreviewEntry,
+    TextReplacePreviewResult,
+    TextReplaceRequest,
+    TextReplaceResult,
     TrashRestoreRecord,
     UndoDeletePathStep,
     UndoEntry,
@@ -45,10 +49,14 @@ from zivo.state import (
     BeginExtractArchiveInput,
     BeginFileSearch,
     BeginFilterInput,
+    BeginFindAndReplace,
     BeginGoToPath,
+    BeginGrepReplace,
+    BeginGrepReplaceSelected,
     BeginGrepSearch,
     BeginHistorySearch,
     BeginRenameInput,
+    BeginTextReplace,
     BeginZipCompressInput,
     BrowserSnapshot,
     BrowserSnapshotFailed,
@@ -83,6 +91,8 @@ from zivo.state import (
     CurrentPaneDeltaState,
     CutTargets,
     CycleConfigEditorValue,
+    CycleFindReplaceField,
+    CycleReplaceField,
     DeleteConfirmationState,
     DirectoryEntryState,
     DirectorySizeCacheEntry,
@@ -130,8 +140,10 @@ from zivo.state import (
     PasteClipboard,
     PasteConflictState,
     PendingInputState,
+    PendingKeySequenceState,
     ReloadDirectory,
     RemoveBookmark,
+    ReplacePreviewResultState,
     RequestBrowserSnapshot,
     RequestDirectorySizes,
     ResolvePasteConflict,
@@ -144,6 +156,8 @@ from zivo.state import (
     RunFileMutationEffect,
     RunFileSearchEffect,
     RunGrepSearchEffect,
+    RunTextReplaceApplyEffect,
+    RunTextReplacePreviewEffect,
     RunUndoEffect,
     RunZipCompressEffect,
     RunZipCompressPreparationEffect,
@@ -153,9 +167,14 @@ from zivo.state import (
     SetCommandPaletteQuery,
     SetCursorPath,
     SetFilterQuery,
+    SetFindReplaceField,
+    SetGrepReplaceField,
+    SetGrepReplaceSelectedField,
     SetGrepSearchField,
     SetNotification,
     SetPendingInputValue,
+    SetPendingKeySequence,
+    SetReplaceField,
     SetSort,
     SetTerminalHeight,
     SetUiMode,
@@ -166,6 +185,10 @@ from zivo.state import (
     StartSplitTerminalEffect,
     SubmitCommandPalette,
     SubmitPendingInput,
+    TextReplaceApplied,
+    TextReplaceApplyFailed,
+    TextReplacePreviewCompleted,
+    TextReplacePreviewFailed,
     ToggleHiddenFiles,
     ToggleSelection,
     ToggleSelectionAndAdvance,
@@ -948,6 +971,7 @@ def test_begin_rename_input_sets_initial_value_from_target_name() -> None:
     assert next_state.pending_input == PendingInputState(
         prompt="Rename: ",
         value="docs",
+        cursor_pos=4,
         target_path="/home/tadashi/develop/zivo/docs",
     )
 
@@ -1032,6 +1056,7 @@ def test_submit_command_palette_runs_create_file_flow() -> None:
 
 def test_begin_extract_archive_input_sets_default_destination() -> None:
     archive_path = "/home/tadashi/develop/zivo/archive.tar.gz"
+    expected_value = str(Path("/home/tadashi/develop/zivo/archive").resolve())
     next_state = _reduce_state(
         build_initial_app_state(),
         BeginExtractArchiveInput(archive_path),
@@ -1040,13 +1065,15 @@ def test_begin_extract_archive_input_sets_default_destination() -> None:
     assert next_state.ui_mode == "EXTRACT"
     assert next_state.pending_input == PendingInputState(
         prompt="Extract to: ",
-        value=str(Path("/home/tadashi/develop/zivo/archive").resolve()),
+        value=expected_value,
+        cursor_pos=len(expected_value),
         extract_source_path=archive_path,
     )
 
 
 def test_begin_zip_compress_input_sets_default_destination() -> None:
     source_path = "/home/tadashi/develop/zivo/README.md"
+    expected_value = str(Path("/home/tadashi/develop/zivo/README.zip").resolve())
     next_state = _reduce_state(
         build_initial_app_state(),
         BeginZipCompressInput((source_path,)),
@@ -1055,7 +1082,8 @@ def test_begin_zip_compress_input_sets_default_destination() -> None:
     assert next_state.ui_mode == "ZIP"
     assert next_state.pending_input == PendingInputState(
         prompt="Compress to: ",
-        value=str(Path("/home/tadashi/develop/zivo/README.zip").resolve()),
+        value=expected_value,
+        cursor_pos=len(expected_value),
         zip_source_paths=(source_path,),
     )
 
@@ -1409,7 +1437,7 @@ def test_move_config_editor_cursor_clamps_to_visible_settings() -> None:
     next_state = _reduce_state(state, MoveConfigEditorCursor(delta=99))
 
     assert next_state.config_editor is not None
-    assert next_state.config_editor.cursor_index == 14
+    assert next_state.config_editor.cursor_index == 15
 
 
 def test_cycle_config_editor_editor_command_updates_draft_and_dirty_state() -> None:
@@ -1456,7 +1484,7 @@ def test_cycle_config_editor_split_terminal_position_updates_draft() -> None:
         config_editor=ConfigEditorState(
             path="/tmp/zivo/config.toml",
             draft=original_state.config,
-            cursor_index=11,
+            cursor_index=12,
         ),
     )
 
@@ -1464,6 +1492,31 @@ def test_cycle_config_editor_split_terminal_position_updates_draft() -> None:
 
     assert next_state.config_editor is not None
     assert next_state.config_editor.draft.display.split_terminal_position == "right"
+    assert next_state.config_editor.dirty is True
+
+
+def test_cycle_config_editor_split_terminal_position_reaches_overlay() -> None:
+    original_state = build_initial_app_state(config_path="/tmp/zivo/config.toml")
+    state = replace(
+        original_state,
+        ui_mode="CONFIG",
+        config_editor=ConfigEditorState(
+            path="/tmp/zivo/config.toml",
+            draft=replace(
+                original_state.config,
+                display=replace(
+                    original_state.config.display,
+                    split_terminal_position="right",
+                ),
+            ),
+            cursor_index=12,
+        ),
+    )
+
+    next_state = _reduce_state(state, CycleConfigEditorValue(delta=1))
+
+    assert next_state.config_editor is not None
+    assert next_state.config_editor.draft.display.split_terminal_position == "overlay"
     assert next_state.config_editor.dirty is True
 
 
@@ -1561,6 +1614,24 @@ def test_cycle_config_editor_preview_syntax_theme_updates_draft_and_dirty_state(
 
     assert next_state.config_editor is not None
     assert next_state.config_editor.draft.display.preview_syntax_theme == "abap"
+    assert next_state.config_editor.dirty is True
+
+
+def test_cycle_config_editor_preview_max_kib_updates_draft_and_dirty_state() -> None:
+    state = replace(
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
+        ui_mode="CONFIG",
+        config_editor=ConfigEditorState(
+            path="/tmp/zivo/config.toml",
+            draft=build_initial_app_state().config,
+            cursor_index=6,
+        ),
+    )
+
+    next_state = _reduce_state(state, CycleConfigEditorValue(delta=1))
+
+    assert next_state.config_editor is not None
+    assert next_state.config_editor.draft.display.preview_max_kib == 128
     assert next_state.config_editor.dirty is True
 
 
@@ -2489,6 +2560,97 @@ def test_set_grep_search_field_builds_include_and_exclude_globs() -> None:
     )
 
 
+def test_set_grep_search_filename_filter_updates_palette_and_requests_search() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = _reduce_state(state, SetCommandPaletteQuery("todo"))
+
+    result = reduce_app_state(state, SetGrepSearchField(field="filename", value="readme"))
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.grep_search_filename_filter == "readme"
+    assert result.effects == (
+        RunGrepSearchEffect(
+            request_id=2,
+            root_path="/home/tadashi/develop/zivo",
+            query="todo",
+            show_hidden=False,
+            include_globs=(),
+            exclude_globs=(),
+        ),
+    )
+
+
+def test_grep_search_completed_filters_results_by_filename() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grep_search_keyword="todo",
+            grep_search_filename_filter="readme",
+        ),
+        pending_grep_search_request_id=4,
+    )
+    results = (
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/README.md",
+            display_path="README.md",
+            line_number=1,
+            line_text="TODO",
+        ),
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/docs/guide.md",
+            display_path="docs/guide.md",
+            line_number=2,
+            line_text="TODO",
+        ),
+    )
+
+    result = reduce_app_state(
+        state,
+        GrepSearchCompleted(request_id=4, query="todo", results=results),
+    )
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.grep_search_results == (results[0],)
+    assert result.state.pending_grep_search_request_id is None
+
+
+def test_grep_search_completed_filters_results_by_filename_regex() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grep_search_keyword="todo",
+            grep_search_filename_filter="re:^docs/.+\\.md$",
+        ),
+        pending_grep_search_request_id=4,
+    )
+    results = (
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/README.md",
+            display_path="README.md",
+            line_number=1,
+            line_text="TODO",
+        ),
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/docs/guide.md",
+            display_path="docs/guide.md",
+            line_number=2,
+            line_text="TODO",
+        ),
+    )
+
+    result = reduce_app_state(
+        state,
+        GrepSearchCompleted(request_id=4, query="todo", results=results),
+    )
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.grep_search_results == (results[1],)
+
+
 def test_set_grep_search_field_rejects_conflicting_extensions() -> None:
     state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
     state = _reduce_state(state, SetCommandPaletteQuery("todo"))
@@ -2549,6 +2711,312 @@ def test_set_grep_search_field_clears_results_when_keyword_becomes_empty() -> No
     assert result.state.pending_grep_search_request_id is None
     assert result.state.pending_child_pane_request_id is None
     assert result.effects == ()
+
+
+def test_begin_text_replace_enters_replace_mode() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginTextReplace(target_paths=("/home/tadashi/develop/zivo/README.md",)),
+    )
+
+    assert state.ui_mode == "PALETTE"
+    assert state.command_palette is not None
+    assert state.command_palette.source == "replace_text"
+    assert state.command_palette.replace_target_paths == (
+        "/home/tadashi/develop/zivo/README.md",
+    )
+
+
+def test_set_replace_field_starts_preview_effect() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginTextReplace(target_paths=("/home/tadashi/develop/zivo/README.md",)),
+    )
+
+    result = reduce_app_state(state, SetReplaceField(field="find", value="todo"))
+
+    assert result.state.command_palette is not None
+    assert result.state.pending_replace_preview_request_id == 1
+    assert result.effects == (
+        RunTextReplacePreviewEffect(
+            request_id=1,
+            request=TextReplaceRequest(
+                paths=("/home/tadashi/develop/zivo/README.md",),
+                find_text="todo",
+                replace_text="",
+            ),
+        ),
+    )
+
+
+def test_cycle_replace_field_switches_active_input() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginTextReplace(target_paths=("/home/tadashi/develop/zivo/README.md",)),
+    )
+
+    next_state = _reduce_state(state, CycleReplaceField(delta=1))
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.replace_active_field == "replace"
+
+
+def test_text_replace_preview_completed_updates_palette_results() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginTextReplace(target_paths=("/home/tadashi/develop/zivo/README.md",)),
+    )
+    state = replace(
+        state,
+        pending_replace_preview_request_id=4,
+        command_palette=replace(
+            state.command_palette,
+            replace_find_text="todo",
+        ),
+    )
+
+    next_state = _reduce_state(
+        state,
+        TextReplacePreviewCompleted(
+            request_id=4,
+            result=TextReplacePreviewResult(
+                request=TextReplaceRequest(
+                    paths=("/home/tadashi/develop/zivo/README.md",),
+                    find_text="todo",
+                    replace_text="done",
+                ),
+                changed_entries=(
+                    TextReplacePreviewEntry(
+                        path="/home/tadashi/develop/zivo/README.md",
+                        diff_text="--- before\n+++ after\n@@\n-todo item\n+done item\n",
+                        match_count=2,
+                        first_match_line_number=12,
+                        first_match_before="todo item",
+                        first_match_after="done item",
+                    ),
+                ),
+                total_match_count=2,
+                diff_text="--- before\n+++ after\n@@\n-todo item\n+done item\n",
+            ),
+        ),
+    )
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.replace_total_match_count == 2
+    assert next_state.command_palette.replace_preview_results[0].display_path == "README.md"
+    assert next_state.command_palette.replace_preview_results[0].diff_text == (
+        "--- before\n+++ after\n@@\n-todo item\n+done item\n"
+    )
+    assert next_state.child_pane.preview_title == "Replace Preview"
+    assert next_state.child_pane.preview_content == (
+        "--- before\n+++ after\n@@\n-todo item\n+done item\n"
+    )
+    assert next_state.child_pane.preview_path == "/home/tadashi/develop/zivo/README.md"
+    assert next_state.pending_replace_preview_request_id is None
+
+
+def test_move_palette_cursor_updates_replace_preview_diff() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginTextReplace(
+            target_paths=(
+                "/home/tadashi/develop/zivo/README.md",
+                "/home/tadashi/develop/zivo/docs/notes.md",
+            )
+        ),
+    )
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            replace_preview_results=(
+                ReplacePreviewResultState(
+                    path="/home/tadashi/develop/zivo/README.md",
+                    display_path="README.md",
+                    diff_text="--- README\n+++ README\n@@\n-todo\n+done\n",
+                    match_count=1,
+                    first_match_line_number=1,
+                    first_match_before="todo",
+                    first_match_after="done",
+                ),
+                ReplacePreviewResultState(
+                    path="/home/tadashi/develop/zivo/docs/notes.md",
+                    display_path="docs/notes.md",
+                    diff_text="--- notes\n+++ notes\n@@\n-todo\n+done\n",
+                    match_count=1,
+                    first_match_line_number=2,
+                    first_match_before="todo",
+                    first_match_after="done",
+                ),
+            ),
+            replace_total_match_count=2,
+        ),
+        child_pane=PaneState(
+            directory_path=state.current_path,
+            entries=(),
+            mode="preview",
+            preview_path="/home/tadashi/develop/zivo/README.md",
+            preview_title="Replace Preview",
+            preview_content="--- README\n+++ README\n@@\n-todo\n+done\n",
+        ),
+    )
+
+    result = reduce_app_state(state, MoveCommandPaletteCursor(delta=1))
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.cursor_index == 1
+    assert result.state.child_pane.preview_path == "/home/tadashi/develop/zivo/docs/notes.md"
+    assert result.state.child_pane.preview_content == (
+        "--- notes\n+++ notes\n@@\n-todo\n+done\n"
+    )
+
+
+def test_text_replace_preview_failed_sets_inline_error_for_invalid_regex() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginTextReplace(target_paths=("/home/tadashi/develop/zivo/README.md",)),
+    )
+    state = replace(state, pending_replace_preview_request_id=4)
+
+    next_state = _reduce_state(
+        state,
+        TextReplacePreviewFailed(
+            request_id=4,
+            message="missing )",
+            invalid_query=True,
+        ),
+    )
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.replace_error_message == "missing )"
+    assert next_state.pending_replace_preview_request_id is None
+
+
+def test_submit_command_palette_applies_replace_when_preview_exists() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginTextReplace(target_paths=("/home/tadashi/develop/zivo/README.md",)),
+    )
+    state = replace(
+        state,
+        next_request_id=8,
+        command_palette=replace(
+            state.command_palette,
+            replace_find_text="todo",
+            replace_replacement_text="done",
+            replace_preview_results=(
+                ReplacePreviewResultState(
+                    path="/home/tadashi/develop/zivo/README.md",
+                    display_path="README.md",
+                    diff_text="--- before\n+++ after\n@@\n-todo item\n+done item\n",
+                    match_count=2,
+                    first_match_line_number=12,
+                    first_match_before="todo item",
+                    first_match_after="done item",
+                ),
+            ),
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.pending_replace_apply_request_id == 8
+    assert result.state.ui_mode == "BROWSING"
+    assert result.effects == (
+        RunTextReplaceApplyEffect(
+            request_id=8,
+            request=TextReplaceRequest(
+                paths=("/home/tadashi/develop/zivo/README.md",),
+                find_text="todo",
+                replace_text="done",
+            ),
+        ),
+    )
+
+
+def test_text_replace_applied_refreshes_current_directory() -> None:
+    state = replace(
+        build_initial_app_state(),
+        pending_replace_apply_request_id=6,
+        current_path="/home/tadashi/develop/zivo",
+        current_pane=replace(
+            build_initial_app_state().current_pane,
+            cursor_path="/home/tadashi/develop/zivo/README.md",
+        ),
+    )
+
+    result = reduce_app_state(
+        state,
+        TextReplaceApplied(
+            request_id=6,
+            result=TextReplaceResult(
+                request=TextReplaceRequest(
+                    paths=("/home/tadashi/develop/zivo/README.md",),
+                    find_text="todo",
+                    replace_text="done",
+                ),
+                changed_paths=("/home/tadashi/develop/zivo/README.md",),
+                total_match_count=3,
+                message="Replaced 3 match(es) in 1 file(s)",
+            ),
+        ),
+    )
+
+    assert result.state.post_reload_notification == NotificationState(
+        level="info",
+        message="Replaced 3 match(es) in 1 file(s)",
+    )
+    assert result.effects == (
+        LoadBrowserSnapshotEffect(
+            request_id=1,
+            path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/README.md",
+            blocking=True,
+            invalidate_paths=browser_snapshot_invalidation_paths(
+                "/home/tadashi/develop/zivo",
+                "/home/tadashi/develop/zivo/README.md",
+            ),
+        ),
+    )
+
+
+def test_text_replace_apply_failed_sets_error_notification() -> None:
+    state = replace(
+        build_initial_app_state(),
+        pending_replace_apply_request_id=3,
+    )
+
+    next_state = _reduce_state(
+        state,
+        TextReplaceApplyFailed(request_id=3, message="permission denied"),
+    )
+
+    assert next_state.pending_replace_apply_request_id is None
+    assert next_state.notification == NotificationState(
+        level="error",
+        message="permission denied",
+    )
+
+
+def test_run_replace_text_command_uses_cursor_file_when_nothing_is_selected() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = replace(
+        state,
+        command_palette=replace(state.command_palette, query="replace text"),
+        current_pane=replace(
+            state.current_pane,
+            selected_paths=frozenset(),
+            cursor_path="/home/tadashi/develop/zivo/README.md",
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.source == "replace_text"
+    assert result.state.command_palette.replace_target_paths == (
+        "/home/tadashi/develop/zivo/README.md",
+    )
 
 
 def test_set_command_palette_query_reuses_completed_file_search_results_for_prefix_extension(
@@ -3783,7 +4251,7 @@ def test_set_pending_input_value_updates_current_value() -> None:
         pending_input=PendingInputState(prompt="New file: ", value="", create_kind="file"),
     )
 
-    next_state = _reduce_state(state, SetPendingInputValue("notes.txt"))
+    next_state = _reduce_state(state, SetPendingInputValue("notes.txt", cursor_pos=8))
 
     assert next_state.pending_input is not None
     assert next_state.pending_input.value == "notes.txt"
@@ -5315,7 +5783,7 @@ def test_move_cursor_page_down_repositions_viewport_window() -> None:
     result = reduce_app_state(state, MoveCursor(delta=5, visible_paths=visible_paths))
 
     assert result.state.current_pane.cursor_path == entries[5].path
-    assert result.state.current_pane_window_start == 1
+    assert result.state.current_pane_window_start == 2
 
 
 def test_set_filter_query_resets_viewport_window_when_cursor_leaves_visible_entries() -> None:
@@ -5980,6 +6448,35 @@ def test_cancel_empty_trash_confirmation_returns_to_browsing() -> None:
     assert next_state.notification is None
 
 
+def test_set_pending_key_sequence_updates_state() -> None:
+    state = build_initial_app_state()
+
+    next_state = _reduce_state(
+        state,
+        SetPendingKeySequence(keys=("y",), possible_next_keys=("y",)),
+    )
+
+    assert next_state.pending_key_sequence == PendingKeySequenceState(
+        keys=("y",),
+        possible_next_keys=("y",),
+    )
+
+
+def test_begin_command_palette_clears_pending_key_sequence() -> None:
+    state = replace(
+        build_initial_app_state(),
+        pending_key_sequence=PendingKeySequenceState(
+            keys=("y",),
+            possible_next_keys=("y",),
+        ),
+    )
+
+    next_state = _reduce_state(state, BeginCommandPalette())
+
+    assert next_state.ui_mode == "PALETTE"
+    assert next_state.pending_key_sequence is None
+
+
 def test_confirm_empty_trash_shows_notification_on_success(monkeypatch) -> None:
     from unittest.mock import MagicMock
 
@@ -6129,3 +6626,902 @@ def test_submit_pending_input_allows_colon_in_name_on_linux(monkeypatch) -> None
     # Should proceed to emit a create effect (not blocked by colon validation)
     assert result.state.ui_mode == "BUSY"
     assert result.effects != ()
+
+
+# ---------------------------------------------------------------------------
+# Find-and-replace (replace_in_found_files) tests
+# ---------------------------------------------------------------------------
+
+
+def test_begin_find_and_replace_enters_rff_mode() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginFindAndReplace())
+
+    assert state.ui_mode == "PALETTE"
+    assert state.command_palette is not None
+    assert state.command_palette.source == "replace_in_found_files"
+    assert state.command_palette.rff_active_field == "filename"
+
+
+def test_set_rff_filename_field_starts_file_search() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginFindAndReplace())
+
+    result = reduce_app_state(state, SetFindReplaceField(field="filename", value="readme"))
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.rff_filename_query == "readme"
+    assert result.state.pending_file_search_request_id == 1
+    assert result.effects == (
+        RunFileSearchEffect(
+            request_id=1,
+            root_path="/home/tadashi/develop/zivo",
+            query="readme",
+            show_hidden=False,
+        ),
+    )
+
+
+def test_set_rff_filename_clear_triggers_no_search() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginFindAndReplace())
+
+    result = reduce_app_state(
+        state,
+        SetFindReplaceField(field="filename", value=""),
+    )
+
+    assert result.state.command_palette is not None
+    assert result.state.pending_file_search_request_id is None
+    assert result.effects == ()
+
+
+def test_set_rff_find_field_with_file_results_starts_preview() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginFindAndReplace())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            rff_filename_query="readme",
+            rff_file_results=(
+                FileSearchResultState(
+                    path="/home/tadashi/develop/zivo/README.md",
+                    display_path="README.md",
+                ),
+            ),
+        ),
+    )
+
+    result = reduce_app_state(state, SetFindReplaceField(field="find", value="todo"))
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.rff_find_text == "todo"
+    assert result.state.pending_replace_preview_request_id == 1
+    assert result.effects == (
+        RunTextReplacePreviewEffect(
+            request_id=1,
+            request=TextReplaceRequest(
+                paths=("/home/tadashi/develop/zivo/README.md",),
+                find_text="todo",
+                replace_text="",
+            ),
+        ),
+    )
+
+
+def test_set_rff_find_field_without_file_results_no_preview() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginFindAndReplace())
+
+    result = reduce_app_state(state, SetFindReplaceField(field="find", value="todo"))
+
+    assert result.state.command_palette is not None
+    assert result.state.pending_replace_preview_request_id is None
+    assert result.effects == ()
+
+
+def test_cycle_find_replace_field_cycles_through_three_fields() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginFindAndReplace())
+
+    assert state.command_palette is not None
+    assert state.command_palette.rff_active_field == "filename"
+
+    state = _reduce_state(state, CycleFindReplaceField(delta=1))
+    assert state.command_palette is not None
+    assert state.command_palette.rff_active_field == "find"
+
+    state = _reduce_state(state, CycleFindReplaceField(delta=1))
+    assert state.command_palette is not None
+    assert state.command_palette.rff_active_field == "replace"
+
+    state = _reduce_state(state, CycleFindReplaceField(delta=1))
+    assert state.command_palette is not None
+    assert state.command_palette.rff_active_field == "filename"
+
+
+def test_cycle_find_replace_field_reverse() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginFindAndReplace())
+
+    state = _reduce_state(state, CycleFindReplaceField(delta=-1))
+    assert state.command_palette is not None
+    assert state.command_palette.rff_active_field == "replace"
+
+
+def test_rff_file_search_completed_stores_results() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginFindAndReplace())
+    state = replace(
+        state,
+        pending_file_search_request_id=3,
+        command_palette=replace(
+            state.command_palette,
+            rff_filename_query="readme",
+        ),
+    )
+
+    next_state = _reduce_state(
+        state,
+        FileSearchCompleted(
+            request_id=3,
+            query="readme",
+            results=(
+                FileSearchResultState(
+                    path="/home/tadashi/develop/zivo/README.md",
+                    display_path="README.md",
+                ),
+            ),
+        ),
+    )
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.rff_file_results == (
+        FileSearchResultState(
+            path="/home/tadashi/develop/zivo/README.md",
+            display_path="README.md",
+        ),
+    )
+    assert next_state.pending_file_search_request_id is None
+
+
+def test_rff_file_search_completed_auto_triggers_preview_when_find_text_present() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginFindAndReplace())
+    state = replace(
+        state,
+        pending_file_search_request_id=3,
+        command_palette=replace(
+            state.command_palette,
+            rff_filename_query="readme",
+            rff_find_text="todo",
+        ),
+    )
+
+    result = reduce_app_state(
+        state,
+        FileSearchCompleted(
+            request_id=3,
+            query="readme",
+            results=(
+                FileSearchResultState(
+                    path="/home/tadashi/develop/zivo/README.md",
+                    display_path="README.md",
+                ),
+            ),
+        ),
+    )
+
+    assert result.state.pending_replace_preview_request_id is not None
+    assert len(result.effects) == 1
+    assert isinstance(result.effects[0], RunTextReplacePreviewEffect)
+
+
+def test_rff_preview_completed_stores_results() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginFindAndReplace())
+    state = replace(
+        state,
+        pending_replace_preview_request_id=4,
+        command_palette=replace(
+            state.command_palette,
+            rff_find_text="todo",
+            rff_replacement_text="done",
+            rff_file_results=(
+                FileSearchResultState(
+                    path="/home/tadashi/develop/zivo/README.md",
+                    display_path="README.md",
+                ),
+            ),
+        ),
+    )
+
+    next_state = _reduce_state(
+        state,
+        TextReplacePreviewCompleted(
+            request_id=4,
+            result=TextReplacePreviewResult(
+                request=TextReplaceRequest(
+                    paths=("/home/tadashi/develop/zivo/README.md",),
+                    find_text="todo",
+                    replace_text="done",
+                ),
+                changed_entries=(
+                    TextReplacePreviewEntry(
+                        path="/home/tadashi/develop/zivo/README.md",
+                        diff_text="-todo\n+done",
+                        match_count=1,
+                        first_match_line_number=5,
+                        first_match_before="todo",
+                        first_match_after="done",
+                    ),
+                ),
+                total_match_count=1,
+                diff_text="-todo\n+done",
+            ),
+        ),
+    )
+
+    assert next_state.command_palette is not None
+    assert next_state.command_palette.rff_total_match_count == 1
+    assert len(next_state.command_palette.rff_preview_results) == 1
+    assert next_state.command_palette.rff_preview_results[0].display_path == "README.md"
+    assert next_state.child_pane.preview_title == "Replace Preview"
+    assert next_state.pending_replace_preview_request_id is None
+
+
+def test_submit_rff_palette_warns_when_no_find_text() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginFindAndReplace())
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.notification == NotificationState(
+        level="warning",
+        message="Find text is required",
+    )
+
+
+def test_submit_rff_palette_warns_when_no_preview_results() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginFindAndReplace())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            rff_find_text="todo",
+            rff_file_results=(
+                FileSearchResultState(
+                    path="/home/tadashi/develop/zivo/README.md",
+                    display_path="README.md",
+                ),
+            ),
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.notification is not None
+    assert result.state.notification.level == "warning"
+
+
+def test_cancel_rff_returns_to_browsing() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginFindAndReplace())
+    assert state.ui_mode == "PALETTE"
+
+    state = _reduce_state(state, CancelCommandPalette())
+    assert state.ui_mode == "BROWSING"
+    assert state.command_palette is None
+
+
+# ---------------------------------------------------------------------------
+# Grep replace (grf) tests
+# ---------------------------------------------------------------------------
+
+
+def test_begin_grep_replace_enters_grf_mode() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepReplace())
+    assert state.ui_mode == "PALETTE"
+    assert state.command_palette is not None
+    assert state.command_palette.source == "replace_in_grep_files"
+    assert state.command_palette.grf_active_field == "keyword"
+
+
+def test_set_grf_keyword_field_starts_grep_search() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepReplace())
+    result = reduce_app_state(state, SetGrepReplaceField(field="keyword", value="todo"))
+
+    assert result.state.pending_grep_search_request_id is not None
+    assert result.state.command_palette.grf_keyword == "todo"
+    effects = [e for e in result.effects if isinstance(e, RunGrepSearchEffect)]
+    assert len(effects) == 1
+    assert effects[0].query == "todo"
+
+
+def test_set_grf_keyword_clear_triggers_no_search() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepReplace())
+    state = _reduce_state(state, SetGrepReplaceField(field="keyword", value="todo"))
+    result = reduce_app_state(state, SetGrepReplaceField(field="keyword", value=""))
+
+    assert result.state.pending_grep_search_request_id is None
+    assert result.state.command_palette.grf_grep_results == ()
+
+
+def test_set_grf_replace_field_with_grep_results_starts_preview() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepReplace())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grf_keyword="todo",
+            grf_grep_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/zivo/README.md",
+                    display_path="README.md",
+                    line_number=1,
+                    line_text="todo item",
+                ),
+            ),
+        ),
+    )
+    result = reduce_app_state(state, SetGrepReplaceField(field="replace", value="done"))
+
+    assert result.state.pending_replace_preview_request_id is not None
+    effects = [e for e in result.effects if isinstance(e, RunTextReplacePreviewEffect)]
+    assert len(effects) == 1
+    assert effects[0].request.paths == ("/home/tadashi/develop/zivo/README.md",)
+    assert effects[0].request.find_text == "todo"
+
+
+def test_set_grf_replace_field_without_grep_results_no_preview() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepReplace())
+    result = reduce_app_state(state, SetGrepReplaceField(field="replace", value="done"))
+
+    assert result.state.pending_replace_preview_request_id is None
+    assert result.state.command_palette.grf_preview_results == ()
+
+
+def test_grf_grep_search_completed_stores_results() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepReplace())
+    state = replace(
+        state,
+        command_palette=replace(state.command_palette, grf_keyword="todo"),
+        pending_grep_search_request_id=10,
+        next_request_id=11,
+    )
+    results = (
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/README.md",
+            display_path="README.md",
+            line_number=1,
+            line_text="todo item",
+        ),
+    )
+    result = reduce_app_state(
+        state, GrepSearchCompleted(request_id=10, query="todo", results=results)
+    )
+
+    assert result.state.command_palette.grf_grep_results == results
+    assert result.state.pending_grep_search_request_id is None
+
+
+def test_grf_grep_search_completed_auto_triggers_preview_when_replace_text_present() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepReplace())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grf_keyword="todo",
+            grf_replacement_text="done",
+        ),
+        pending_grep_search_request_id=10,
+        next_request_id=11,
+    )
+    results = (
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/README.md",
+            display_path="README.md",
+            line_number=1,
+            line_text="todo item",
+        ),
+    )
+    result = reduce_app_state(
+        state, GrepSearchCompleted(request_id=10, query="todo", results=results)
+    )
+
+    assert result.state.command_palette.grf_grep_results == results
+    assert result.state.pending_replace_preview_request_id is not None
+    effects = [e for e in result.effects if isinstance(e, RunTextReplacePreviewEffect)]
+    assert len(effects) == 1
+
+
+def test_grf_preview_completed_stores_results() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepReplace())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grf_keyword="todo",
+            grf_replacement_text="done",
+            grf_grep_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/zivo/README.md",
+                    display_path="README.md",
+                    line_number=1,
+                    line_text="todo item",
+                ),
+            ),
+        ),
+        pending_replace_preview_request_id=10,
+        next_request_id=11,
+    )
+    preview_result = TextReplacePreviewResult(
+        request=TextReplaceRequest(
+            paths=("/home/tadashi/develop/zivo/README.md",),
+            find_text="todo",
+            replace_text="done",
+        ),
+        changed_entries=(
+            TextReplacePreviewEntry(
+                path="/home/tadashi/develop/zivo/README.md",
+                diff_text="- todo + done",
+                match_count=1,
+                first_match_line_number=1,
+                first_match_before="todo",
+                first_match_after="done",
+            ),
+        ),
+        total_match_count=1,
+        skipped_paths=(),
+    )
+    result = reduce_app_state(
+        state, TextReplacePreviewCompleted(request_id=10, result=preview_result)
+    )
+
+    assert len(result.state.command_palette.grf_preview_results) == 1
+    assert result.state.command_palette.grf_total_match_count == 1
+    assert result.state.pending_replace_preview_request_id is None
+
+
+def test_submit_grf_palette_warns_when_no_replace_text() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepReplace())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grf_keyword="todo",
+            grf_grep_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/zivo/README.md",
+                    display_path="README.md",
+                    line_number=1,
+                    line_text="todo item",
+                ),
+            ),
+        ),
+    )
+    result = reduce_app_state(state, SubmitCommandPalette())
+    assert result.state.notification is not None
+    assert result.state.notification.level == "warning"
+
+
+def test_submit_grf_palette_warns_when_no_preview_results() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepReplace())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grf_keyword="todo",
+            grf_replacement_text="done",
+            grf_grep_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/zivo/README.md",
+                    display_path="README.md",
+                    line_number=1,
+                    line_text="todo item",
+                ),
+            ),
+        ),
+    )
+    result = reduce_app_state(state, SubmitCommandPalette())
+    assert result.state.notification is not None
+    assert result.state.notification.level == "warning"
+
+
+def test_cancel_grf_returns_to_browsing() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepReplace())
+    assert state.ui_mode == "PALETTE"
+
+    state = _reduce_state(state, CancelCommandPalette())
+    assert state.ui_mode == "BROWSING"
+    assert state.command_palette is None
+
+
+def test_submit_command_palette_begins_grep_replace() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery(query="replace text in grep"))
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.source == "replace_in_grep_files"
+
+
+def test_grf_grep_search_completed_deduplicates_file_paths() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepReplace())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grf_keyword="todo",
+            grf_replacement_text="done",
+        ),
+        pending_grep_search_request_id=10,
+        next_request_id=11,
+    )
+    results = (
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/README.md",
+            display_path="README.md",
+            line_number=1,
+            line_text="todo item 1",
+        ),
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/README.md",
+            display_path="README.md",
+            line_number=5,
+            line_text="todo item 2",
+        ),
+    )
+    result = reduce_app_state(
+        state, GrepSearchCompleted(request_id=10, query="todo", results=results)
+    )
+
+    effects = [e for e in result.effects if isinstance(e, RunTextReplacePreviewEffect)]
+    assert len(effects) == 1
+    assert effects[0].request.paths == ("/home/tadashi/develop/zivo/README.md",)
+
+
+# ---------------------------------------------------------------------------
+# Grep replace selected (grs) tests
+# ---------------------------------------------------------------------------
+
+
+def test_begin_grep_replace_selected_enters_grs_mode() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginGrepReplaceSelected(
+            target_paths=("/home/tadashi/develop/zivo/a.py", "/home/tadashi/develop/zivo/b.py")
+        ),
+    )
+    assert state.ui_mode == "PALETTE"
+    assert state.command_palette is not None
+    assert state.command_palette.source == "grep_replace_selected"
+    assert state.command_palette.grs_active_field == "keyword"
+    assert state.command_palette.grs_target_paths == (
+        "/home/tadashi/develop/zivo/a.py",
+        "/home/tadashi/develop/zivo/b.py",
+    )
+
+
+def test_set_grs_keyword_field_starts_grep_search() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginGrepReplaceSelected(target_paths=("/home/tadashi/develop/zivo/a.py",)),
+    )
+    result = reduce_app_state(
+        state, SetGrepReplaceSelectedField(field="keyword", value="todo")
+    )
+
+    assert result.state.pending_grep_search_request_id is not None
+    assert result.state.command_palette.grs_keyword == "todo"
+    effects = [e for e in result.effects if isinstance(e, RunGrepSearchEffect)]
+    assert len(effects) == 1
+    assert effects[0].query == "todo"
+
+
+def test_set_grs_keyword_clear_triggers_no_search() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginGrepReplaceSelected(target_paths=("/home/tadashi/develop/zivo/a.py",)),
+    )
+    state = _reduce_state(state, SetGrepReplaceSelectedField(field="keyword", value="todo"))
+    result = reduce_app_state(state, SetGrepReplaceSelectedField(field="keyword", value=""))
+
+    assert result.state.pending_grep_search_request_id is None
+    assert result.state.command_palette.grs_grep_results == ()
+
+
+def test_grs_grep_search_completed_filters_to_target_paths() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginGrepReplaceSelected(
+            target_paths=("/home/tadashi/develop/zivo/a.py", "/home/tadashi/develop/zivo/c.py")
+        ),
+    )
+    state = replace(
+        state,
+        command_palette=replace(state.command_palette, grs_keyword="todo"),
+        pending_grep_search_request_id=10,
+        next_request_id=11,
+    )
+    all_results = (
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/a.py",
+            display_path="a.py",
+            line_number=1,
+            line_text="todo in a",
+        ),
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/b.py",
+            display_path="b.py",
+            line_number=3,
+            line_text="todo in b",
+        ),
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/c.py",
+            display_path="c.py",
+            line_number=5,
+            line_text="todo in c",
+        ),
+    )
+    result = reduce_app_state(
+        state, GrepSearchCompleted(request_id=10, query="todo", results=all_results)
+    )
+
+    assert len(result.state.command_palette.grs_grep_results) == 2
+    assert result.state.command_palette.grs_grep_results[0].path == (
+        "/home/tadashi/develop/zivo/a.py"
+    )
+    assert result.state.command_palette.grs_grep_results[1].path == (
+        "/home/tadashi/develop/zivo/c.py"
+    )
+    assert result.state.pending_grep_search_request_id is None
+
+
+def test_grs_grep_search_completed_auto_triggers_preview_when_replace_text_present() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginGrepReplaceSelected(target_paths=("/home/tadashi/develop/zivo/a.py",)),
+    )
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grs_keyword="todo",
+            grs_replacement_text="done",
+        ),
+        pending_grep_search_request_id=10,
+        next_request_id=11,
+    )
+    results = (
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/a.py",
+            display_path="a.py",
+            line_number=1,
+            line_text="todo item",
+        ),
+    )
+    result = reduce_app_state(
+        state, GrepSearchCompleted(request_id=10, query="todo", results=results)
+    )
+
+    assert result.state.command_palette.grs_grep_results == results
+    assert result.state.pending_replace_preview_request_id is not None
+    effects = [e for e in result.effects if isinstance(e, RunTextReplacePreviewEffect)]
+    assert len(effects) == 1
+    assert effects[0].request.paths == ("/home/tadashi/develop/zivo/a.py",)
+
+
+def test_set_grs_replace_field_with_grep_results_starts_preview() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginGrepReplaceSelected(target_paths=("/home/tadashi/develop/zivo/a.py",)),
+    )
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grs_keyword="todo",
+            grs_grep_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/zivo/a.py",
+                    display_path="a.py",
+                    line_number=1,
+                    line_text="todo item",
+                ),
+            ),
+        ),
+    )
+    result = reduce_app_state(
+        state, SetGrepReplaceSelectedField(field="replace", value="done")
+    )
+
+    assert result.state.pending_replace_preview_request_id is not None
+    effects = [e for e in result.effects if isinstance(e, RunTextReplacePreviewEffect)]
+    assert len(effects) == 1
+    assert effects[0].request.paths == ("/home/tadashi/develop/zivo/a.py",)
+    assert effects[0].request.find_text == "todo"
+
+
+def test_set_grs_replace_field_without_grep_results_no_preview() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginGrepReplaceSelected(target_paths=("/home/tadashi/develop/zivo/a.py",)),
+    )
+    result = reduce_app_state(
+        state, SetGrepReplaceSelectedField(field="replace", value="done")
+    )
+
+    assert result.state.pending_replace_preview_request_id is None
+    assert result.state.command_palette.grs_preview_results == ()
+
+
+def test_grs_preview_completed_stores_results() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginGrepReplaceSelected(target_paths=("/home/tadashi/develop/zivo/a.py",)),
+    )
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grs_keyword="todo",
+            grs_replacement_text="done",
+            grs_grep_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/zivo/a.py",
+                    display_path="a.py",
+                    line_number=1,
+                    line_text="todo item",
+                ),
+            ),
+        ),
+        pending_replace_preview_request_id=10,
+        next_request_id=11,
+    )
+    preview_result = TextReplacePreviewResult(
+        request=TextReplaceRequest(
+            paths=("/home/tadashi/develop/zivo/a.py",),
+            find_text="todo",
+            replace_text="done",
+        ),
+        changed_entries=(
+            TextReplacePreviewEntry(
+                path="/home/tadashi/develop/zivo/a.py",
+                diff_text="- todo + done",
+                match_count=1,
+                first_match_line_number=1,
+                first_match_before="todo",
+                first_match_after="done",
+            ),
+        ),
+        total_match_count=1,
+        skipped_paths=(),
+    )
+    result = reduce_app_state(
+        state, TextReplacePreviewCompleted(request_id=10, result=preview_result)
+    )
+
+    assert len(result.state.command_palette.grs_preview_results) == 1
+    assert result.state.command_palette.grs_total_match_count == 1
+    assert result.state.pending_replace_preview_request_id is None
+
+
+def test_submit_grs_palette_applies_replacement() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginGrepReplaceSelected(target_paths=("/home/tadashi/develop/zivo/a.py",)),
+    )
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grs_keyword="todo",
+            grs_replacement_text="done",
+            grs_grep_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/zivo/a.py",
+                    display_path="a.py",
+                    line_number=1,
+                    line_text="todo item",
+                ),
+            ),
+            grs_preview_results=(
+                ReplacePreviewResultState(
+                    path="/home/tadashi/develop/zivo/a.py",
+                    display_path="a.py",
+                    diff_text="- todo + done",
+                    match_count=1,
+                    first_match_line_number=1,
+                    first_match_before="todo",
+                    first_match_after="done",
+                ),
+            ),
+            grs_total_match_count=1,
+        ),
+    )
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    effects = [e for e in result.effects if isinstance(e, RunTextReplaceApplyEffect)]
+    assert len(effects) == 1
+    assert effects[0].request.paths == ("/home/tadashi/develop/zivo/a.py",)
+    assert effects[0].request.find_text == "todo"
+    assert effects[0].request.replace_text == "done"
+    assert result.state.command_palette is None
+
+
+def test_submit_grs_palette_warns_when_no_keyword() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginGrepReplaceSelected(target_paths=("/home/tadashi/develop/zivo/a.py",)),
+    )
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.notification is not None
+    assert result.state.notification.level == "warning"
+
+
+def test_submit_grs_palette_warns_when_no_preview_results() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginGrepReplaceSelected(target_paths=("/home/tadashi/develop/zivo/a.py",)),
+    )
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grs_keyword="todo",
+            grs_replacement_text="done",
+            grs_grep_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/zivo/a.py",
+                    display_path="a.py",
+                    line_number=1,
+                    line_text="todo item",
+                ),
+            ),
+        ),
+    )
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.notification is not None
+    assert result.state.notification.level == "warning"
+
+
+def test_cancel_grs_returns_to_browsing() -> None:
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginGrepReplaceSelected(target_paths=("/home/tadashi/develop/zivo/a.py",)),
+    )
+    assert state.ui_mode == "PALETTE"
+
+    state = _reduce_state(state, CancelCommandPalette())
+    assert state.ui_mode == "BROWSING"
+    assert state.command_palette is None
+
+
+def test_grs_grep_search_completed_filters_non_target_results() -> None:
+    """Verify that grep results not in target_paths are excluded."""
+    state = _reduce_state(
+        build_initial_app_state(),
+        BeginGrepReplaceSelected(target_paths=("/home/tadashi/develop/zivo/a.py",)),
+    )
+    state = replace(
+        state,
+        command_palette=replace(state.command_palette, grs_keyword="todo"),
+        pending_grep_search_request_id=10,
+        next_request_id=11,
+    )
+    all_results = (
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/a.py",
+            display_path="a.py",
+            line_number=1,
+            line_text="todo in a",
+        ),
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/b.py",
+            display_path="b.py",
+            line_number=3,
+            line_text="todo in b",
+        ),
+    )
+    result = reduce_app_state(
+        state, GrepSearchCompleted(request_id=10, query="todo", results=all_results)
+    )
+
+    assert len(result.state.command_palette.grs_grep_results) == 1
+    assert result.state.command_palette.grs_grep_results[0].path == (
+        "/home/tadashi/develop/zivo/a.py"
+    )
+    # Preview is triggered even with empty replace text to show find matches
+    assert result.state.pending_replace_preview_request_id is not None

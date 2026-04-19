@@ -30,6 +30,7 @@ from .actions import (
     CancelPendingInput,
     CancelShellCommandInput,
     CancelZipCompressConfirmation,
+    ClearPendingKeySequence,
     ClearSelection,
     CloseCurrentTab,
     ConfirmArchiveExtract,
@@ -41,7 +42,12 @@ from .actions import (
     CopyTargets,
     CutTargets,
     CycleConfigEditorValue,
+    CycleFindReplaceField,
+    CycleGrepReplaceField,
+    CycleGrepReplaceSelectedField,
     CycleGrepSearchField,
+    CycleReplaceField,
+    DeletePendingInputForward,
     DismissAttributeDialog,
     DismissConfigEditor,
     DismissNameConflict,
@@ -57,6 +63,7 @@ from .actions import (
     MoveCursor,
     MoveCursorAndSelectRange,
     MoveCursorByPage,
+    MovePendingInputCursor,
     OpenFindResultInEditor,
     OpenGrepResultInEditor,
     OpenNewTab,
@@ -64,7 +71,6 @@ from .actions import (
     OpenPathWithDefaultApp,
     OpenTerminalAtPath,
     PasteClipboard,
-    PasteFromClipboardToTerminal,
     ReloadDirectory,
     RemoveBookmark,
     ResetHelpBarConfig,
@@ -74,9 +80,15 @@ from .actions import (
     SendSplitTerminalInput,
     SetCommandPaletteQuery,
     SetFilterQuery,
+    SetFindReplaceField,
+    SetGrepReplaceField,
+    SetGrepReplaceSelectedField,
     SetGrepSearchField,
     SetNotification,
+    SetPendingInputCursor,
     SetPendingInputValue,
+    SetPendingKeySequence,
+    SetReplaceField,
     SetShellCommandValue,
     SetSort,
     ShowAttributes,
@@ -89,7 +101,16 @@ from .actions import (
     UndoLastOperation,
 )
 from .command_palette import normalize_command_palette_cursor
-from .models import AppState, DirectoryEntryState, GrepSearchFieldId, NotificationState
+from .models import (
+    AppState,
+    DirectoryEntryState,
+    FindReplaceFieldId,
+    GrepReplaceFieldId,
+    GrepReplaceSelectedFieldId,
+    GrepSearchFieldId,
+    NotificationState,
+    ReplaceFieldId,
+)
 from .reducer_common import format_go_to_path_completion
 from .selectors import (
     compute_current_pane_visible_window,
@@ -113,6 +134,12 @@ class _BrowsingCtx:
 
 _BrowsingHandler = Callable[[AppState, _BrowsingCtx], DispatchedActions]
 
+
+def _noop_browsing_handler(_state: AppState, _ctx: _BrowsingCtx) -> DispatchedActions:
+    """Consume a browsing key that is handled elsewhere in the UI layer."""
+
+    return ()
+
 BROWSING_KEYMAP = {
     "up": "cursor_up",
     "shift+up": "cursor_up_selecting",
@@ -133,7 +160,8 @@ BROWSING_KEYMAP = {
     "!": "begin_shell_command",
     ":": "begin_command_palette",
     "s": "cycle_sort",
-    "d": "toggle_directories_first",
+    "d": "delete_targets",
+    "D": "permanent_delete_targets",
     "delete": "delete_targets",
     "shift+delete": "permanent_delete_targets",
     "e": "open_in_editor",
@@ -156,8 +184,10 @@ BROWSING_KEYMAP = {
     "G": "begin_go_to_path",
     "n": "create_file",
     "N": "create_dir",
-    "[": "go_back",
-    "]": "go_forward",
+    "[": "preview_pageup",
+    "]": "preview_pagedown",
+    "{": "go_back",
+    "}": "go_forward",
     "m": "open_file_manager",
     "T": "open_terminal",
     "home": "jump_cursor_start",
@@ -180,7 +210,6 @@ CONFLICT_KEYMAP = {
 TERMINAL_KEYMAP = {
     # Actions handled explicitly in _dispatch_split_terminal_input
     "tab": "terminal_tab",
-    "ctrl+v": "paste_from_clipboard",
     "ctrl+q": "close_terminal",
     # Keys handled via _TERMINAL_KEY_SEQUENCES (kept here for binding registration)
     "enter": "terminal_enter",
@@ -307,6 +336,7 @@ _TERMINAL_KEY_SEQUENCES: dict[str, str] = {
 
 PRINTABLE_BINDING_KEYS = tuple((*string.ascii_letters, *string.digits))
 PALETTE_EXTRA_KEYS = ("shift+tab",)
+_MULTI_KEY_COMMAND_DISPATCH: dict[tuple[str, ...], _BrowsingHandler] = {}
 
 
 def iter_bound_keys() -> tuple[str, ...]:
@@ -320,6 +350,13 @@ def iter_bound_keys() -> tuple[str, ...]:
                 *TERMINAL_KEYMAP.keys(),
                 *PRINTABLE_BINDING_KEYS,
                 *PALETTE_EXTRA_KEYS,
+                *tuple(
+                    dict.fromkeys(
+                        key
+                        for sequence in _MULTI_KEY_COMMAND_DISPATCH
+                        for key in sequence
+                    )
+                ),
             )
         )
     )
@@ -386,6 +423,10 @@ def _dispatch_browsing_input(
         target_paths=select_target_paths(state),
         filter_is_active=state.filter.active and bool(state.filter.query),
     )
+
+    if state.pending_key_sequence is not None:
+        return _dispatch_pending_multi_key_input(state, ctx, key=key)
+
     command = BROWSING_KEYMAP.get(key)
 
     if command is not None:
@@ -399,6 +440,10 @@ def _dispatch_browsing_input(
             return _supported(EnterCursorDirectory())
         if ctx.cursor_entry is not None and ctx.cursor_entry.kind == "file":
             return _supported(OpenPathWithDefaultApp(ctx.cursor_entry.path))
+
+    pending = _start_multi_key_sequence_if_supported(key)
+    if pending is not None:
+        return pending
 
     return ()
 
@@ -416,9 +461,6 @@ def _dispatch_split_terminal_input(
 
     if command == "close_terminal":
         return _supported(ToggleSplitTerminal())
-
-    if command == "paste_from_clipboard":
-        return _supported(PasteFromClipboardToTerminal())
 
     # Look up escape sequence for special keys (escape, arrows, F-keys, etc.)
     sequence = _TERMINAL_KEY_SEQUENCES.get(key)
@@ -442,7 +484,7 @@ def _dispatch_split_terminal_input(
 
 
 def _terminal_control_character(key: str) -> str | None:
-    if not key.startswith("ctrl+") or key in {"ctrl+v", "ctrl+q"}:
+    if not key.startswith("ctrl+") or key == "ctrl+q":
         return None
 
     suffix = key[5:]
@@ -459,9 +501,67 @@ def _active_grep_field_value(state: AppState) -> str:
     field = state.command_palette.grep_search_active_field
     if field == "keyword":
         return state.command_palette.grep_search_keyword or state.command_palette.query
+    if field == "filename":
+        return state.command_palette.grep_search_filename_filter
     if field == "include":
         return state.command_palette.grep_search_include_extensions
     return state.command_palette.grep_search_exclude_extensions
+
+
+def _active_replace_field_value(state: AppState) -> str:
+    if state.command_palette is None:
+        return ""
+    field = state.command_palette.replace_active_field
+    if field == "find":
+        return state.command_palette.replace_find_text
+    return state.command_palette.replace_replacement_text
+
+
+def _active_find_replace_field_value(state: AppState) -> str:
+    if state.command_palette is None:
+        return ""
+    field = state.command_palette.rff_active_field
+    if field == "filename":
+        return state.command_palette.rff_filename_query
+    if field == "find":
+        return state.command_palette.rff_find_text
+    return state.command_palette.rff_replacement_text
+
+
+def _active_grep_replace_field_value(state: AppState) -> str:
+    if state.command_palette is None:
+        return ""
+    field = state.command_palette.grf_active_field
+    if field == "keyword":
+        return state.command_palette.grf_keyword or state.command_palette.query
+    if field == "replace":
+        return state.command_palette.grf_replacement_text
+    if field == "filename":
+        return state.command_palette.grf_filename_filter
+    if field == "include":
+        return state.command_palette.grf_include_extensions
+    return state.command_palette.grf_exclude_extensions
+
+
+def _active_grep_replace_selected_field_value(state: AppState) -> str:
+    if state.command_palette is None:
+        return ""
+    field = state.command_palette.grs_active_field
+    if field == "keyword":
+        return state.command_palette.grs_keyword or state.command_palette.query
+    return state.command_palette.grs_replacement_text
+
+
+def _palette_extra_rows(palette_source: str | None) -> int:
+    if palette_source == "replace_in_found_files":
+        return 3
+    if palette_source == "replace_in_grep_files":
+        return 5
+    if palette_source == "grep_replace_selected":
+        return 2
+    if palette_source in {"grep_search", "replace_text"}:
+        return 2
+    return 0
 
 
 def _dispatch_command_palette_input(
@@ -504,6 +604,30 @@ def _dispatch_command_palette_input(
     if key == "shift+tab" and palette_source == "grep_search":
         return _supported(CycleGrepSearchField(delta=-1))
 
+    if key == "tab" and palette_source == "replace_text":
+        return _supported(CycleReplaceField(delta=1))
+
+    if key == "shift+tab" and palette_source == "replace_text":
+        return _supported(CycleReplaceField(delta=-1))
+
+    if key == "tab" and palette_source == "replace_in_found_files":
+        return _supported(CycleFindReplaceField(delta=1))
+
+    if key == "shift+tab" and palette_source == "replace_in_found_files":
+        return _supported(CycleFindReplaceField(delta=-1))
+
+    if key == "tab" and palette_source == "replace_in_grep_files":
+        return _supported(CycleGrepReplaceField(delta=1))
+
+    if key == "shift+tab" and palette_source == "replace_in_grep_files":
+        return _supported(CycleGrepReplaceField(delta=-1))
+
+    if key == "tab" and palette_source == "grep_replace_selected":
+        return _supported(CycleGrepReplaceSelectedField(delta=1))
+
+    if key == "shift+tab" and palette_source == "grep_replace_selected":
+        return _supported(CycleGrepReplaceSelectedField(delta=-1))
+
     if key == "up" or (key == "k" and not search_palette):
         return _supported(MoveCommandPaletteCursor(delta=-1))
 
@@ -517,12 +641,12 @@ def _dispatch_command_palette_input(
         return _supported(MoveCommandPaletteCursor(delta=-1))
 
     if key == "pageup":
-        extra_rows = 2 if palette_source == "grep_search" else 0
+        extra_rows = _palette_extra_rows(palette_source)
         visible = compute_search_visible_window(state.terminal_height, extra_rows=extra_rows)
         return _supported(MoveCommandPaletteCursor(delta=-visible))
 
     if key == "pagedown":
-        extra_rows = 2 if palette_source == "grep_search" else 0
+        extra_rows = _palette_extra_rows(palette_source)
         visible = compute_search_visible_window(state.terminal_height, extra_rows=extra_rows)
         return _supported(MoveCommandPaletteCursor(delta=visible))
 
@@ -543,6 +667,34 @@ def _dispatch_command_palette_input(
                     value=_active_grep_field_value(state)[:-1],
                 )
             )
+        if palette_source == "replace_text":
+            return _supported(
+                SetReplaceField(
+                    field=state.command_palette.replace_active_field,
+                    value=_active_replace_field_value(state)[:-1],
+                )
+            )
+        if palette_source == "replace_in_found_files":
+            return _supported(
+                SetFindReplaceField(
+                    field=state.command_palette.rff_active_field,
+                    value=_active_find_replace_field_value(state)[:-1],
+                )
+            )
+        if palette_source == "replace_in_grep_files":
+            return _supported(
+                SetGrepReplaceField(
+                    field=state.command_palette.grf_active_field,
+                    value=_active_grep_replace_field_value(state)[:-1],
+                )
+            )
+        if palette_source == "grep_replace_selected":
+            return _supported(
+                SetGrepReplaceSelectedField(
+                    field=state.command_palette.grs_active_field,
+                    value=_active_grep_replace_selected_field_value(state)[:-1],
+                )
+            )
         current_query = state.command_palette.query if state.command_palette is not None else ""
         return _supported(SetCommandPaletteQuery(current_query[:-1]))
 
@@ -561,6 +713,38 @@ def _dispatch_command_palette_input(
                     value=f"{_active_grep_field_value(state)}{character}",
                 )
             )
+        if palette_source == "replace_text":
+            active_field: ReplaceFieldId = state.command_palette.replace_active_field
+            return _supported(
+                SetReplaceField(
+                    field=active_field,
+                    value=f"{_active_replace_field_value(state)}{character}",
+                )
+            )
+        if palette_source == "replace_in_found_files":
+            active_field_rff: FindReplaceFieldId = state.command_palette.rff_active_field
+            return _supported(
+                SetFindReplaceField(
+                    field=active_field_rff,
+                    value=f"{_active_find_replace_field_value(state)}{character}",
+                )
+            )
+        if palette_source == "replace_in_grep_files":
+            active_field_grf: GrepReplaceFieldId = state.command_palette.grf_active_field
+            return _supported(
+                SetGrepReplaceField(
+                    field=active_field_grf,
+                    value=f"{_active_grep_replace_field_value(state)}{character}",
+                )
+            )
+        if palette_source == "grep_replace_selected":
+            active_field_grs: GrepReplaceSelectedFieldId = state.command_palette.grs_active_field
+            return _supported(
+                SetGrepReplaceSelectedField(
+                    field=active_field_grs,
+                    value=f"{_active_grep_replace_selected_field_value(state)}{character}",
+                )
+            )
         current_query = state.command_palette.query if state.command_palette is not None else ""
         return _supported(SetCommandPaletteQuery(f"{current_query}{character}"))
 
@@ -568,6 +752,18 @@ def _dispatch_command_palette_input(
         if state.command_palette is not None and state.command_palette.source == "grep_search":
             return _warn("Use Tab/Shift+Tab, type, arrows, Enter, Ctrl+e, or Esc")
         return _warn("Use arrows, type to filter, Enter, Ctrl+e for editor, or Esc")
+
+    if palette_source == "replace_text":
+        return _warn("Use Tab/Shift+Tab, type, arrows or Ctrl+n/p, Enter to apply, or Esc")
+
+    if palette_source == "replace_in_found_files":
+        return _warn("Use Tab/Shift+Tab, type, arrows or Ctrl+n/p, Enter to apply, or Esc")
+
+    if palette_source == "replace_in_grep_files":
+        return _warn("Use Tab/Shift+Tab, type, arrows or Ctrl+n/p, Enter to apply, or Esc")
+
+    if palette_source == "grep_replace_selected":
+        return _warn("Use Tab/Shift+Tab, type, arrows or Ctrl+n/p, Enter to apply, or Esc")
 
     return _warn("Use arrows, type to filter, Enter to run, or Esc to cancel")
 
@@ -645,7 +841,7 @@ def _dispatch_confirm_input(
     return _warn("Use o, s, r, or Esc while resolving paste conflicts")
 
 
-def _dispatch_pending_input(
+def _dispatch_input_dialog_input(
     state: AppState,
     *,
     key: str,
@@ -658,14 +854,42 @@ def _dispatch_pending_input(
         return _supported(SubmitPendingInput())
 
     if key == "backspace":
-        current_value = state.pending_input.value if state.pending_input is not None else ""
-        return _supported(SetPendingInputValue(current_value[:-1]))
+        pending = state.pending_input
+        if pending is None or pending.cursor_pos == 0:
+            return _supported()
+        pos = pending.cursor_pos
+        new_value = pending.value[: pos - 1] + pending.value[pos:]
+        return _supported(SetPendingInputValue(new_value, pos - 1))
+
+    if key == "delete":
+        return _supported(DeletePendingInputForward())
+
+    if key == "left":
+        return _supported(MovePendingInputCursor(delta=-1))
+
+    if key == "right":
+        return _supported(MovePendingInputCursor(delta=1))
+
+    if key == "home":
+        return _supported(SetPendingInputCursor(cursor_pos=0))
+
+    if key == "end":
+        pending = state.pending_input
+        end_pos = len(pending.value) if pending is not None else 0
+        return _supported(SetPendingInputCursor(cursor_pos=end_pos))
+
+    if key == "ctrl+v":
+        return _supported()  # handled by on_key in app.py
 
     if character and character.isprintable():
-        current_value = state.pending_input.value if state.pending_input is not None else ""
-        return _supported(SetPendingInputValue(f"{current_value}{character}"))
+        pending = state.pending_input
+        if pending is None:
+            return _supported()
+        pos = pending.cursor_pos
+        new_value = pending.value[:pos] + character + pending.value[pos:]
+        return _supported(SetPendingInputValue(new_value, pos + 1))
 
-    return _warn("Use Enter to apply or Esc to cancel")
+    return _warn("Use Enter to apply, Esc to cancel, or paste")
 
 
 def _dispatch_shell_command_input(
@@ -760,6 +984,81 @@ def _simple(action_cls: type[Action]) -> _BrowsingHandler:
 
 def _warn(message: str) -> DispatchedActions:
     return (SetNotification(NotificationState(level="warning", message=message)),)
+
+
+def _matching_multi_key_sequences(prefix: tuple[str, ...]) -> tuple[tuple[str, ...], ...]:
+    return tuple(
+        sequence
+        for sequence in _MULTI_KEY_COMMAND_DISPATCH
+        if len(sequence) >= len(prefix) and sequence[: len(prefix)] == prefix
+    )
+
+
+def _next_multi_key_steps(prefix: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            {
+                sequence[len(prefix)]
+                for sequence in _matching_multi_key_sequences(prefix)
+                if len(sequence) > len(prefix)
+            }
+        )
+    )
+
+
+def _start_multi_key_sequence_if_supported(key: str) -> DispatchedActions | None:
+    possible_next_keys = _next_multi_key_steps((key,))
+    if not possible_next_keys:
+        return None
+    return _supported(
+        SetPendingKeySequence(
+            keys=(key,),
+            possible_next_keys=possible_next_keys,
+        )
+    )
+
+
+def _insert_clear_pending_key_sequence(actions: DispatchedActions) -> DispatchedActions:
+    if not actions:
+        return (ClearPendingKeySequence(),)
+    if isinstance(actions[0], SetNotification):
+        return (actions[0], ClearPendingKeySequence(), *actions[1:])
+    return (ClearPendingKeySequence(), *actions)
+
+
+def _dispatch_pending_multi_key_input(
+    state: AppState,
+    ctx: _BrowsingCtx,
+    *,
+    key: str,
+) -> DispatchedActions:
+    prefix = state.pending_key_sequence.keys
+    if key == "escape":
+        return _supported(ClearPendingKeySequence())
+
+    next_prefix = (*prefix, key)
+    handler = _MULTI_KEY_COMMAND_DISPATCH.get(next_prefix)
+    if handler is not None:
+        return _insert_clear_pending_key_sequence(handler(state, ctx))
+
+    possible_next_keys = _next_multi_key_steps(next_prefix)
+    if possible_next_keys:
+        return _supported(
+            SetPendingKeySequence(
+                keys=next_prefix,
+                possible_next_keys=possible_next_keys,
+            )
+        )
+
+    return (
+        SetNotification(
+            NotificationState(
+                level="warning",
+                message=f"No multi-key command matches {''.join(next_prefix)!r}",
+            )
+        ),
+        ClearPendingKeySequence(),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -891,18 +1190,6 @@ def _handle_cycle_sort(state: AppState, _ctx: _BrowsingCtx) -> DispatchedActions
     return _supported(_next_sort_action(state))
 
 
-def _handle_toggle_directories_first(
-    state: AppState, _ctx: _BrowsingCtx
-) -> DispatchedActions:
-    return _supported(
-        SetSort(
-            field=state.sort.field,
-            descending=state.sort.descending,
-            directories_first=not state.sort.directories_first,
-        )
-    )
-
-
 def _handle_delete_targets(_state: AppState, ctx: _BrowsingCtx) -> DispatchedActions:
     if not ctx.target_paths:
         return _warn("Nothing to delete")
@@ -974,6 +1261,8 @@ _BROWSING_PARAM_DISPATCH: dict[str, _BrowsingHandler] = {
     "create_dir": _handle_create_dir,
     "open_terminal": _handle_open_terminal,
     "open_file_manager": _handle_open_file_manager,
+    "preview_pageup": _noop_browsing_handler,
+    "preview_pagedown": _noop_browsing_handler,
 }
 
 _BROWSING_COMPLEX_DISPATCH: dict[str, _BrowsingHandler] = {
@@ -984,7 +1273,6 @@ _BROWSING_COMPLEX_DISPATCH: dict[str, _BrowsingHandler] = {
     "toggle_bookmark": _handle_toggle_bookmark,
     "begin_rename": _handle_begin_rename,
     "cycle_sort": _handle_cycle_sort,
-    "toggle_directories_first": _handle_toggle_directories_first,
     "delete_targets": _handle_delete_targets,
     "permanent_delete_targets": _handle_permanent_delete_targets,
     "open_in_editor": _handle_open_in_editor,
@@ -1042,7 +1330,7 @@ _MODE_DISPATCHERS = (
     (lambda state: state.ui_mode == "PALETTE", _dispatch_command_palette_input),
     (
         lambda state: state.ui_mode in {"RENAME", "CREATE", "EXTRACT", "ZIP"},
-        _dispatch_pending_input,
+        _dispatch_input_dialog_input,
     ),
     (lambda state: state.ui_mode == "SHELL", _dispatch_shell_command_input),
     # デフォルト（BROWSING）

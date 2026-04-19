@@ -1,5 +1,6 @@
 from dataclasses import replace
 
+import zivo.state.input as input_module
 from zivo.models import AppConfig, BookmarkConfig, CreateZipArchiveRequest
 from zivo.state import (
     ActivateNextTab,
@@ -21,6 +22,7 @@ from zivo.state import (
     CancelPasteConflict,
     CancelPendingInput,
     CancelZipCompressConfirmation,
+    ClearPendingKeySequence,
     ClearSelection,
     CloseCurrentTab,
     CommandPaletteState,
@@ -32,6 +34,7 @@ from zivo.state import (
     CopyTargets,
     CutTargets,
     CycleConfigEditorValue,
+    CycleFindReplaceField,
     CycleGrepSearchField,
     DeleteConfirmationState,
     DismissAttributeDialog,
@@ -47,6 +50,7 @@ from zivo.state import (
     MoveConfigEditorCursor,
     MoveCursor,
     MoveCursorAndSelectRange,
+    MovePendingInputCursor,
     NameConflictState,
     NotificationState,
     OpenFindResultInEditor,
@@ -56,6 +60,7 @@ from zivo.state import (
     OpenPathWithDefaultApp,
     PasteClipboard,
     PendingInputState,
+    PendingKeySequenceState,
     ReloadDirectory,
     RemoveBookmark,
     ResolvePasteConflict,
@@ -64,9 +69,11 @@ from zivo.state import (
     SendSplitTerminalInput,
     SetCommandPaletteQuery,
     SetFilterQuery,
+    SetFindReplaceField,
     SetGrepSearchField,
     SetNotification,
     SetPendingInputValue,
+    SetPendingKeySequence,
     SetSort,
     ShowAttributes,
     SubmitCommandPalette,
@@ -153,6 +160,8 @@ def test_iter_bound_keys_includes_printable_text_input_keys() -> None:
     assert "shift+up" in keys
     assert "shift+down" in keys
     assert "shift+delete" in keys
+    assert "{" in keys
+    assert "}" in keys
 
 
 def test_browsing_j_dispatches_move_cursor() -> None:
@@ -188,6 +197,108 @@ def test_browsing_k_dispatches_move_cursor() -> None:
             "/home/tadashi/develop/zivo/pyproject.toml",
             "/home/tadashi/develop/zivo/README.md",
         ),
+    )
+
+
+def test_browsing_prefix_key_starts_multi_key_sequence(monkeypatch) -> None:
+    monkeypatch.setattr(
+        input_module,
+        "_MULTI_KEY_COMMAND_DISPATCH",
+        {
+            ("y", "y"): lambda _state, ctx: (
+                SetNotification(None),
+                CopyTargets(ctx.target_paths),
+            )
+        },
+    )
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="y", character="y")
+
+    assert actions == (
+        SetNotification(None),
+        SetPendingKeySequence(keys=("y",), possible_next_keys=("y",)),
+    )
+
+
+def test_browsing_prefix_key_completion_dispatches_handler(monkeypatch) -> None:
+    monkeypatch.setattr(
+        input_module,
+        "_MULTI_KEY_COMMAND_DISPATCH",
+        {
+            ("y", "y"): lambda _state, ctx: (
+                SetNotification(None),
+                CopyTargets(ctx.target_paths),
+            )
+        },
+    )
+    state = replace(
+        build_initial_app_state(),
+        pending_key_sequence=PendingKeySequenceState(
+            keys=("y",),
+            possible_next_keys=("y",),
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="y", character="y")
+
+    assert actions == (
+        SetNotification(None),
+        ClearPendingKeySequence(),
+        CopyTargets(("/home/tadashi/develop/zivo/docs",)),
+    )
+
+
+def test_browsing_prefix_key_escape_clears_sequence(monkeypatch) -> None:
+    monkeypatch.setattr(
+        input_module,
+        "_MULTI_KEY_COMMAND_DISPATCH",
+        {
+            ("y", "y"): lambda _state, ctx: (
+                SetNotification(None),
+                CopyTargets(ctx.target_paths),
+            )
+        },
+    )
+    state = replace(
+        build_initial_app_state(),
+        pending_key_sequence=PendingKeySequenceState(
+            keys=("y",),
+            possible_next_keys=("y",),
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="escape")
+
+    assert actions == (SetNotification(None), ClearPendingKeySequence())
+
+
+def test_browsing_prefix_key_invalid_followup_warns_and_clears(monkeypatch) -> None:
+    monkeypatch.setattr(
+        input_module,
+        "_MULTI_KEY_COMMAND_DISPATCH",
+        {
+            ("y", "y"): lambda _state, ctx: (
+                SetNotification(None),
+                CopyTargets(ctx.target_paths),
+            )
+        },
+    )
+    state = replace(
+        build_initial_app_state(),
+        pending_key_sequence=PendingKeySequenceState(
+            keys=("y",),
+            possible_next_keys=("y",),
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="x", character="x")
+
+    assert actions == (
+        SetNotification(
+            NotificationState(level="warning", message="No multi-key command matches 'yx'")
+        ),
+        ClearPendingKeySequence(),
     )
 
 
@@ -741,6 +852,25 @@ def test_grep_palette_printable_key_updates_include_field() -> None:
     )
 
 
+def test_grep_palette_printable_key_updates_filename_field() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="grep_search",
+            grep_search_active_field="filename",
+            grep_search_filename_filter="READ",
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="m", character="m")
+
+    assert actions == (
+        SetNotification(None),
+        SetGrepSearchField(field="filename", value="READm"),
+    )
+
+
 def test_commands_palette_j_key_moves_cursor() -> None:
     state = replace(
         build_initial_app_state(),
@@ -870,6 +1000,40 @@ def test_palette_ctrl_p_moves_cursor_up_in_file_search_palette() -> None:
         command_palette=CommandPaletteState(
             source="file_search",
             query="test",
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="ctrl+p")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=-1))
+
+
+def test_palette_ctrl_n_moves_cursor_down_in_replace_palette() -> None:
+    from zivo.state.models import CommandPaletteState
+
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="replace_text",
+            replace_find_text="todo",
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="ctrl+n")
+
+    assert actions == (SetNotification(None), MoveCommandPaletteCursor(delta=1))
+
+
+def test_palette_ctrl_p_moves_cursor_up_in_replace_palette() -> None:
+    from zivo.state.models import CommandPaletteState
+
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="replace_text",
+            replace_find_text="todo",
         ),
     )
 
@@ -1103,14 +1267,28 @@ def test_browsing_s_cycles_from_name_desc_to_modified_desc() -> None:
     )
 
 
-def test_browsing_d_toggles_directories_first() -> None:
+def test_browsing_d_dispatches_delete_targets() -> None:
     state = build_initial_app_state()
 
     actions = dispatch_key_input(state, key="d", character="d")
 
     assert actions == (
         SetNotification(None),
-        SetSort(field="name", descending=False, directories_first=False),
+        BeginDeleteTargets(("/home/tadashi/develop/zivo/docs",)),
+    )
+
+
+def test_browsing_d_warns_when_no_target_exists() -> None:
+    state = build_initial_app_state()
+    state = replace(
+        state,
+        current_pane=replace(state.current_pane, entries=(), cursor_path=None),
+    )
+
+    actions = dispatch_key_input(state, key="d", character="d")
+
+    assert actions == (
+        SetNotification(NotificationState(level="warning", message="Nothing to delete")),
     )
 
 
@@ -1147,6 +1325,33 @@ def test_browsing_shift_delete_dispatches_permanent_delete_targets() -> None:
     assert actions == (
         SetNotification(None),
         BeginDeleteTargets(("/home/tadashi/develop/zivo/docs",), mode="permanent"),
+    )
+
+
+def test_browsing_uppercase_D_dispatches_permanent_delete_targets() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="D", character="D")
+
+    assert actions == (
+        SetNotification(None),
+        BeginDeleteTargets(("/home/tadashi/develop/zivo/docs",), mode="permanent"),
+    )
+
+
+def test_browsing_uppercase_D_warns_when_no_target_exists() -> None:
+    state = build_initial_app_state()
+    state = replace(
+        state,
+        current_pane=replace(state.current_pane, entries=(), cursor_path=None),
+    )
+
+    actions = dispatch_key_input(state, key="D", character="D")
+
+    assert actions == (
+        SetNotification(
+            NotificationState(level="warning", message="Nothing to permanently delete")
+        ),
     )
 
 
@@ -1503,12 +1708,12 @@ def test_rename_character_dispatches_input_update() -> None:
     state = replace(
         state,
         ui_mode="RENAME",
-        pending_input=PendingInputState(prompt="Rename: ", value="doc"),
+        pending_input=PendingInputState(prompt="Rename: ", value="doc", cursor_pos=3),
     )
 
     actions = dispatch_key_input(state, key="s", character="s")
 
-    assert actions == (SetNotification(None), SetPendingInputValue("docs"))
+    assert actions == (SetNotification(None), SetPendingInputValue("docs", cursor_pos=4))
 
 
 def test_create_space_dispatches_input_update() -> None:
@@ -1516,12 +1721,14 @@ def test_create_space_dispatches_input_update() -> None:
     state = replace(
         state,
         ui_mode="CREATE",
-        pending_input=PendingInputState(prompt="New file: ", value="new", create_kind="file"),
+        pending_input=PendingInputState(
+            prompt="New file: ", value="new", cursor_pos=3, create_kind="file"
+        ),
     )
 
     actions = dispatch_key_input(state, key="space", character=" ")
 
-    assert actions == (SetNotification(None), SetPendingInputValue("new "))
+    assert actions == (SetNotification(None), SetPendingInputValue("new ", cursor_pos=4))
 
 
 def test_zip_enter_dispatches_submit_pending_input() -> None:
@@ -1547,13 +1754,14 @@ def test_zip_printable_character_dispatches_input_update() -> None:
         pending_input=PendingInputState(
             prompt="Compress to: ",
             value="/tmp/output",
+            cursor_pos=11,
             zip_source_paths=("/home/tadashi/develop/zivo/docs",),
         ),
     )
 
     actions = dispatch_key_input(state, key="z", character="z")
 
-    assert actions == (SetNotification(None), SetPendingInputValue("/tmp/outputz"))
+    assert actions == (SetNotification(None), SetPendingInputValue("/tmp/outputz", cursor_pos=12))
 
 
 def test_pending_input_backspace_updates_value() -> None:
@@ -1561,12 +1769,12 @@ def test_pending_input_backspace_updates_value() -> None:
     state = replace(
         state,
         ui_mode="RENAME",
-        pending_input=PendingInputState(prompt="Rename: ", value="docs"),
+        pending_input=PendingInputState(prompt="Rename: ", value="docs", cursor_pos=4),
     )
 
     actions = dispatch_key_input(state, key="backspace")
 
-    assert actions == (SetNotification(None), SetPendingInputValue("doc"))
+    assert actions == (SetNotification(None), SetPendingInputValue("doc", cursor_pos=3))
 
 
 def test_pending_input_enter_submits() -> None:
@@ -1590,16 +1798,12 @@ def test_pending_input_unbound_key_shows_guidance() -> None:
     state = replace(
         state,
         ui_mode="RENAME",
-        pending_input=PendingInputState(prompt="Rename: ", value="docs"),
+        pending_input=PendingInputState(prompt="Rename: ", value="docs", cursor_pos=4),
     )
 
     actions = dispatch_key_input(state, key="left")
 
-    assert actions == (
-        SetNotification(
-            NotificationState(level="warning", message="Use Enter to apply or Esc to cancel")
-        ),
-    )
+    assert actions == (SetNotification(None), MovePendingInputCursor(delta=-1))
 
 
 def test_busy_key_shows_warning_message() -> None:
@@ -1657,20 +1861,38 @@ def test_browsing_capital_G_begins_go_to_path() -> None:
     assert isinstance(actions[1], BeginGoToPath)
 
 
-def test_browsing_open_bracket_dispatches_go_back() -> None:
+def test_browsing_open_bracket_is_reserved_for_preview_scroll() -> None:
     state = build_initial_app_state()
 
     actions = dispatch_key_input(state, key="[")
 
-    assert actions == (SetNotification(None), GoBack())
+    assert actions == ()
 
 
-def test_browsing_close_bracket_dispatches_go_forward() -> None:
+def test_browsing_close_bracket_is_reserved_for_preview_scroll() -> None:
     state = build_initial_app_state()
 
     actions = dispatch_key_input(state, key="]")
 
+    assert actions == ()
+
+
+def test_browsing_open_brace_dispatches_go_back() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="{")
+
+    assert actions == (SetNotification(None), GoBack())
+
+
+def test_browsing_close_brace_dispatches_go_forward() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="}")
+
     assert actions == (SetNotification(None), GoForward())
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -1780,3 +2002,93 @@ def test_split_terminal_iter_bound_keys_includes_new_keys() -> None:
     assert "ctrl+up" in keys
     assert "shift+left" in keys
     assert "ctrl+shift+right" in keys
+
+
+# ---------------------------------------------------------------------------
+# Find-and-replace (replace_in_found_files) input tests
+# ---------------------------------------------------------------------------
+
+
+def test_palette_tab_cycles_rff_fields() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(source="replace_in_found_files"),
+    )
+
+    actions = dispatch_key_input(state, key="tab")
+
+    assert actions == (
+        SetNotification(None),
+        CycleFindReplaceField(delta=1),
+    )
+
+
+def test_palette_shift_tab_cycles_rff_fields_reverse() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(source="replace_in_found_files"),
+    )
+
+    actions = dispatch_key_input(state, key="shift+tab")
+
+    assert actions == (
+        SetNotification(None),
+        CycleFindReplaceField(delta=-1),
+    )
+
+
+def test_palette_printable_key_updates_rff_filename_field() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="replace_in_found_files",
+            rff_active_field="filename",
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="r", character="r")
+
+    assert actions == (
+        SetNotification(None),
+        SetFindReplaceField(field="filename", value="r"),
+    )
+
+
+def test_palette_printable_key_updates_rff_find_field() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="replace_in_found_files",
+            rff_active_field="find",
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="t", character="t")
+
+    assert actions == (
+        SetNotification(None),
+        SetFindReplaceField(field="find", value="t"),
+    )
+
+
+def test_palette_backspace_updates_rff_field() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="replace_in_found_files",
+            rff_active_field="find",
+            rff_find_text="todo",
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="backspace")
+
+    assert actions == (
+        SetNotification(None),
+        SetFindReplaceField(field="find", value="tod"),
+    )

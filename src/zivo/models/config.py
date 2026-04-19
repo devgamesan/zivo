@@ -6,9 +6,10 @@ from typing import Literal
 from zivo.theme_support import AUTO_PREVIEW_SYNTAX_THEME, DEFAULT_APP_THEME
 
 ConfigSortField = Literal["name", "modified", "size"]
-SplitTerminalPosition = Literal["bottom", "right"]
+SplitTerminalPosition = Literal["bottom", "right", "overlay"]
 ConfigTheme = str
 PreviewSyntaxTheme = str
+PreviewMaxKiB = Literal[64, 128, 256, 512, 1024]
 ConfigLogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 PasteConflictAction = Literal["overwrite", "skip", "rename", "prompt"]
 
@@ -39,6 +40,7 @@ class DisplayConfig:
     show_help_bar: bool = True
     theme: ConfigTheme = DEFAULT_APP_THEME
     preview_syntax_theme: PreviewSyntaxTheme = AUTO_PREVIEW_SYNTAX_THEME
+    preview_max_kib: PreviewMaxKiB = 64
     default_sort_field: ConfigSortField = "name"
     default_sort_descending: bool = False
     directories_first: bool = True
