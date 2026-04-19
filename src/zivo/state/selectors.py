@@ -896,28 +896,28 @@ def _build_grep_replace_input_fields(
             active=palette.grf_active_field == "keyword",
         ),
         CommandPaletteInputFieldViewState(
-            label="Include",
+            label="Replace",
+            value=palette.grf_replacement_text,
+            placeholder="replacement text",
+            active=palette.grf_active_field == "replace",
+        ),
+        CommandPaletteInputFieldViewState(
+            label="Filter: Filename",
+            value=palette.grf_filename_filter,
+            placeholder="pattern or re:pattern",
+            active=palette.grf_active_field == "filename",
+        ),
+        CommandPaletteInputFieldViewState(
+            label="Filter: Include",
             value=palette.grf_include_extensions,
             placeholder="e.g. py, js",
             active=palette.grf_active_field == "include",
         ),
         CommandPaletteInputFieldViewState(
-            label="Exclude",
+            label="Filter: Exclude",
             value=palette.grf_exclude_extensions,
             placeholder="e.g. log, tmp",
             active=palette.grf_active_field == "exclude",
-        ),
-        CommandPaletteInputFieldViewState(
-            label="Find",
-            value=palette.grf_find_text,
-            placeholder="text or re:pattern",
-            active=palette.grf_active_field == "find",
-        ),
-        CommandPaletteInputFieldViewState(
-            label="Replace",
-            value=palette.grf_replacement_text,
-            placeholder="replacement text",
-            active=palette.grf_active_field == "replace",
         ),
     )
 
@@ -1811,15 +1811,15 @@ def _grep_replace_empty_message(state: AppState) -> str:
         return state.command_palette.grf_grep_error_message
     if not state.command_palette.grf_keyword.strip():
         return "Type a search keyword"
+    if not state.command_palette.grf_replacement_text.strip():
+        file_count = len(state.command_palette.grf_grep_results)
+        if file_count == 0:
+            return "No matching lines"
+        return f"{file_count} result(s) found. Tab to Replace field."
     if state.pending_replace_preview_request_id is not None:
         return "Previewing diff in right pane..."
     if state.command_palette.grf_error_message is not None:
         return state.command_palette.grf_error_message
-    if not state.command_palette.grf_find_text.strip():
-        file_count = len(state.command_palette.grf_grep_results)
-        if file_count == 0:
-            return "No matching lines"
-        return f"{file_count} result(s) found. Tab to Find field."
     if state.command_palette.grf_status_message is not None:
         return state.command_palette.grf_status_message
     if state.command_palette.grf_total_match_count > 0:

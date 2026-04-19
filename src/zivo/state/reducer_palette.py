@@ -115,10 +115,10 @@ _REPLACE_FIELDS: tuple[ReplaceFieldId, ...] = ("find", "replace")
 _FIND_REPLACE_FIELDS: tuple[FindReplaceFieldId, ...] = ("filename", "find", "replace")
 _GREP_REPLACE_FIELDS: tuple[GrepReplaceFieldId, ...] = (
     "keyword",
+    "replace",
+    "filename",
     "include",
     "exclude",
-    "find",
-    "replace",
 )
 _EXTENSION_SEPARATOR_RE = re.compile(r"[\s,]+")
 _VALID_EXTENSION_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*")
@@ -174,13 +174,13 @@ def _grf_field_value(
 ) -> str:
     if field == "keyword":
         return palette.grf_keyword
+    if field == "replace":
+        return palette.grf_replacement_text
+    if field == "filename":
+        return palette.grf_filename_filter
     if field == "include":
         return palette.grf_include_extensions
-    if field == "exclude":
-        return palette.grf_exclude_extensions
-    if field == "find":
-        return palette.grf_find_text
-    return palette.grf_replacement_text
+    return palette.grf_exclude_extensions
 
 
 def _replace_grf_field(
@@ -191,13 +191,13 @@ def _replace_grf_field(
 ) -> CommandPaletteState:
     if field == "keyword":
         return replace(palette, query=value, grf_keyword=value)
+    if field == "replace":
+        return replace(palette, grf_replacement_text=value)
+    if field == "filename":
+        return replace(palette, grf_filename_filter=value)
     if field == "include":
         return replace(palette, grf_include_extensions=value)
-    if field == "exclude":
-        return replace(palette, grf_exclude_extensions=value)
-    if field == "find":
-        return replace(palette, grf_find_text=value)
-    return replace(palette, grf_replacement_text=value)
+    return replace(palette, grf_exclude_extensions=value)
 
 
 def _normalize_grep_extension_filters(
@@ -941,19 +941,22 @@ def _handle_submit_grep_replace_palette(state: AppState) -> ReduceResult:
         return _notify(state, level="warning", message="Grep search is still running")
     if state.command_palette is None:
         return finalize(state)
-    if not state.command_palette.grf_find_text.strip():
-        return _notify(state, level="warning", message="Find text is required")
+    if not state.command_palette.grf_keyword.strip():
+        return _notify(state, level="warning", message="Keyword is required")
     if state.command_palette.grf_error_message is not None:
         return _notify(state, level="warning", message=state.command_palette.grf_error_message)
     if not state.command_palette.grf_preview_results:
         message = state.command_palette.grf_status_message or "No matching files"
         return _notify(state, level="warning", message=message)
 
-    file_paths = _grf_unique_file_paths(state.command_palette.grf_grep_results)
+    filtered_results = _filter_grf_by_filename(
+        state.command_palette.grf_grep_results, state.command_palette.grf_filename_filter
+    )
+    file_paths = _grf_unique_file_paths(filtered_results)
     request_id = state.next_request_id
     request = TextReplaceRequest(
         paths=file_paths,
-        find_text=state.command_palette.grf_find_text,
+        find_text=state.command_palette.grf_keyword,
         replace_text=state.command_palette.grf_replacement_text,
     )
     next_state = _restore_browsing_from_palette(state)
@@ -2203,7 +2206,10 @@ def _handle_set_grep_replace_field(
     if field in ("keyword", "include", "exclude"):
         return _handle_set_grf_keyword(state, field, value)
 
-    return _handle_set_grf_text_field(state, field, value)
+    if field == "replace":
+        return _handle_set_grf_replace(state, value)
+
+    return _handle_set_grf_filename(state, value)
 
 
 def _handle_set_grf_keyword(
@@ -2290,32 +2296,45 @@ def _validate_grf_filters(
     return include_globs, exclude_globs
 
 
-def _handle_set_grf_text_field(
+def _handle_set_grf_replace(
     state: AppState,
-    field: Literal["find", "replace"],
     value: str,
 ) -> ReduceResult:
-    if field == "find":
-        next_palette = replace(
-            state.command_palette,
-            grf_find_text=value,
-            grf_error_message=None,
-            grf_status_message=None,
-            cursor_index=0,
-        )
-    else:
-        next_palette = replace(
-            state.command_palette,
-            grf_replacement_text=value,
-            grf_error_message=None,
-            grf_status_message=None,
-            cursor_index=0,
-        )
+    next_palette = replace(
+        state.command_palette,
+        grf_replacement_text=value,
+        grf_error_message=None,
+        grf_status_message=None,
+        cursor_index=0,
+    )
+    return _trigger_grf_preview(state, next_palette)
 
-    find_text = next_palette.grf_find_text.strip()
-    file_paths = _grf_unique_file_paths(next_palette.grf_grep_results)
 
-    if not find_text or not file_paths:
+def _handle_set_grf_filename(
+    state: AppState,
+    value: str,
+) -> ReduceResult:
+    next_palette = replace(
+        state.command_palette,
+        grf_filename_filter=value,
+        grf_error_message=None,
+        grf_status_message=None,
+        cursor_index=0,
+    )
+    return _trigger_grf_preview(state, next_palette)
+
+
+def _trigger_grf_preview(
+    state: AppState,
+    next_palette: CommandPaletteState,
+) -> ReduceResult:
+    keyword = next_palette.grf_keyword.strip()
+    filtered_results = _filter_grf_by_filename(
+        next_palette.grf_grep_results, next_palette.grf_filename_filter
+    )
+    file_paths = _grf_unique_file_paths(filtered_results)
+
+    if not keyword or not file_paths:
         return _sync_grep_replace_preview(
             replace(
                 state,
@@ -2332,7 +2351,7 @@ def _handle_set_grf_text_field(
     request_id = state.next_request_id
     request = TextReplaceRequest(
         paths=file_paths,
-        find_text=next_palette.grf_find_text,
+        find_text=keyword,
         replace_text=next_palette.grf_replacement_text,
     )
     return finalize(
@@ -2344,6 +2363,19 @@ def _handle_set_grf_text_field(
         ),
         RunTextReplacePreviewEffect(request_id=request_id, request=request),
     )
+
+
+def _filter_grf_by_filename(
+    results: tuple[GrepSearchResultState, ...],
+    filename_query: str,
+) -> tuple[GrepSearchResultState, ...]:
+    if not filename_query.strip():
+        return results
+    if is_regex_file_search_query(filename_query):
+        pattern = re.compile(filename_query[3:], re.IGNORECASE)
+        return tuple(r for r in results if pattern.search(r.display_path))
+    lowered = filename_query.casefold()
+    return tuple(r for r in results if lowered in r.display_path.casefold())
 
 
 def _handle_grf_grep_search_completed(
@@ -2361,8 +2393,8 @@ def _handle_grf_grep_search_completed(
         pending_grep_search_request_id=None,
     )
 
-    find_text = next_state.command_palette.grf_find_text.strip()
-    if not find_text or not action.results:
+    keyword = next_state.command_palette.grf_keyword.strip()
+    if not keyword or not action.results:
         return _sync_grep_replace_preview(
             replace(
                 next_state,
@@ -2374,11 +2406,26 @@ def _handle_grf_grep_search_completed(
             )
         )
 
-    file_paths = _grf_unique_file_paths(action.results)
+    filtered_results = _filter_grf_by_filename(
+        action.results, next_state.command_palette.grf_filename_filter
+    )
+    file_paths = _grf_unique_file_paths(filtered_results)
+    if not file_paths:
+        return _sync_grep_replace_preview(
+            replace(
+                next_state,
+                command_palette=replace(
+                    next_state.command_palette,
+                    grf_preview_results=(),
+                    grf_total_match_count=0,
+                ),
+            )
+        )
+
     request_id = next_state.next_request_id
     request = TextReplaceRequest(
         paths=file_paths,
-        find_text=next_state.command_palette.grf_find_text,
+        find_text=keyword,
         replace_text=next_state.command_palette.grf_replacement_text,
     )
     return finalize(

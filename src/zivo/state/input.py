@@ -529,13 +529,13 @@ def _active_grep_replace_field_value(state: AppState) -> str:
     field = state.command_palette.grf_active_field
     if field == "keyword":
         return state.command_palette.grf_keyword or state.command_palette.query
+    if field == "replace":
+        return state.command_palette.grf_replacement_text
+    if field == "filename":
+        return state.command_palette.grf_filename_filter
     if field == "include":
         return state.command_palette.grf_include_extensions
-    if field == "exclude":
-        return state.command_palette.grf_exclude_extensions
-    if field == "find":
-        return state.command_palette.grf_find_text
-    return state.command_palette.grf_replacement_text
+    return state.command_palette.grf_exclude_extensions
 
 
 def _palette_extra_rows(palette_source: str | None) -> int:
