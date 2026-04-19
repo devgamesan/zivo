@@ -114,7 +114,7 @@ def dispatch_command_palette_input(
     character: str | None,
 ) -> DispatchedActions:
     palette_source = state.command_palette.source if state.command_palette is not None else None
-    search_palette = palette_source in {"file_search", "grep_search"}
+    search_palette = palette_source in {"file_search", "grep_search", "selected_files_grep"}
 
     if (
         key == "tab"
@@ -256,7 +256,7 @@ def dispatch_command_palette_input(
         return supported(SetCommandPaletteQuery(current_query[:-1]))
 
     if key == "ctrl+e" and state.command_palette is not None:
-        if state.command_palette.source == "grep_search":
+        if state.command_palette.source in {"grep_search", "selected_files_grep"}:
             return supported(OpenGrepResultInEditor())
         if state.command_palette.source == "file_search":
             return supported(OpenFindResultInEditor())
@@ -316,7 +316,7 @@ def dispatch_command_palette_input(
     if search_palette:
         if state.command_palette is not None and state.command_palette.source == "grep_search":
             return warn("Use Tab/Shift+Tab, type, arrows, Enter, Ctrl+e, or Esc")
-        return warn("Use arrows, type to filter, Enter, Ctrl+e for editor, or Esc")
+        return warn("Use arrows, type to search, Enter, Ctrl+e for editor, or Esc")
 
     if palette_source == "replace_text":
         return warn("Use Tab/Shift+Tab, type, arrows or Ctrl+n/p, Enter to apply, or Esc")
@@ -329,8 +329,5 @@ def dispatch_command_palette_input(
 
     if palette_source == "grep_replace_selected":
         return warn("Use Tab/Shift+Tab, type, arrows or Ctrl+n/p, Enter to apply, or Esc")
-
-    if palette_source == "selected_files_grep":
-        return warn("Use arrows, type to search, Enter to open, or Esc")
 
     return warn("Use arrows, type to filter, Enter to run, or Esc to cancel")
