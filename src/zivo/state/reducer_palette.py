@@ -115,9 +115,9 @@ from .reducer_palette_search import (
     handle_grep_search_failed,
     handle_open_find_result_in_editor,
     handle_open_grep_result_in_editor,
-    handle_sfg_keyword_changed,
     handle_set_file_search_query,
     handle_set_grep_search_field,
+    handle_sfg_keyword_changed,
     handle_submit_file_search_palette,
     handle_submit_grep_search_palette,
     sync_file_search_preview,
@@ -214,7 +214,10 @@ def _handle_set_palette_query(state: AppState, action: SetCommandPaletteQuery) -
     if state.command_palette.source == "grep_replace_selected":
         return handle_set_grep_replace_selected_field(state, "keyword", action.query)
     if state.command_palette.source == "selected_files_grep":
-        return handle_sfg_keyword_changed(state, SelectedFilesGrepKeywordChanged(keyword=action.query))
+        return handle_sfg_keyword_changed(
+            state,
+            SelectedFilesGrepKeywordChanged(keyword=action.query),
+        )
     return finalize(replace(state, command_palette=next_palette))
 
 

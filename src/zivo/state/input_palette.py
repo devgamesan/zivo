@@ -245,7 +245,10 @@ def dispatch_command_palette_input(
                 )
             )
         if palette_source == "selected_files_grep":
-            current_value = state.command_palette.sfg_keyword if state.command_palette is not None else ""
+            if state.command_palette is not None:
+                current_value = state.command_palette.sfg_keyword
+            else:
+                current_value = ""
             return supported(
                 SelectedFilesGrepKeywordChanged(keyword=current_value[:-1])
             )
@@ -300,7 +303,10 @@ def dispatch_command_palette_input(
                 )
             )
         if palette_source == "selected_files_grep":
-            current_value = state.command_palette.sfg_keyword if state.command_palette is not None else ""
+            if state.command_palette is not None:
+                current_value = state.command_palette.sfg_keyword
+            else:
+                current_value = ""
             return supported(
                 SelectedFilesGrepKeywordChanged(keyword=f"{current_value}{character}")
             )
