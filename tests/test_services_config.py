@@ -414,6 +414,10 @@ def test_loader_rejects_invalid_split_terminal_position(tmp_path) -> None:
 
 def test_render_app_config_round_trips_full_config(tmp_path) -> None:
     config_path = tmp_path / "config.toml"
+    bookmark_paths = (
+        str((tmp_path / "project").resolve(strict=False)),
+        str((tmp_path / "docs").resolve(strict=False)),
+    )
     config = AppConfig(
         terminal=TerminalConfig(
             linux=("konsole --working-directory {path}",),
@@ -442,7 +446,7 @@ def test_render_app_config_round_trips_full_config(tmp_path) -> None:
             path="~/logs/zivo.log",
             level="WARNING",
         ),
-        bookmarks=BookmarkConfig(paths=("/tmp/project", "/tmp/docs")),
+        bookmarks=BookmarkConfig(paths=bookmark_paths),
         help_bar=HelpBarConfig(
             browsing=("j/k: move", "enter: open"),
             shell=("ctrl+t: terminal",),
