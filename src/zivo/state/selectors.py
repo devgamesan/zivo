@@ -538,6 +538,13 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
                     "Shift+↑↓ scroll preview | enter apply | esc cancel",
                 )
             )
+        if (
+            state.command_palette is not None
+            and state.command_palette.source == "selected_files_grep"
+        ):
+            return HelpBarState(
+                ("type keyword / ↑↓ or Ctrl+n/p select | enter jump | Ctrl+e edit | esc cancel",)
+            )
         if state.command_palette is not None and state.command_palette.source == "history":
             if state.config.help_bar.palette_history:
                 return HelpBarState(state.config.help_bar.palette_history)
