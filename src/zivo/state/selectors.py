@@ -33,6 +33,18 @@ from zivo.models import (
 )
 from zivo.theme_support import preview_syntax_theme_for_app_theme
 
+from .entry_state_helpers import (
+    current_entry_for_path as shared_current_entry_for_path,
+)
+from .entry_state_helpers import (
+    single_target_entry as shared_single_target_entry,
+)
+from .entry_state_helpers import (
+    target_paths as shared_target_paths,
+)
+from .entry_state_helpers import (
+    visible_current_entry_states as shared_visible_current_entry_states,
+)
 from .models import (
     AppState,
     CommandPaletteState,
@@ -43,6 +55,11 @@ from .models import (
     ReplacePreviewResultState,
     SortState,
     select_browser_tabs,
+)
+from .reducer_config import (
+    CONFIG_EDITOR_CATEGORIES,
+    config_editor_labels,
+    format_config_field_value,
 )
 
 if TYPE_CHECKING:
@@ -1147,8 +1164,6 @@ def select_config_dialog_state(state: AppState) -> ConfigDialogState | None:
     if state.ui_mode != "CONFIG" or state.config_editor is None:
         return None
 
-    from .reducer_common import CONFIG_EDITOR_CATEGORIES, config_editor_labels
-
     config = state.config_editor.draft
     selected_index = state.config_editor.cursor_index
     labels = config_editor_labels()
@@ -1212,18 +1227,7 @@ def select_shell_command_dialog_state(state: AppState) -> ShellCommandDialogStat
 def select_target_paths(state: AppState) -> tuple[str, ...]:
     """Return selected paths, or the cursor path when nothing is selected."""
 
-    current_pane = _select_current_pane_projection(state)
-    selected_paths = tuple(
-        entry.path
-        for entry in current_pane.visible_entries
-        if entry.path in state.current_pane.selected_paths
-    )
-    if selected_paths:
-        return selected_paths
-
-    if current_pane.cursor_entry is None:
-        return ()
-    return (current_pane.cursor_entry.path,)
+    return shared_target_paths(state)
 
 
 def select_current_entry_for_path(
@@ -1232,21 +1236,13 @@ def select_current_entry_for_path(
 ) -> DirectoryEntryState | None:
     """Return the visible current-pane entry for the given path."""
 
-    if path is None:
-        return None
-    for entry in select_visible_current_entry_states(state):
-        if entry.path == path:
-            return entry
-    return None
+    return shared_current_entry_for_path(state, path)
 
 
 def select_single_target_entry(state: AppState) -> DirectoryEntryState | None:
     """Return the visible entry when exactly one target is active."""
 
-    target_paths = select_target_paths(state)
-    if len(target_paths) != 1:
-        return None
-    return select_current_entry_for_path(state, target_paths[0])
+    return shared_single_target_entry(state)
 
 
 def select_target_file_paths(state: AppState) -> tuple[str, ...]:
@@ -1276,14 +1272,7 @@ def select_has_visible_current_entries(state: AppState) -> bool:
 def select_visible_current_entry_states(state: AppState) -> tuple[DirectoryEntryState, ...]:
     """Return filtered and sorted raw current-pane entries."""
 
-    return _select_visible_current_entry_states(
-        state.current_pane.entries,
-        state.directory_size_cache,
-        state.show_hidden,
-        state.filter.query,
-        state.filter.active,
-        state.sort,
-    )
+    return shared_visible_current_entry_states(state)
 
 
 def _select_current_pane_projection(state: AppState) -> _CurrentPaneProjection:
@@ -1584,42 +1573,7 @@ def _format_bool(value: bool) -> str:
 
 
 def _config_field_value(field_index: int, config: "AppConfig") -> str:  # type: ignore[name-defined]  # noqa: F821
-    from .reducer_common import config_editor_field_ids
-
-    field_id = config_editor_field_ids()[field_index]
-    if field_id == "editor.command":
-        return _format_editor_command_value(config.editor.command)
-    if field_id == "display.show_hidden_files":
-        return _format_bool(config.display.show_hidden_files)
-    if field_id == "display.theme":
-        return config.display.theme
-    if field_id == "display.show_directory_sizes":
-        return _format_bool(config.display.show_directory_sizes)
-    if field_id == "display.show_preview":
-        return _format_bool(config.display.show_preview)
-    if field_id == "display.preview_syntax_theme":
-        return config.display.preview_syntax_theme
-    if field_id == "display.preview_max_kib":
-        return f"{config.display.preview_max_kib} KiB"
-    if field_id == "display.show_help_bar":
-        return _format_bool(config.display.show_help_bar)
-    if field_id == "display.default_sort_field":
-        return config.display.default_sort_field
-    if field_id == "display.default_sort_descending":
-        return _format_bool(config.display.default_sort_descending)
-    if field_id == "display.directories_first":
-        return _format_bool(config.display.directories_first)
-    if field_id == "display.grep_preview_context_lines":
-        return str(config.display.grep_preview_context_lines)
-    if field_id == "display.split_terminal_position":
-        return config.display.split_terminal_position
-    if field_id == "behavior.confirm_delete":
-        return _format_bool(config.behavior.confirm_delete)
-    if field_id == "behavior.paste_conflict_action":
-        return config.behavior.paste_conflict_action
-    if field_id == "logging.level":
-        return config.logging.level
-    return ""
+    return format_config_field_value(field_index, config)
 
 
 @lru_cache(maxsize=128)
