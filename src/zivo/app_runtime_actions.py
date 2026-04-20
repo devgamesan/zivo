@@ -28,6 +28,7 @@ from zivo.state import (
     LoadChildPaneSnapshotEffect,
     RunArchiveExtractEffect,
     RunArchivePreparationEffect,
+    RunAttributeInspectionEffect,
     RunClipboardPasteEffect,
     RunConfigSaveEffect,
     RunDirectorySizeEffect,
@@ -47,6 +48,8 @@ from zivo.state.actions import (
     ArchiveExtractFailed,
     ArchivePreparationCompleted,
     ArchivePreparationFailed,
+    AttributeInspectionFailed,
+    AttributeInspectionLoaded,
     BrowserSnapshotFailed,
     BrowserSnapshotLoaded,
     ChildPaneSnapshotFailed,
@@ -231,6 +234,18 @@ def complete_directory_sizes(
     )
 
 
+def complete_attribute_inspection(
+    effect: RunAttributeInspectionEffect,
+    result: object,
+) -> tuple[Any, ...]:
+    return (
+        AttributeInspectionLoaded(
+            request_id=effect.request_id,
+            inspection=result,
+        ),
+    )
+
+
 def complete_external_launch(
     effect: RunExternalLaunchEffect,
     result: object,
@@ -334,6 +349,7 @@ failed_directory_sizes = make_failed_handler(
     DirectorySizesFailed,
     extra_field_builders={"paths": lambda e, _err, _msg: e.paths},
 )
+failed_attribute_inspection = make_failed_handler(AttributeInspectionFailed)
 failed_external_launch = make_failed_handler(
     ExternalLaunchFailed,
     extra_field_builders={"request": lambda e, _err, _msg: e.request},
@@ -378,6 +394,7 @@ COMPLETE_ACTION_HANDLERS: tuple[tuple[type[Any], CompleteActionHandler], ...] = 
     (LoadChildPaneSnapshotEffect, complete_child_pane_snapshot),
     (RunConfigSaveEffect, complete_config_save),
     (RunDirectorySizeEffect, complete_directory_sizes),
+    (RunAttributeInspectionEffect, complete_attribute_inspection),
     (RunExternalLaunchEffect, complete_external_launch),
     (RunShellCommandEffect, complete_shell_command),
     (RunFileSearchEffect, complete_file_search),
@@ -397,6 +414,7 @@ FAILED_ACTION_HANDLERS: tuple[tuple[type[Any], FailureActionHandler], ...] = (
     (RunFileMutationEffect, failed_file_mutation),
     (RunConfigSaveEffect, failed_config_save),
     (RunDirectorySizeEffect, failed_directory_sizes),
+    (RunAttributeInspectionEffect, failed_attribute_inspection),
     (RunExternalLaunchEffect, failed_external_launch),
     (RunShellCommandEffect, failed_shell_command),
     (RunUndoEffect, failed_undo),

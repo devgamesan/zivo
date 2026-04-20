@@ -125,6 +125,8 @@ from .actions_runtime import (
     ArchiveExtractProgress,
     ArchivePreparationCompleted,
     ArchivePreparationFailed,
+    AttributeInspectionFailed,
+    AttributeInspectionLoaded,
     BrowserSnapshotFailed,
     BrowserSnapshotLoaded,
     ChildPaneSnapshotFailed,
@@ -285,6 +287,8 @@ Action = (
     | CancelZipCompressConfirmation
     | RequestBrowserSnapshot
     | RequestDirectorySizes
+    | AttributeInspectionLoaded
+    | AttributeInspectionFailed
     | BrowserSnapshotLoaded
     | BrowserSnapshotFailed
     | ChildPaneSnapshotLoaded

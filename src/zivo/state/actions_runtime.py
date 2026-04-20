@@ -19,7 +19,7 @@ from zivo.models import (
     UndoResult,
 )
 
-from .models import BrowserSnapshot, PaneState
+from .models import AttributeInspectionState, BrowserSnapshot, PaneState
 
 
 @dataclass(frozen=True)
@@ -88,6 +88,22 @@ class DirectorySizesFailed:
 
     request_id: int
     paths: tuple[str, ...]
+    message: str
+
+
+@dataclass(frozen=True)
+class AttributeInspectionLoaded:
+    """Apply detailed metadata loaded for the attribute dialog."""
+
+    request_id: int
+    inspection: AttributeInspectionState
+
+
+@dataclass(frozen=True)
+class AttributeInspectionFailed:
+    """Apply a terminal attribute-inspection failure."""
+
+    request_id: int
     message: str
 
 

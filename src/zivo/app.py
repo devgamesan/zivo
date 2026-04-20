@@ -33,6 +33,7 @@ from zivo.models import (
 )
 from zivo.services import (
     ArchiveExtractService,
+    AttributeInspectionService,
     BrowserSnapshotLoader,
     ClipboardOperationService,
     ConfigSaveService,
@@ -42,6 +43,7 @@ from zivo.services import (
     FileSearchService,
     GrepSearchService,
     LiveArchiveExtractService,
+    LiveAttributeInspectionService,
     LiveBrowserSnapshotLoader,
     LiveClipboardOperationService,
     LiveConfigSaveService,
@@ -170,6 +172,7 @@ class zivoApp(App[None]):
     def __init__(
         self,
         snapshot_loader: BrowserSnapshotLoader | None = None,
+        attribute_inspection_service: AttributeInspectionService | None = None,
         clipboard_service: ClipboardOperationService | None = None,
         config_save_service: ConfigSaveService | None = None,
         directory_size_service: DirectorySizeService | None = None,
@@ -207,6 +210,9 @@ class zivoApp(App[None]):
             current_pane_projection_mode=current_pane_projection_mode,
         )
         self._snapshot_loader = snapshot_loader or LiveBrowserSnapshotLoader()
+        self._attribute_inspection_service = (
+            attribute_inspection_service or LiveAttributeInspectionService()
+        )
         self._clipboard_service = clipboard_service or LiveClipboardOperationService()
         self._config_save_service = config_save_service or LiveConfigSaveService()
         self._directory_size_service = directory_size_service or LiveDirectorySizeService()
@@ -655,6 +661,7 @@ class zivoApp(App[None]):
 
 def create_app(
     snapshot_loader: BrowserSnapshotLoader | None = None,
+    attribute_inspection_service: AttributeInspectionService | None = None,
     clipboard_service: ClipboardOperationService | None = None,
     config_save_service: ConfigSaveService | None = None,
     directory_size_service: DirectorySizeService | None = None,
@@ -683,6 +690,7 @@ def create_app(
 
     return zivoApp(
         snapshot_loader=snapshot_loader,
+        attribute_inspection_service=attribute_inspection_service,
         clipboard_service=clipboard_service,
         config_save_service=config_save_service,
         directory_size_service=directory_size_service,

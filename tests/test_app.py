@@ -38,6 +38,7 @@ from zivo.models import (
     UndoResult,
 )
 from zivo.services import (
+    FakeAttributeInspectionService,
     FakeBrowserSnapshotLoader,
     FakeClipboardOperationService,
     FakeDirectorySizeService,
@@ -52,6 +53,7 @@ from zivo.services import (
     LiveExternalLaunchService,
 )
 from zivo.state import (
+    AttributeInspectionState,
     BrowserSnapshot,
     CommandPaletteState,
     DirectoryEntryState,
@@ -3574,7 +3576,23 @@ async def test_app_command_palette_show_attributes_opens_read_only_dialog() -> N
             )
         }
     )
-    app = create_app(snapshot_loader=loader, initial_path=path)
+    attribute_service = FakeAttributeInspectionService(
+        inspections_by_path={
+            f"{path}/docs": AttributeInspectionState(
+                name="docs",
+                kind="dir",
+                path=f"{path}/docs",
+                permissions_mode=0o40755,
+                owner="tadashi",
+                group="staff",
+            )
+        }
+    )
+    app = create_app(
+        snapshot_loader=loader,
+        attribute_inspection_service=attribute_service,
+        initial_path=path,
+    )
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
@@ -3594,7 +3612,7 @@ async def test_app_command_palette_show_attributes_opens_read_only_dialog() -> N
         assert "Type: Directory" in str(lines.renderable)
         assert f"Path: {path}/docs" in str(lines.renderable)
         assert "Hidden: No" in str(lines.renderable)
-        assert "Permissions:" in str(lines.renderable)
+        assert "Permissions: drwxr-xr-x (755) tadashi staff" in str(lines.renderable)
 
         await pilot.press("enter")
         await asyncio.sleep(0.05)

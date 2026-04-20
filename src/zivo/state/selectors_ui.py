@@ -46,6 +46,20 @@ from .selectors_shared import (
 )
 
 
+def _format_attribute_permissions_label(state: AppState) -> str:
+    entry = state.attribute_inspection
+    if entry is None:
+        return "-"
+    permission_str = _format_permissions_label(entry.permissions_mode)
+    if entry.permissions_mode is None:
+        return permission_str
+    if entry.owner and entry.group:
+        return f"{permission_str} {entry.owner} {entry.group}"
+    if entry.owner:
+        return f"{permission_str} {entry.owner}"
+    return permission_str
+
+
 def select_status_bar_state(state: AppState) -> StatusBarState:
     """Return a status bar model derived from app state."""
 
@@ -624,7 +638,7 @@ def select_attribute_dialog_state(state: AppState) -> AttributeDialogState | Non
             f"Size: {_format_size_label(entry.size_bytes)}",
             f"Modified: {_format_modified_label_from_timestamp(entry.modified_at)}",
             f"Hidden: {hidden_label}",
-            f"Permissions: {_format_permissions_label(entry.permissions_mode)}",
+            f"Permissions: {_format_attribute_permissions_label(state)}",
         ),
         options=("enter close", "esc close"),
     )

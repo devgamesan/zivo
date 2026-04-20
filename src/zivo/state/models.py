@@ -218,6 +218,8 @@ class AttributeInspectionState:
     modified_at: datetime | None = None
     hidden: bool = False
     permissions_mode: int | None = None
+    owner: str | None = None
+    group: str | None = None
 
 
 @dataclass(frozen=True)
@@ -511,6 +513,7 @@ class AppState:
     pending_replace_preview_request_id: int | None = None
     pending_replace_apply_request_id: int | None = None
     pending_directory_size_request_id: int | None = None
+    pending_attribute_inspection_request_id: int | None = None
     pending_config_save_request_id: int | None = None
     pending_shell_command_request_id: int | None = None
     undo_stack: tuple[UndoEntry, ...] = ()

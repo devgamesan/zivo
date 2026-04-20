@@ -50,6 +50,14 @@ class RunDirectorySizeEffect:
 
 
 @dataclass(frozen=True)
+class RunAttributeInspectionEffect:
+    """Load detailed metadata for the attribute dialog outside the reducer."""
+
+    request_id: int
+    path: str
+
+
+@dataclass(frozen=True)
 class RunClipboardPasteEffect:
     """Execute a clipboard paste outside the reducer."""
 
@@ -196,6 +204,7 @@ Effect = (
     LoadBrowserSnapshotEffect
     | LoadChildPaneSnapshotEffect
     | RunDirectorySizeEffect
+    | RunAttributeInspectionEffect
     | RunClipboardPasteEffect
     | RunFileMutationEffect
     | RunUndoEffect

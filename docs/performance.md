@@ -6,7 +6,8 @@
 
 1. [スモークテスト（既存）](#スモークテスト既存)
 2. [Issue #304 viewport-aware projection スパイク](#issue-304-viewport-aware-projection-スパイク)
-3. [現在の方針](#現在の方針)
+3. [Issue #646 ディレクトリ一覧メタデータ遅延取得](#issue-646-ディレクトリ一覧メタデータ遅延取得)
+4. [現在の方針](#現在の方針)
 
 ---
 
@@ -132,6 +133,35 @@ uv run python scripts/benchmark_current_pane_projection.py --entries 50000 --ite
 
 ---
 
+## Issue #646 ディレクトリ一覧メタデータ遅延取得
+
+### 実施日
+
+- 2026-04-20
+
+### 追加したもの
+
+- `scripts/benchmark_directory_listing.py`
+  - `LocalFilesystemAdapter.list_directory()` と `inspect_entry()` を同じ fixture 条件で比較する手動ベンチマーク
+- `tests/test_adapters_filesystem.py`
+  - 一覧表示で owner/group 解決を呼ばないこと
+  - ディレクトリ一覧の metadata を軽量化していること
+  - 属性ダイアログ向け詳細取得で owner/group を含む metadata を取得できること
+
+### 再実行コマンド
+
+```bash
+uv run python scripts/benchmark_directory_listing.py --files 8000 --dirs 2000 --iterations 10
+```
+
+### 判断メモ
+
+- 一覧表示で必要な軽量データと、属性ダイアログ用の重い metadata 取得を分離した
+- owner/group 解決は `Show attributes` 実行時の遅延取得へ移した
+- 比較は同じコマンドを別 commit や branch で再実行して確認する
+
+---
+
 ## 現在の方針
 
 - 自動ベンチマークは削除した
@@ -147,4 +177,5 @@ uv run pytest tests/test_app.py -k large_directory_smoke_with_1000_entries --dur
 uv run pytest tests/test_app.py -k main_flow_round_trip_on_live_filesystem -q
 uv run pytest tests/test_state_selectors.py -q
 uv run python scripts/benchmark_current_pane_projection.py --entries 10000 --iterations 200
+uv run python scripts/benchmark_directory_listing.py --files 8000 --dirs 2000 --iterations 10
 ```
