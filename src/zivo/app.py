@@ -64,21 +64,23 @@ from zivo.services import (
     resolve_config_path,
 )
 from zivo.state import (
-    Action,
     AppState,
     Effect,
-    ExitCurrentPath,
     NotificationState,
     ReduceResult,
-    RequestBrowserSnapshot,
-    SetTerminalHeight,
     SortState,
-    SplitTerminalExited,
     build_placeholder_app_state,
     dispatch_key_input,
     iter_bound_keys,
     reduce_app_state,
     select_shell_data,
+)
+from zivo.state.actions import (
+    Action,
+    ExitCurrentPath,
+    RequestBrowserSnapshot,
+    SetTerminalHeight,
+    SplitTerminalExited,
 )
 from zivo.ui import (
     AttributeDialog,
@@ -429,7 +431,7 @@ class zivoApp(App[None]):
         ):
             text = self._external_launch_service.get_from_clipboard()
             if text:
-                from zivo.state import PasteIntoPendingInput
+                from zivo.state.actions import PasteIntoPendingInput
 
                 await self.dispatch_actions((PasteIntoPendingInput(text=text),))
             event.stop()
@@ -457,7 +459,7 @@ class zivoApp(App[None]):
 
         if self._app_state.ui_mode in {"RENAME", "CREATE", "EXTRACT", "ZIP"}:
             if self._app_state.pending_input is not None:
-                from zivo.state import PasteIntoPendingInput
+                from zivo.state.actions import PasteIntoPendingInput
 
                 await self.dispatch_actions(
                     (PasteIntoPendingInput(text=event.text),)
@@ -472,7 +474,7 @@ class zivoApp(App[None]):
             and st.status == "running"
             and st.focus_target == "terminal"
         ):
-            from zivo.state import SendSplitTerminalInput
+            from zivo.state.actions import SendSplitTerminalInput
 
             await self.dispatch_actions(
                 (SendSplitTerminalInput(event.text),)

@@ -10,10 +10,7 @@ from textual.app import SuspendNotSupported
 
 from zivo.app_runtime_core import WorkerSpec, run_worker
 from zivo.state import (
-    ArchiveExtractProgress,
     CloseSplitTerminalEffect,
-    ExternalLaunchCompleted,
-    ExternalLaunchFailed,
     RunArchiveExtractEffect,
     RunArchivePreparationEffect,
     RunClipboardPasteEffect,
@@ -24,10 +21,15 @@ from zivo.state import (
     RunUndoEffect,
     RunZipCompressEffect,
     RunZipCompressPreparationEffect,
-    SplitTerminalStarted,
-    SplitTerminalStartFailed,
     StartSplitTerminalEffect,
     WriteSplitTerminalInputEffect,
+)
+from zivo.state.actions import (
+    ArchiveExtractProgress,
+    ExternalLaunchCompleted,
+    ExternalLaunchFailed,
+    SplitTerminalStarted,
+    SplitTerminalStartFailed,
     ZipCompressProgress,
 )
 

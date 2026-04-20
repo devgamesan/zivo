@@ -54,16 +54,13 @@ from zivo.services import (
 from zivo.state import (
     BrowserSnapshot,
     CommandPaletteState,
-    ConfigSaveCompleted,
     DirectoryEntryState,
     FileSearchResultState,
     GrepSearchResultState,
-    JumpCursor,
-    MoveCursor,
     PaneState,
-    SetTerminalHeight,
     build_initial_app_state,
 )
+from zivo.state.actions import ConfigSaveCompleted, JumpCursor, MoveCursor, SetTerminalHeight
 from zivo.state.selectors import (
     compute_current_pane_visible_window,
     select_command_palette_state,

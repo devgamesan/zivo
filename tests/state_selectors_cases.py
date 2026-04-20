@@ -17,15 +17,9 @@ from zivo.models import (
 from zivo.state import (
     ArchiveExtractConfirmationState,
     AttributeInspectionState,
-    BeginCommandPalette,
-    BeginCreateInput,
-    BeginFilterInput,
-    BeginSelectedFilesGrep,
     CommandPaletteState,
     ConfigEditorState,
-    ConfirmFilterInput,
     CurrentPaneDeltaState,
-    CutTargets,
     DeleteConfirmationState,
     DirectoryEntryState,
     DirectorySizeCacheEntry,
@@ -35,17 +29,11 @@ from zivo.state import (
     HistoryState,
     NameConflictState,
     NotificationState,
-    OpenNewTab,
     PaneState,
     PasteConflictState,
     PendingInputState,
     PendingKeySequenceState,
     ReplacePreviewResultState,
-    SetCursorPath,
-    SetFilterQuery,
-    SetNotification,
-    SetSort,
-    ToggleSelection,
     ZipCompressConfirmationState,
     build_initial_app_state,
     build_placeholder_app_state,
@@ -67,6 +55,20 @@ from zivo.state import (
     select_visible_current_entry_states,
 )
 from zivo.state import command_palette as command_palette_module
+from zivo.state.actions import (
+    BeginCommandPalette,
+    BeginCreateInput,
+    BeginFilterInput,
+    BeginSelectedFilesGrep,
+    ConfirmFilterInput,
+    CutTargets,
+    OpenNewTab,
+    SetCursorPath,
+    SetFilterQuery,
+    SetNotification,
+    SetSort,
+    ToggleSelection,
+)
 from zivo.state.command_palette import CommandPaletteItem
 from zivo.state.reducer_common import directory_size_target_paths
 from zivo.state.selectors import (
