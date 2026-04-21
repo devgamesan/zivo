@@ -394,7 +394,7 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             CommandPaletteItem(
                 id="open_file_manager",
                 label="Open in file manager",
-                shortcut="m",
+                shortcut="M",
                 enabled=True,
             ),
             CommandPaletteItem(

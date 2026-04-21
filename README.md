@@ -246,7 +246,7 @@ When a file is focused, press `e` to switch into a terminal editor in the curren
 | `w` | Close current tab |
 | `tab` | Switch to next tab |
 | `shift+tab` | Switch to previous tab |
-| `m` | Open current directory in file manager |
+| `M` | Open current directory in file manager |
 | `:` | Open command palette |
 | `q` | Quit |
 | `[` | Scroll the right-pane text preview up by a page |
@@ -272,7 +272,7 @@ When a file is focused, press `e` to switch into a terminal editor in the curren
 | `a` | Select all visible entries in the focused pane |
 | `Esc` | Clear selection in the focused pane |
 | `y` | Copy focused-pane targets to the opposite pane |
-| `M` | Move focused-pane targets to the opposite pane |
+| `m` | Move focused-pane targets to the opposite pane |
 | `c` / `x` / `v` | Copy, cut, or paste using the focused pane |
 | `Tab` / `Shift+Tab` | Switch browser tabs, same as normal mode |
 
@@ -385,7 +385,7 @@ The tab strip is only shown when two or more browser tabs are open.
 | `Copy path` | At least one target is selected or focused | Copies the selected path list, or the focused path when nothing is selected, to the system clipboard. Also available with `C`. |
 | `Move to trash` | At least one target is selected or focused | Moves the selected items, or the focused item, to trash (confirmation is enabled by default and can be configured). |
 | `Empty trash` | Always (Linux/macOS only) | Permanently deletes all items from the trash. Shows a confirmation dialog before emptying. Not available on Windows. |
-| `Open in file manager` | Always | Opens the current directory in the OS file manager. Also available with `m`. |
+| `Open in file manager` | Always | Opens the current directory in the OS file manager. Also available with `M`. |
 | `Open terminal` | Always | Launches an external terminal rooted at the current directory, using `config.toml` templates before built-in fallbacks. Also available with `T`. |
 | `Run shell command` | Always | Opens a one-line shell command dialog, runs the command in the current directory in the background, and returns the first output line or failure summary in the status bar. Also available with `!`. |
 | `Bookmark this directory` / `Remove bookmark` | Always | Saves or removes the current directory in `[bookmarks].paths`. The label reflects whether the current directory is already bookmarked. Also available with `B`. |

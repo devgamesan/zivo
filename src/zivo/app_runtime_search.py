@@ -190,7 +190,7 @@ def schedule_transfer_pane_snapshot(app: Any, effect: LoadTransferPaneEffect) ->
         ),
         WorkerSpec(
             name=f"transfer-pane-snapshot:{effect.request_id}",
-            group="transfer-pane-snapshot",
+            group=f"transfer-pane-snapshot:{effect.pane_id}",
             description=effect.path,
             exclusive=True,
         ),

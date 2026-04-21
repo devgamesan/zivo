@@ -41,7 +41,7 @@ def test_transfer_mode_uses_non_function_keys_for_copy_and_move() -> None:
         SetNotification(None),
         TransferCopyToOppositePane(),
     )
-    assert dispatch_key_input(state, key="M") == (
+    assert dispatch_key_input(state, key="m") == (
         SetNotification(None),
         TransferMoveToOppositePane(),
     )

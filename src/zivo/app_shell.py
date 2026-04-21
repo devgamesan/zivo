@@ -125,8 +125,8 @@ def build_body(shell: ThreePaneShellData, *, terminal_position: str = "bottom") 
 
 
 def _format_transfer_title(pane: Any) -> str:
-    marker = "*" if pane.active else " "
-    return f"{marker} {pane.title}: {pane.path}"
+    marker = "ACTIVE" if pane.active else "     "
+    return f"[{marker}] {pane.title}: {pane.path}"
 
 
 def _transfer_pane_classes(active: bool) -> str:
@@ -259,6 +259,7 @@ async def refresh_shell(
         )
         current_pane.set_summary(shell.transfer_left.summary)
         current_pane.set_context_input(None)
+        current_pane.set_class(shell.transfer_left.active, "active-transfer-pane")
         current_pane.query_one("Label").update(_format_transfer_title(shell.transfer_left))
         try:
             transfer_right_pane = app.query_one("#transfer-right-pane", MainPane)
@@ -273,6 +274,10 @@ async def refresh_shell(
             )
             transfer_right_pane.set_summary(shell.transfer_right.summary)
             transfer_right_pane.set_context_input(None)
+            transfer_right_pane.set_class(
+                shell.transfer_right.active,
+                "active-transfer-pane",
+            )
             transfer_right_pane.query_one("Label").update(
                 _format_transfer_title(shell.transfer_right)
             )

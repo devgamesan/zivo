@@ -112,7 +112,7 @@ BROWSING_KEYMAP = {
     "]": "preview_pagedown",
     "{": "go_back",
     "}": "go_forward",
-    "m": "open_file_manager",
+    "M": "open_file_manager",
     "T": "open_terminal",
     "home": "jump_cursor_start",
     "end": "jump_cursor_end",

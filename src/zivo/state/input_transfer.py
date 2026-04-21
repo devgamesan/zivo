@@ -46,7 +46,7 @@ TRANSFER_KEYMAP = {
     "h",
     "left",
     "y",
-    "M",
+    "m",
     "c",
     "x",
     "v",
@@ -124,7 +124,7 @@ def dispatch_transfer_input(
         return supported(GoToTransferParent())
     if key == "y":
         return supported(TransferCopyToOppositePane())
-    if key == "M":
+    if key == "m":
         return supported(TransferMoveToOppositePane())
     if key == "c":
         return supported(TransferCopyToOppositePane())
@@ -133,7 +133,7 @@ def dispatch_transfer_input(
     if key == "v":
         return supported(PasteClipboardToTransferPane())
 
-    return warn("Use [], arrows, space, y copy, M move, v paste, or 2 to close transfer mode")
+    return warn("Use [], arrows, space, y copy, m move, v paste, or 2 to close transfer mode")
 
 
 def _active_transfer_pane(state: AppState) -> TransferPaneState | None:

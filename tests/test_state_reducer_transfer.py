@@ -1,5 +1,7 @@
+from pathlib import Path
+
 from tests.test_state_reducer import _reduce_state
-from zivo.models import PasteRequest
+from zivo.models import PasteAppliedChange, PasteRequest, PasteSummary
 from zivo.state import (
     LoadTransferPaneEffect,
     RunClipboardPasteEffect,
@@ -8,6 +10,7 @@ from zivo.state import (
     select_shell_data,
 )
 from zivo.state.actions import (
+    ClipboardPasteCompleted,
     EnterTransferDirectory,
     FocusTransferPane,
     ToggleTransferMode,
@@ -59,6 +62,54 @@ def test_transfer_move_to_opposite_pane_uses_cut_paste_request() -> None:
                 mode="cut",
                 source_paths=("/home/tadashi/develop/zivo/docs",),
                 destination_dir="/home/tadashi/develop/zivo",
+            ),
+        ),
+    )
+
+
+def test_transfer_paste_completed_refreshes_both_transfer_panes() -> None:
+    state = _reduce_state(build_initial_app_state(), ToggleTransferMode())
+    state = _reduce_state(state, TransferMoveToOppositePane())
+
+    reduced = reduce_app_state(
+        state,
+        ClipboardPasteCompleted(
+            request_id=1,
+            summary=PasteSummary(
+                mode="cut",
+                destination_dir="/home/tadashi/develop/zivo",
+                total_count=1,
+                success_count=1,
+                skipped_count=0,
+            ),
+            applied_changes=(
+                PasteAppliedChange(
+                    source_path="/home/tadashi/develop/zivo/docs",
+                    destination_path="/home/tadashi/develop/zivo/docs",
+                ),
+            ),
+        ),
+    )
+
+    assert reduced.effects == (
+        LoadTransferPaneEffect(
+            request_id=2,
+            pane_id="left",
+            path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/docs",
+            invalidate_paths=(
+                str(Path("/home/tadashi/develop/zivo").resolve()),
+                str(Path("/home/tadashi/develop").resolve()),
+            ),
+        ),
+        LoadTransferPaneEffect(
+            request_id=3,
+            pane_id="right",
+            path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/docs",
+            invalidate_paths=(
+                str(Path("/home/tadashi/develop/zivo").resolve()),
+                str(Path("/home/tadashi/develop").resolve()),
             ),
         ),
     )
