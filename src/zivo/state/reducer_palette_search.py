@@ -41,6 +41,7 @@ from .reducer_palette_shared import (
     notify,
     replace_grep_field,
     request_palette_snapshot,
+    validate_filename_filter,
 )
 
 
@@ -151,19 +152,35 @@ def handle_set_grep_search_field(
         )
 
     # If filename filter is changed and we have existing results, re-apply filtering
-    if field == "filename" and state.command_palette.grep_search_results:
-        return sync_grep_preview(
-            replace(
-                state,
-                command_palette=replace(
-                    next_palette,
-                    grep_search_results=filter_grep_results_by_filename(
-                        state.command_palette.grep_search_results,
-                        value,
+    if field == "filename":
+        # Validate filename filter to prevent regex crashes
+        validation_error = validate_filename_filter(value)
+        if validation_error:
+            return sync_grep_preview(
+                replace(
+                    state,
+                    command_palette=replace(
+                        next_palette,
+                        grep_search_results=(),
+                        grep_search_error_message=validation_error,
                     ),
-                ),
+                    pending_grep_search_request_id=None,
+                    pending_child_pane_request_id=None,
+                )
             )
-        )
+        if state.command_palette.grep_search_results:
+            return sync_grep_preview(
+                replace(
+                    state,
+                    command_palette=replace(
+                        next_palette,
+                        grep_search_results=filter_grep_results_by_filename(
+                            state.command_palette.grep_search_results,
+                            value,
+                        ),
+                    ),
+                )
+            )
 
     try:
         include_globs, exclude_globs = validate_grep_search_filters(

@@ -1231,3 +1231,77 @@ def test_grs_grep_search_completed_filters_non_target_results() -> None:
     )
     # Preview is triggered even with empty replace text to show find matches
     assert result.state.pending_replace_preview_request_id is not None
+
+
+def test_grf_filename_filter_with_invalid_regex_single_backslash() -> None:
+    """Test that single backslash in regex mode shows error and clears results."""
+    from dataclasses import replace
+
+    state = _reduce_state(build_initial_app_state(), BeginGrepReplace())
+    # First, set up grep results
+    all_results = (
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/a.py",
+            display_path="a.py",
+            line_number=1,
+            line_text="todo in a",
+        ),
+    )
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grf_keyword="todo",
+            grf_grep_results=all_results,
+        ),
+    )
+
+    # Now test invalid filename filter
+    result = reduce_app_state(state, SetGrepReplaceField(field="filename", value="re:\\"))
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.grf_filename_filter == "re:\\"
+    assert result.state.command_palette.grf_error_message is not None
+    assert "Invalid regex pattern" in result.state.command_palette.grf_error_message
+    assert result.state.command_palette.grf_preview_results == ()
+    assert result.state.command_palette.grf_total_match_count == 0
+
+
+def test_grf_filename_filter_with_valid_regex_backslash() -> None:
+    """Test that valid regex with backslash works correctly for grep replace."""
+    from dataclasses import replace
+
+    state = _reduce_state(build_initial_app_state(), BeginGrepReplace())
+    # First, set up grep results
+    all_results = (
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/a.py",
+            display_path="a.py",
+            line_number=1,
+            line_text="todo in a",
+        ),
+        GrepSearchResultState(
+            path="/home/tadashi/develop/zivo/b.txt",
+            display_path="b.txt",
+            line_number=1,
+            line_text="todo in b",
+        ),
+    )
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grf_keyword="todo",
+            grf_replacement_text="done",
+            grf_grep_results=all_results,
+        ),
+    )
+
+    # Test valid filename filter
+    result = reduce_app_state(state, SetGrepReplaceField(field="filename", value="re:\\.py$"))
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.grf_filename_filter == "re:\\.py$"
+    assert result.state.command_palette.grf_error_message is None
+    # Results should be filtered to .py files only
+    assert result.state.pending_replace_preview_request_id == 1

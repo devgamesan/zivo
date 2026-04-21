@@ -1082,3 +1082,121 @@ def test_sfg_cycle_field_is_noop() -> None:
     assert result.state.command_palette is not None
     assert result.state.command_palette.sfg_active_field == "keyword"
     assert result.state == state  # No changes expected
+
+
+def test_grep_filename_filter_with_invalid_regex_single_backslash() -> None:
+    """Test that single backslash in regex mode shows error and clears results."""
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grep_search_keyword="test",
+            grep_search_results=(
+                GrepSearchResultState(
+                    path="/home/test/file.py",
+                    display_path="file.py",
+                    line_number=1,
+                    line_text="test content",
+                ),
+            ),
+        ),
+    )
+
+    result = reduce_app_state(state, SetGrepSearchField(field="filename", value="re:\\"))
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.grep_search_filename_filter == "re:\\"
+    assert result.state.command_palette.grep_search_error_message is not None
+    assert "Invalid regex pattern" in result.state.command_palette.grep_search_error_message
+    assert result.state.command_palette.grep_search_results == ()
+
+
+def test_grep_filename_filter_with_invalid_regex_unclosed_char_class() -> None:
+    """Test that invalid regex (unclosed character class) shows error and clears results."""
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grep_search_keyword="test",
+            grep_search_results=(
+                GrepSearchResultState(
+                    path="/home/test/file.py",
+                    display_path="file.py",
+                    line_number=1,
+                    line_text="test content",
+                ),
+            ),
+        ),
+    )
+
+    result = reduce_app_state(state, SetGrepSearchField(field="filename", value="re:["))
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.grep_search_filename_filter == "re:["
+    assert result.state.command_palette.grep_search_error_message is not None
+    assert "Invalid regex pattern" in result.state.command_palette.grep_search_error_message
+    assert result.state.command_palette.grep_search_results == ()
+
+
+def test_grep_filename_filter_with_valid_regex_backslash() -> None:
+    """Test that valid regex with backslash works correctly."""
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grep_search_keyword="test",
+            grep_search_results=(
+                GrepSearchResultState(
+                    path="/home/test/file.py",
+                    display_path="file.py",
+                    line_number=1,
+                    line_text="test content",
+                ),
+                GrepSearchResultState(
+                    path="/home/test/file.txt",
+                    display_path="file.txt",
+                    line_number=1,
+                    line_text="test content",
+                ),
+            ),
+        ),
+    )
+
+    result = reduce_app_state(state, SetGrepSearchField(field="filename", value="re:\\.py$"))
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.grep_search_filename_filter == "re:\\.py$"
+    assert result.state.command_palette.grep_search_error_message is None
+    assert len(result.state.command_palette.grep_search_results) == 1
+    assert result.state.command_palette.grep_search_results[0].display_path == "file.py"
+
+
+def test_grep_filename_filter_with_non_regex_backslash() -> None:
+    """Test that backslash in non-regex mode works correctly."""
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grep_search_keyword="test",
+            grep_search_results=(
+                GrepSearchResultState(
+                    path="/home/test/file.py",
+                    display_path="file.py",
+                    line_number=1,
+                    line_text="test content",
+                ),
+            ),
+        ),
+    )
+
+    result = reduce_app_state(state, SetGrepSearchField(field="filename", value="\\"))
+
+    assert result.state.command_palette is not None
+    assert result.state.command_palette.grep_search_filename_filter == "\\"
+    assert result.state.command_palette.grep_search_error_message is None
+    # Non-regex mode should not crash, results may be empty or filtered
+    assert isinstance(result.state.command_palette.grep_search_results, tuple)

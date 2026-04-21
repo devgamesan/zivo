@@ -157,6 +157,21 @@ def normalize_grep_extension_filters(
     return tuple(normalized_globs)
 
 
+def validate_filename_filter(filename_query: str) -> str | None:
+    """ファイル名フィルタの正規表現をバリデーションし、エラーメッセージを返す
+
+    無効な正規表現の場合はエラーメッセージを返し、
+    有効な場合は None を返す。
+    """
+    if not is_regex_file_search_query(filename_query):
+        return None
+    try:
+        re.compile(filename_query[3:], re.IGNORECASE)
+        return None
+    except re.error as e:
+        return f"Invalid regex pattern: {e}"
+
+
 def filter_grep_results_by_filename(
     results: tuple[GrepSearchResultState, ...],
     filename_query: str,
@@ -164,8 +179,12 @@ def filter_grep_results_by_filename(
     if not filename_query.strip():
         return results
     if is_regex_file_search_query(filename_query):
-        pattern = re.compile(filename_query[3:], re.IGNORECASE)
-        return tuple(result for result in results if pattern.search(result.display_path))
+        try:
+            pattern = re.compile(filename_query[3:], re.IGNORECASE)
+            return tuple(result for result in results if pattern.search(result.display_path))
+        except re.error:
+            # バリデーション済みのため通常は到達しないが、安全性のため空を返す
+            return ()
     lowered = filename_query.casefold()
     return tuple(result for result in results if lowered in result.display_path.casefold())
 

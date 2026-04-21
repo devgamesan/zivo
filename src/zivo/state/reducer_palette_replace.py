@@ -45,6 +45,7 @@ from .reducer_palette_shared import (
     notify,
     replace_grf_field,
     replace_replace_field,
+    validate_filename_filter,
 )
 
 
@@ -358,6 +359,27 @@ def handle_set_grf_replace(state: AppState, value: str) -> ReduceResult:
 
 
 def handle_set_grf_filename(state: AppState, value: str) -> ReduceResult:
+    # Validate filename filter to prevent regex crashes
+    validation_error = validate_filename_filter(value)
+    if validation_error:
+        next_palette = replace(
+            state.command_palette,
+            grf_filename_filter=value,
+            grf_error_message=validation_error,
+            grf_status_message=None,
+            grf_preview_results=(),
+            grf_total_match_count=0,
+            cursor_index=0,
+        )
+        return sync_grep_replace_preview(
+            replace(
+                state,
+                command_palette=next_palette,
+                child_pane=PaneState(directory_path=state.current_path, entries=()),
+                pending_replace_preview_request_id=None,
+            )
+        )
+
     next_palette = replace(
         state.command_palette,
         grf_filename_filter=value,
