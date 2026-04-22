@@ -248,6 +248,14 @@ def _handle_submit_history_palette(state: AppState, reduce_state: ReducerFn) -> 
     selected_item = items[
         normalize_command_palette_cursor(state, state.command_palette.cursor_index)
     ]
+    if state.layout_mode == "transfer":
+        next_state = restore_browsing_from_palette(state)
+        return request_transfer_pane_snapshot(
+            next_state,
+            next_state.active_transfer_pane,
+            selected_item.path,
+            invalidate_paths=(),
+        )
     return request_palette_snapshot(state, reduce_state, path=selected_item.path)
 
 

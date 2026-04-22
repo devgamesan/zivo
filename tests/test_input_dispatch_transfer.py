@@ -3,6 +3,7 @@ from zivo.state import NotificationState, build_initial_app_state, dispatch_key_
 from zivo.state.actions import (
     ActivateNextTab,
     ActivatePreviousTab,
+    BeginHistorySearch,
     FocusTransferPane,
     SetNotification,
     ToggleHiddenFiles,
@@ -77,7 +78,7 @@ def test_transfer_mode_does_not_use_clipboard_style_keys() -> None:
                 level="warning",
                 message=(
                     "Use [], space, y copy, m move, z undo, b bookmarks, "
-                    ". hidden, or q/2 to close"
+                    "H history, . hidden, or q/2 to close"
                 ),
             )
         ),
@@ -86,3 +87,11 @@ def test_transfer_mode_does_not_use_clipboard_style_keys() -> None:
     assert dispatch_key_input(state, key="c") == expected
     assert dispatch_key_input(state, key="x") == expected
     assert dispatch_key_input(state, key="v") == expected
+
+def test_transfer_mode_H_begins_history_search() -> None:
+    state = _reduce_state(build_initial_app_state(), ToggleTransferMode())
+
+    assert dispatch_key_input(state, key="H") == (
+        SetNotification(None),
+        BeginHistorySearch(),
+    )
