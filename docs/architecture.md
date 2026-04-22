@@ -239,7 +239,7 @@ sequenceDiagram
   - `Create directory`
 - palette source は `commands` / `file_search` / `grep_search` / `history` / `bookmarks` / `go_to_path` を持つ
 - `go_to_path` は入力中に一致するディレクトリ候補を複数表示し、`Tab` で選択候補を補完できる
-- `grep_search` は keyword / include extensions / exclude extensions の 3 フィールドを持ち、`Tab` / `Shift+Tab` で入力欄を移動する
+- `grep_search` は keyword / filename filter / include extensions / exclude extensions の 4 フィールドを持ち、`Tab` / `Shift+Tab` で入力欄を移動する
 
 ### `src/zivo/services/`
 

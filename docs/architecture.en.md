@@ -239,7 +239,7 @@ sequenceDiagram
   - `Create directory`
 - Palette sources are `commands`, `file_search`, `grep_search`, `history`, `bookmarks`, and `go_to_path`
 - `go_to_path` shows matching directory candidates while the user types and lets `Tab` complete the selected one
-- `grep_search` uses separate keyword / include-extensions / exclude-extensions fields and moves focus with `Tab` / `Shift+Tab`
+- `grep_search` uses separate keyword / filename-filter / include-extensions / exclude-extensions fields and moves focus with `Tab` / `Shift+Tab`
 
 ### `src/zivo/services/`
 

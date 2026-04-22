@@ -1562,8 +1562,8 @@ def test_select_command_palette_state_for_grep_search_includes_input_fields() ->
     assert [field.label for field in palette_state.input_fields] == [
         "Keyword",
         "Filter: Filename",
-        "Filter: Include",
-        "Filter: Exclude",
+        "Include extensions",
+        "Exclude extensions",
     ]
     assert [field.value for field in palette_state.input_fields] == ["todo", "main", "py,ts", "log"]
     assert [field.active for field in palette_state.input_fields] == [False, False, False, True]
