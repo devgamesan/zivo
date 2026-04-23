@@ -275,6 +275,7 @@ When a file is focused, press `e` to switch into a terminal editor in the curren
 | `y` | Copy focused-pane targets to the opposite pane |
 | `m` | Move focused-pane targets to the opposite pane |
 | `d` | Delete focused-pane targets to trash |
+| `r` | Rename focused or single selected entry |
 | `z` | Undo the last file operation |
 | `.` | Toggle hidden files |
 | `N` | Create new directory in the focused pane |

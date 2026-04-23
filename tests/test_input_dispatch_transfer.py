@@ -6,6 +6,7 @@ from zivo.state.actions import (
     BeginDeleteTargets,
     BeginGoToPath,
     BeginHistorySearch,
+    BeginRenameInput,
     FocusTransferPane,
     SetNotification,
     ToggleHiddenFiles,
@@ -79,7 +80,7 @@ def test_transfer_mode_does_not_use_clipboard_style_keys() -> None:
             NotificationState(
                 level="warning",
                 message=(
-                    "Use [], space, y copy, m move, d delete, z undo, b bookmarks, "
+                    "Use [], space, y copy, m move, d delete, r rename, z undo, b bookmarks, "
                     "H history, . hidden, or q/2 to close"
                 ),
             )
@@ -142,4 +143,61 @@ def test_transfer_mode_d_warns_when_no_targets() -> None:
     assert len(result) == 1
     assert isinstance(result[0], SetNotification)
     assert result[0].notification.message == "Nothing to delete"
+
+
+def test_transfer_lowercase_r_begins_rename_for_single_target() -> None:
+    state = _reduce_state(build_initial_app_state(), ToggleTransferMode())
+
+    result = dispatch_key_input(state, key="r")
+    assert len(result) == 2
+    assert result[0] == SetNotification(None)
+    assert isinstance(result[1], BeginRenameInput)
+    # カーソル位置のファイルがターゲットになる
+    assert result[1].path.endswith("/docs")
+
+
+def test_transfer_lowercase_r_warns_for_no_target() -> None:
+    from dataclasses import replace
+
+    state = _reduce_state(build_initial_app_state(), ToggleTransferMode())
+    # カーソルをクリアしてターゲットがない状態を作る
+    updated_left_pane = replace(
+        state.transfer_left.pane,
+        cursor_path=None,
+        selected_paths=(),
+    )
+    updated_right_pane = replace(
+        state.transfer_right.pane,
+        cursor_path=None,
+        selected_paths=(),
+    )
+    transfer_left = replace(state.transfer_left, pane=updated_left_pane)
+    transfer_right = replace(state.transfer_right, pane=updated_right_pane)
+    state = replace(state, transfer_left=transfer_left, transfer_right=transfer_right)
+
+    result = dispatch_key_input(state, key="r")
+    assert len(result) == 1
+    assert isinstance(result[0], SetNotification)
+    assert result[0].notification.message == "Rename requires a single target"
+
+
+def test_transfer_lowercase_r_warns_for_multiple_targets() -> None:
+    from dataclasses import replace
+
+    state = _reduce_state(build_initial_app_state(), ToggleTransferMode())
+    # 複数選択状態を作る
+    updated_left_pane = replace(
+        state.transfer_left.pane,
+        selected_paths=(
+            state.transfer_left.pane.cursor_path,
+            "/tmp/zivo-test-src/docs2",
+        ),
+    )
+    transfer_left = replace(state.transfer_left, pane=updated_left_pane)
+    state = replace(state, transfer_left=transfer_left)
+
+    result = dispatch_key_input(state, key="r")
+    assert len(result) == 1
+    assert isinstance(result[0], SetNotification)
+    assert result[0].notification.message == "Rename requires a single target"
 
