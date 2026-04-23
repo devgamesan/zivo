@@ -8,6 +8,7 @@ from .actions import (
     BeginDeleteTargets,
     BeginGoToPath,
     BeginHistorySearch,
+    BeginRenameInput,
     ClearTransferSelection,
     EnterTransferDirectory,
     FocusTransferPane,
@@ -36,6 +37,7 @@ TRANSFER_KEYMAP = {
     "N",
     "d",
     "q",
+    "r",
     "~",
     "[",
     "]",
@@ -164,6 +166,17 @@ def dispatch_transfer_input(
             return warn("Nothing to delete")
         return supported(BeginDeleteTargets(target_paths, mode="trash"))
 
+    if key == "r":
+        selected_paths = tuple(
+            path for path in transfer.pane.selected_paths
+        )
+        target_paths = selected_paths if selected_paths else (
+            (transfer.pane.cursor_path,) if transfer.pane.cursor_path else ()
+        )
+        if len(target_paths) != 1:
+            return warn("Rename requires a single target")
+        return supported(BeginRenameInput(target_paths[0]))
+
     if key == "G":
         return supported(BeginGoToPath())
 
@@ -171,7 +184,7 @@ def dispatch_transfer_input(
         return supported(BeginHistorySearch())
 
     return warn(
-        "Use [], space, y copy, m move, d delete, z undo, b bookmarks, "
+        "Use [], space, y copy, m move, d delete, r rename, z undo, b bookmarks, "
         "H history, . hidden, or q/2 to close"
     )
 
