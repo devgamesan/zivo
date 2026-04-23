@@ -4,6 +4,7 @@ from .actions import (
     ActivateNextTab,
     ActivatePreviousTab,
     BeginBookmarkSearch,
+    BeginHistorySearch,
     ClearTransferSelection,
     EnterTransferDirectory,
     FocusTransferPane,
@@ -47,6 +48,7 @@ TRANSFER_KEYMAP = {
     "l",
     "right",
     "h",
+    "H",
     "left",
     "y",
     "m",
@@ -136,7 +138,13 @@ def dispatch_transfer_input(
     if key == "b":
         return supported(BeginBookmarkSearch())
 
-    return warn("Use [], space, y copy, m move, z undo, b bookmarks, . hidden, or q/2 to close")
+    if key == "H":
+        return supported(BeginHistorySearch())
+
+    return warn(
+        "Use [], space, y copy, m move, z undo, b bookmarks, "
+        "H history, . hidden, or q/2 to close"
+    )
 
 
 def _active_transfer_pane(state: AppState) -> TransferPaneState | None:
