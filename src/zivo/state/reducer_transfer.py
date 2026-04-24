@@ -30,7 +30,7 @@ from .effects import LoadTransferPaneEffect, ReduceResult
 from .entry_state_helpers import select_visible_entry_states
 from .models import AppState, NotificationState, PaneState, TransferPaneId, TransferPaneState
 from .reducer_common import finalize, move_cursor, run_paste_request, select_range_paths
-from .reducer_requests import browser_snapshot_invalidation_paths
+from .reducer_requests import browser_snapshot_invalidation_paths, build_history_after_snapshot_load
 
 ReducerFn = Callable[[object, Action], ReduceResult]
 
@@ -119,8 +119,12 @@ def _handle_toggle_transfer_mode(
                 notification=NotificationState(level="info", message="Transfer mode closed"),
             )
         )
-    left = TransferPaneState(pane=state.current_pane, current_path=state.current_path)
-    right = TransferPaneState(pane=state.current_pane, current_path=state.current_path)
+    left = TransferPaneState(
+        pane=state.current_pane, current_path=state.current_path, history=state.history
+    )
+    right = TransferPaneState(
+        pane=state.current_pane, current_path=state.current_path, history=state.history
+    )
     return finalize(
         replace(
             state,
@@ -451,11 +455,21 @@ def _handle_transfer_pane_snapshot_loaded(
     transfer = _transfer_pane(state, action.pane_id)
     if transfer is None or transfer.pending_snapshot_request_id != action.request_id:
         return finalize(state)
+
+    # 履歴を更新（build_history_after_snapshot_loadを再利用）
+    temp_state = replace(
+        state,
+        current_path=transfer.current_path,
+        history=transfer.history,
+    )
+    new_history = build_history_after_snapshot_load(temp_state, action.current_path)
+
     next_transfer = replace(
         transfer,
         pane=action.pane,
         current_path=action.current_path,
         current_pane_window_start=0,
+        history=new_history,
         pending_snapshot_request_id=None,
     )
     return finalize(

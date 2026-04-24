@@ -467,6 +467,7 @@ class TransferPaneState:
 
     pane: PaneState
     current_path: str
+    history: HistoryState = HistoryState()
     current_pane_window_start: int = 0
     current_pane_delta: CurrentPaneDeltaState = CurrentPaneDeltaState()
     pending_snapshot_request_id: int | None = None
