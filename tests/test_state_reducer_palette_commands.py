@@ -41,6 +41,7 @@ from zivo.state.actions import (
     SetCursorPath,
     ShowAttributes,
     SubmitCommandPalette,
+    ToggleTransferMode,
 )
 
 
@@ -279,6 +280,53 @@ def test_submit_history_palette_in_transfer_mode_navigates_active_pane() -> None
         and e.path == "/tmp/c"
         for e in result.effects
     )
+
+
+def test_submit_command_palette_select_all_in_transfer_mode() -> None:
+    state = _reduce_state(build_initial_app_state(), ToggleTransferMode())
+    state = _reduce_state(state, BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("select all"))
+
+    next_state = _reduce_state(state, SubmitCommandPalette())
+
+    assert next_state.transfer_left is not None
+    assert next_state.transfer_left.pane.selected_paths == frozenset(
+        {
+            "/home/tadashi/develop/zivo/docs",
+            "/home/tadashi/develop/zivo/src",
+            "/home/tadashi/develop/zivo/tests",
+            "/home/tadashi/develop/zivo/README.md",
+            "/home/tadashi/develop/zivo/pyproject.toml",
+        }
+    )
+
+
+def test_submit_command_palette_reloads_active_transfer_pane() -> None:
+    state = _reduce_state(build_initial_app_state(), ToggleTransferMode())
+    state = _reduce_state(state, BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("reload"))
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.command_palette is None
+    assert any(
+        isinstance(effect, LoadTransferPaneEffect)
+        and effect.pane_id == "left"
+        and effect.path == "/home/tadashi/develop/zivo"
+        for effect in result.effects
+    )
+
+
+def test_submit_command_palette_begins_rename_in_transfer_mode() -> None:
+    state = _reduce_state(build_initial_app_state(), ToggleTransferMode())
+    state = _reduce_state(state, BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("rename"))
+
+    next_state = _reduce_state(state, SubmitCommandPalette())
+
+    assert next_state.ui_mode == "RENAME"
+    assert next_state.pending_input is not None
+    assert next_state.pending_input.value == "docs"
 
 def test_submit_bookmarks_palette_navigates_to_selected_directory(tmp_path) -> None:
     bookmarked_path = tmp_path / "project"

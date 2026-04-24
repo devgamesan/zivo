@@ -2655,7 +2655,7 @@ async def test_app_displays_transfer_help_bar() -> None:
     expected_help = (
         "[ ] focus | Space select | c copy | x cut | v paste | y copy-to-pane | "
         "m move-to-pane | d delete | r rename\n"
-        "z undo | . hidden | N new-dir | b bookmarks | H history | G go-to | q/2 close"
+        "z undo | . hidden | N new-dir | b bookmarks | H history | G go-to | : palette | q/2 close"
     )
 
     async with app.run_test() as pilot:
@@ -2664,6 +2664,30 @@ async def test_app_displays_transfer_help_bar() -> None:
         help_bar = await _wait_for_help_bar_text(app, expected_help)
 
         assert str(help_bar.renderable) == expected_help
+
+
+@pytest.mark.asyncio
+async def test_app_opens_command_palette_from_transfer_mode_with_colon() -> None:
+    path = str(Path("/tmp/zivo-transfer-palette").resolve())
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (DirectoryEntryState(f"{path}/docs", "docs", "dir"),),
+                child_path=f"{path}/docs",
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test() as pilot:
+        await _wait_for_snapshot_loaded(app, path)
+        await pilot.press("2")
+        await pilot.press(":")
+        palette = await _wait_for_command_palette(app)
+
+        assert app.app_state.ui_mode == "PALETTE"
+        assert palette.display is True
 
 
 def test_transfer_mode_does_not_use_preview_scroll_keys_for_child_preview() -> None:

@@ -3,6 +3,7 @@ from zivo.state import build_initial_app_state, dispatch_key_input
 from zivo.state.actions import (
     ActivateNextTab,
     ActivatePreviousTab,
+    BeginCommandPalette,
     BeginDeleteTargets,
     BeginGoToPath,
     BeginHistorySearch,
@@ -167,6 +168,15 @@ def test_transfer_mode_H_begins_history_search() -> None:
         BeginHistorySearch(),
     )
 
+
+def test_transfer_mode_colon_begins_command_palette() -> None:
+    state = _reduce_state(build_initial_app_state(), ToggleTransferMode())
+
+    assert dispatch_key_input(state, key=":", character=":") == (
+        SetNotification(None),
+        BeginCommandPalette(),
+    )
+
 def test_transfer_mode_G_begins_go_to_path() -> None:
     state = _reduce_state(build_initial_app_state(), ToggleTransferMode())
 
@@ -268,4 +278,3 @@ def test_transfer_lowercase_r_warns_for_multiple_targets() -> None:
     assert len(result) == 1
     assert isinstance(result[0], SetNotification)
     assert result[0].notification.message == "Rename requires a single target"
-

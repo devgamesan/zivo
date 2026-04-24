@@ -68,6 +68,7 @@ from zivo.state.actions import (
     SetNotification,
     SetSort,
     ToggleSelection,
+    ToggleTransferMode,
 )
 from zivo.state.command_palette import CommandPaletteItem
 from zivo.state.reducer_common import directory_size_target_paths
@@ -1384,6 +1385,22 @@ def test_select_command_palette_state_enables_history_navigation_items() -> None
     assert palette_state is not None
     assert any(item.label == "Go back" and item.enabled for item in palette_state.items)
     assert any(item.label == "Go forward" and item.enabled for item in palette_state.items)
+
+
+def test_select_command_palette_state_in_transfer_mode_shows_transfer_commands_only() -> None:
+    state = _reduce_state(build_initial_app_state(), ToggleTransferMode())
+    state = _reduce_state(state, BeginCommandPalette())
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    labels = [item.label for item in palette_state.items]
+    assert "History search" in labels
+    assert "Copy to opposite pane" in labels
+    assert "Move to opposite pane" in labels
+    assert "Close transfer mode" in labels
+    assert "Find files" not in labels
+    assert "Toggle split terminal" not in labels
 
 
 def test_select_command_palette_state_shows_bookmark_items() -> None:
