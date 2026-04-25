@@ -138,6 +138,8 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
         if state.config.help_bar.zip:
             return HelpBarState(state.config.help_bar.zip)
         return HelpBarState(("type zip path | enter compress | esc cancel",))
+    if state.ui_mode == "SYMLINK":
+        return HelpBarState(("type destination path | tab complete | enter create | esc cancel",))
     if state.ui_mode == "PALETTE":
         if state.command_palette is not None and state.command_palette.source == "file_search":
             if state.config.help_bar.palette_file_search:
@@ -254,7 +256,7 @@ def select_input_bar_state(state: AppState) -> InputBarState | None:
 def select_input_dialog_state(state: AppState) -> InputDialogState | None:
     """Return dialog content when the app is in an input mode."""
 
-    if state.ui_mode not in {"RENAME", "CREATE", "EXTRACT", "ZIP"}:
+    if state.ui_mode not in {"RENAME", "CREATE", "EXTRACT", "ZIP", "SYMLINK"}:
         return None
     if state.pending_input is None:
         return None
@@ -264,6 +266,8 @@ def select_input_dialog_state(state: AppState) -> InputDialogState | None:
         title = "Extract"
     elif state.ui_mode == "ZIP":
         title = "Compress"
+    elif state.ui_mode == "SYMLINK":
+        title = "Create Symlink"
     elif state.pending_input.create_kind == "file":
         title = "New File"
     else:
@@ -273,7 +277,11 @@ def select_input_dialog_state(state: AppState) -> InputDialogState | None:
         prompt=state.pending_input.prompt,
         value=state.pending_input.value,
         cursor_pos=state.pending_input.cursor_pos,
-        hint="enter apply | esc cancel",
+        hint=(
+            "tab complete | enter apply | esc cancel"
+            if state.ui_mode == "SYMLINK"
+            else "enter apply | esc cancel"
+        ),
     )
 
 
@@ -586,6 +594,15 @@ def select_conflict_dialog_state(state: AppState) -> ConflictDialogState | None:
                 f"{destination_name} already exists. "
                 f"Overwrite it and continue compressing {confirmation.total_entries} item(s)?"
             ),
+            options=("enter overwrite", "esc return to input"),
+        )
+
+    if state.symlink_overwrite_confirmation is not None:
+        confirmation = state.symlink_overwrite_confirmation
+        destination_name = Path(confirmation.request.destination_path).name
+        return ConflictDialogState(
+            title="Symlink Overwrite Confirmation",
+            message=f"{destination_name} already exists. Overwrite it and create the symlink?",
             options=("enter overwrite", "esc return to input"),
         )
 

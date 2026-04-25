@@ -7,7 +7,13 @@ from time import sleep
 from typing import Mapping, Protocol
 
 from zivo.adapters import FileOperationAdapter, LocalFileOperationAdapter
-from zivo.models import CreatePathRequest, DeleteRequest, FileMutationResult, RenameRequest
+from zivo.models import (
+    CreatePathRequest,
+    CreateSymlinkRequest,
+    DeleteRequest,
+    FileMutationResult,
+    RenameRequest,
+)
 from zivo.services.trash_operations import TrashService, resolve_trash_service
 
 
@@ -16,7 +22,7 @@ class FileMutationService(Protocol):
 
     def execute(
         self,
-        request: RenameRequest | CreatePathRequest | DeleteRequest,
+        request: RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest,
     ) -> FileMutationResult: ...
 
 
@@ -29,10 +35,12 @@ class LiveFileMutationService:
 
     def execute(
         self,
-        request: RenameRequest | CreatePathRequest | DeleteRequest,
+        request: RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest,
     ) -> FileMutationResult:
         if isinstance(request, RenameRequest):
             return self._execute_rename(request)
+        if isinstance(request, CreateSymlinkRequest):
+            return self._execute_symlink(request)
         if isinstance(request, DeleteRequest):
             return self._execute_delete(request)
         return self._execute_create(request)
@@ -57,6 +65,21 @@ class LiveFileMutationService:
             self.adapter.create_directory(str(target_path))
             message = f"Created directory {request.name}"
         return FileMutationResult(path=str(target_path), message=message)
+
+    def _execute_symlink(self, request: CreateSymlinkRequest) -> FileMutationResult:
+        source_path = _absolute_entry_path(request.source_path)
+        destination_path = _absolute_entry_path(request.destination_path)
+        self.adapter.create_symlink(
+            str(source_path),
+            str(destination_path),
+            overwrite=request.overwrite,
+        )
+        return FileMutationResult(
+            path=str(destination_path),
+            message=f"Created symlink {destination_path.name}",
+            operation="symlink",
+            source_path=str(source_path),
+        )
 
     def _execute_delete(self, request: DeleteRequest) -> FileMutationResult:
         removed_paths: list[str] = []
@@ -131,16 +154,16 @@ class FakeFileMutationService:
     """Deterministic file-mutation service used by tests."""
 
     results: Mapping[
-        RenameRequest | CreatePathRequest | DeleteRequest, FileMutationResult
+        RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest, FileMutationResult
     ] = field(default_factory=dict)
     failure_messages: Mapping[
-        RenameRequest | CreatePathRequest | DeleteRequest, str
+        RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest, str
     ] = field(default_factory=dict)
     default_delay_seconds: float = 0.0
 
     def execute(
         self,
-        request: RenameRequest | CreatePathRequest | DeleteRequest,
+        request: RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest,
     ) -> FileMutationResult:
         if self.default_delay_seconds > 0:
             sleep(self.default_delay_seconds)
@@ -159,6 +182,15 @@ class FakeFileMutationService:
                 message=f"Renamed to {request.new_name}",
                 operation="rename",
                 source_path=str(source_path),
+            )
+
+        if isinstance(request, CreateSymlinkRequest):
+            destination_path = _absolute_entry_path(request.destination_path)
+            return FileMutationResult(
+                path=str(destination_path),
+                message=f"Created symlink {destination_path.name}",
+                operation="symlink",
+                source_path=str(_absolute_entry_path(request.source_path)),
             )
 
         if isinstance(request, DeleteRequest):

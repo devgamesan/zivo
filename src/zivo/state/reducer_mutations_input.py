@@ -4,14 +4,17 @@ from dataclasses import replace
 from pathlib import Path
 
 from zivo.archive_utils import default_extract_destination, default_zip_destination
-from zivo.models import RenameRequest
+from zivo.models import CreateSymlinkRequest, RenameRequest
 
 from .actions import (
     BeginCreateInput,
     BeginExtractArchiveInput,
     BeginRenameInput,
+    BeginSymlinkInput,
     BeginZipCompressInput,
     CancelPendingInput,
+    CancelSymlinkOverwriteConfirmation,
+    ConfirmSymlinkOverwrite,
     DeletePendingInputForward,
     DismissNameConflict,
     MovePendingInputCursor,
@@ -20,7 +23,12 @@ from .actions import (
     SetPendingInputValue,
     SubmitPendingInput,
 )
-from .models import NameConflictState, NotificationState, PendingInputState
+from .models import (
+    NameConflictState,
+    NotificationState,
+    PendingInputState,
+    SymlinkOverwriteConfirmationState,
+)
 from .reducer_common import (
     build_extract_archive_request,
     build_file_mutation_request,
@@ -28,6 +36,7 @@ from .reducer_common import (
     current_entry_for_path,
     finalize,
     is_name_conflict_validation_error,
+    is_symlink_destination_conflict_validation_error,
     name_conflict_kind,
     restore_ui_mode_after_pending_input,
     run_archive_prepare_request,
@@ -58,6 +67,7 @@ def _handle_begin_extract_archive_input(state, action, reduce_state):
             archive_extract_progress=None,
             zip_compress_confirmation=None,
             zip_compress_progress=None,
+            symlink_overwrite_confirmation=None,
             name_conflict=None,
             attribute_inspection=None,
         )
@@ -89,6 +99,49 @@ def _handle_begin_zip_compress_input(state, action, reduce_state):
             archive_extract_progress=None,
             zip_compress_confirmation=None,
             zip_compress_progress=None,
+            symlink_overwrite_confirmation=None,
+            name_conflict=None,
+            attribute_inspection=None,
+        )
+    )
+
+
+def _default_symlink_destination(base_path: str, source_path: str) -> str:
+    source_name = Path(source_path).name
+    return str(Path(base_path) / f"{source_name}.link")
+
+
+def _handle_begin_symlink_input(state, action, reduce_state):
+    if state.layout_mode == "transfer":
+        active_pane = (
+            state.transfer_left
+            if state.active_transfer_pane == "left"
+            else state.transfer_right
+        )
+        base_path = active_pane.current_path if active_pane is not None else state.current_path
+    else:
+        base_path = state.current_pane.directory_path
+    destination = _default_symlink_destination(base_path, action.source_path)
+    return finalize(
+        replace(
+            state,
+            ui_mode="SYMLINK",
+            notification=None,
+            pending_input=PendingInputState(
+                prompt="Link to: ",
+                value=destination,
+                cursor_pos=len(destination),
+                symlink_source_path=action.source_path,
+            ),
+            command_palette=None,
+            pending_file_search_request_id=None,
+            pending_grep_search_request_id=None,
+            delete_confirmation=None,
+            archive_extract_confirmation=None,
+            archive_extract_progress=None,
+            zip_compress_confirmation=None,
+            zip_compress_progress=None,
+            symlink_overwrite_confirmation=None,
             name_conflict=None,
             attribute_inspection=None,
         )
@@ -137,6 +190,7 @@ def _handle_begin_rename_input(state, action, reduce_state):
             archive_extract_progress=None,
             zip_compress_confirmation=None,
             zip_compress_progress=None,
+            symlink_overwrite_confirmation=None,
             name_conflict=None,
             attribute_inspection=None,
         )
@@ -162,6 +216,7 @@ def _handle_begin_create_input(state, action, reduce_state):
             archive_extract_progress=None,
             zip_compress_confirmation=None,
             zip_compress_progress=None,
+            symlink_overwrite_confirmation=None,
             name_conflict=None,
             attribute_inspection=None,
         )
@@ -265,6 +320,7 @@ def _handle_cancel_pending_input(state, action, reduce_state):
             archive_extract_progress=None,
             zip_compress_confirmation=None,
             zip_compress_progress=None,
+            symlink_overwrite_confirmation=None,
             name_conflict=None,
             attribute_inspection=None,
         )
@@ -290,6 +346,25 @@ def _handle_submit_pending_input(state, action, reduce_state):
                     ),
                 )
             )
+        if is_symlink_destination_conflict_validation_error(state, validation_error):
+            request = build_file_mutation_request(state)
+            if isinstance(request, CreateSymlinkRequest):
+                return finalize(
+                    replace(
+                        state,
+                        ui_mode="CONFIRM",
+                        notification=None,
+                        paste_conflict=None,
+                        delete_confirmation=None,
+                        symlink_overwrite_confirmation=SymlinkOverwriteConfirmationState(
+                            request=CreateSymlinkRequest(
+                                source_path=request.source_path,
+                                destination_path=request.destination_path,
+                                overwrite=True,
+                            )
+                        ),
+                    )
+                )
         return finalize(
             replace(
                 state,
@@ -333,11 +408,40 @@ def _handle_dismiss_name_conflict(state, action, reduce_state):
     )
 
 
+def _handle_confirm_symlink_overwrite(state, action, reduce_state):
+    if state.symlink_overwrite_confirmation is None or state.pending_input is None:
+        return finalize(state)
+    return run_file_mutation_request(
+        replace(
+            state,
+            ui_mode="SYMLINK",
+            notification=None,
+            symlink_overwrite_confirmation=None,
+            pending_input=replace(state.pending_input, symlink_overwrite=True),
+        ),
+        state.symlink_overwrite_confirmation.request,
+    )
+
+
+def _handle_cancel_symlink_overwrite_confirmation(state, action, reduce_state):
+    if state.symlink_overwrite_confirmation is None:
+        return finalize(state)
+    return finalize(
+        replace(
+            state,
+            symlink_overwrite_confirmation=None,
+            notification=NotificationState(level="warning", message="Symlink creation cancelled"),
+            ui_mode=restore_ui_mode_after_pending_input(state),
+        )
+    )
+
+
 INPUT_MUTATION_HANDLERS: dict[type, MutationHandler] = {
     BeginExtractArchiveInput: _handle_begin_extract_archive_input,
     BeginZipCompressInput: _handle_begin_zip_compress_input,
     BeginRenameInput: _handle_begin_rename_input,
     BeginCreateInput: _handle_begin_create_input,
+    BeginSymlinkInput: _handle_begin_symlink_input,
     SetPendingInputValue: _handle_set_pending_input_value,
     MovePendingInputCursor: _handle_move_pending_input_cursor,
     SetPendingInputCursor: _handle_set_pending_input_cursor,
@@ -345,5 +449,7 @@ INPUT_MUTATION_HANDLERS: dict[type, MutationHandler] = {
     PasteIntoPendingInput: _handle_paste_into_pending_input,
     CancelPendingInput: _handle_cancel_pending_input,
     SubmitPendingInput: _handle_submit_pending_input,
+    ConfirmSymlinkOverwrite: _handle_confirm_symlink_overwrite,
+    CancelSymlinkOverwriteConfirmation: _handle_cancel_symlink_overwrite_confirmation,
     DismissNameConflict: _handle_dismiss_name_conflict,
 }

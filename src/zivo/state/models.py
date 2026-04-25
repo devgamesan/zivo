@@ -9,6 +9,7 @@ from zivo.models import (
     AppConfig,
     ConflictResolution,
     CreateKind,
+    CreateSymlinkRequest,
     CreateZipArchiveRequest,
     DeleteMode,
     ExtractArchiveRequest,
@@ -26,6 +27,7 @@ UiMode = Literal[
     "CREATE",
     "EXTRACT",
     "ZIP",
+    "SYMLINK",
     "PALETTE",
     "CONFIRM",
     "CONFIG",
@@ -206,6 +208,13 @@ class ZipCompressConfirmationState:
 
 
 @dataclass(frozen=True)
+class SymlinkOverwriteConfirmationState:
+    """Pending confirmation dialog state for symlink destination overwrite."""
+
+    request: CreateSymlinkRequest
+
+
+@dataclass(frozen=True)
 class ZipCompressProgressState:
     """Transient progress state for zip compression."""
 
@@ -291,6 +300,8 @@ class PendingInputState:
     create_kind: CreateKind | None = None
     extract_source_path: str | None = None
     zip_source_paths: tuple[str, ...] | None = None
+    symlink_source_path: str | None = None
+    symlink_overwrite: bool = False
 
 
 @dataclass(frozen=True)
@@ -538,6 +549,7 @@ class AppState:
     archive_extract_progress: ArchiveExtractProgressState | None = None
     zip_compress_confirmation: ZipCompressConfirmationState | None = None
     zip_compress_progress: ZipCompressProgressState | None = None
+    symlink_overwrite_confirmation: SymlinkOverwriteConfirmationState | None = None
     replace_confirmation: ReplaceConfirmationState | None = None
     attribute_inspection: AttributeInspectionState | None = None
     config_editor: ConfigEditorState | None = None

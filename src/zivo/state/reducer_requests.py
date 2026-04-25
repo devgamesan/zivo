@@ -6,6 +6,7 @@ from pathlib import Path
 
 from zivo.models import (
     CreatePathRequest,
+    CreateSymlinkRequest,
     CreateZipArchiveRequest,
     DeleteRequest,
     ExternalLaunchRequest,
@@ -76,7 +77,7 @@ def run_external_launch_request(
 
 def run_file_mutation_request(
     state,
-    request: RenameRequest | CreatePathRequest | DeleteRequest,
+    request: RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest,
 ) -> ReduceResult:
     request_id = state.next_request_id
     next_state = replace(
@@ -225,6 +226,8 @@ def restore_ui_mode_after_pending_input(state) -> str:
         return "EXTRACT"
     if state.pending_input.zip_source_paths is not None:
         return "ZIP"
+    if state.pending_input.symlink_source_path is not None:
+        return "SYMLINK"
     if state.pending_input.create_kind is not None:
         return "CREATE"
     return "RENAME"

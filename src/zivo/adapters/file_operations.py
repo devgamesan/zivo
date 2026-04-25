@@ -28,6 +28,8 @@ class FileOperationAdapter(Protocol):
 
     def create_directory(self, path: str) -> None: ...
 
+    def create_symlink(self, source: str, destination: str, *, overwrite: bool = False) -> None: ...
+
     def send_to_trash(self, path: str) -> None: ...
 
 
@@ -115,6 +117,19 @@ class LocalFileOperationAdapter:
             target.mkdir(exist_ok=False)
         except OSError as error:
             raise OSError(str(error) or "Directory creation failed") from error
+
+    def create_symlink(self, source: str, destination: str, *, overwrite: bool = False) -> None:
+        source_path = self._entry_path(source)
+        destination_path = self._entry_path(destination)
+        if source_path == destination_path:
+            raise OSError("Source and destination are the same path")
+        try:
+            if overwrite and os.path.lexists(destination_path):
+                self.remove_path(str(destination_path))
+            relative_target = os.path.relpath(source_path, destination_path.parent)
+            destination_path.symlink_to(relative_target)
+        except OSError as error:
+            raise OSError(str(error) or "Symlink creation failed") from error
 
     def send_to_trash(self, path: str) -> None:
         target = self._entry_path(path)

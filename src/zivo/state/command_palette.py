@@ -337,6 +337,14 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
         )
         items.append(
             CommandPaletteItem(
+                id="create_symlink",
+                label="Make symlink",
+                shortcut=None,
+                enabled=True,
+            )
+        )
+        items.append(
+            CommandPaletteItem(
                 id="compress_as_zip",
                 label="Compress as zip",
                 shortcut=None,
@@ -547,6 +555,12 @@ def _build_transfer_command_palette_items(state: AppState) -> tuple[CommandPalet
             id="rename",
             label="Rename",
             shortcut="r",
+            enabled=has_single_target,
+        ),
+        CommandPaletteItem(
+            id="create_symlink",
+            label="Make symlink",
+            shortcut=None,
             enabled=has_single_target,
         ),
         CommandPaletteItem(

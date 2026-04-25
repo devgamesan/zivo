@@ -480,7 +480,7 @@ class zivoApp(App[None]):
 
         if (
             event.key == "ctrl+v"
-            and self._app_state.ui_mode in {"RENAME", "CREATE", "EXTRACT", "ZIP"}
+            and self._app_state.ui_mode in {"RENAME", "CREATE", "EXTRACT", "ZIP", "SYMLINK"}
             and self._app_state.pending_input is not None
         ):
             text = self._external_launch_service.get_from_clipboard()
@@ -511,7 +511,7 @@ class zivoApp(App[None]):
     async def on_paste(self, event: events.Paste) -> None:
         """Handle clipboard paste in input dialog and split terminal modes."""
 
-        if self._app_state.ui_mode in {"RENAME", "CREATE", "EXTRACT", "ZIP"}:
+        if self._app_state.ui_mode in {"RENAME", "CREATE", "EXTRACT", "ZIP", "SYMLINK"}:
             if self._app_state.pending_input is not None:
                 from zivo.state.actions import PasteIntoPendingInput
 

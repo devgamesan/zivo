@@ -2051,7 +2051,7 @@ def test_select_config_dialog_state_formats_directories_first_detail() -> None:
         config_editor=ConfigEditorState(
             path="/tmp/zivo/config.toml",
             draft=AppConfig(display=DisplayConfig(directories_first=False)),
-            cursor_index=11,
+            cursor_index=14,
         ),
     )
 
@@ -2263,6 +2263,26 @@ def test_select_input_bar_state_for_create_mode() -> None:
     assert input_dialog.prompt == "New file: "
     assert input_dialog.value == "notes.txt"
     assert input_dialog.hint == "enter apply | esc cancel"
+
+
+def test_select_input_bar_state_for_symlink_mode() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="SYMLINK",
+        pending_input=PendingInputState(
+            prompt="Link to: ",
+            value="/tmp/docs.link",
+            cursor_pos=14,
+            symlink_source_path="/tmp/docs",
+        ),
+    )
+
+    input_dialog = select_input_dialog_state(state)
+
+    assert input_dialog is not None
+    assert input_dialog.title == "Create Symlink"
+    assert input_dialog.prompt == "Link to: "
+    assert input_dialog.hint == "tab complete | enter apply | esc cancel"
 
 
 def test_select_input_bar_state_for_filter_mode() -> None:

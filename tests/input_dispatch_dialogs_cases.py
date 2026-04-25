@@ -446,6 +446,29 @@ def test_pending_input_unbound_key_shows_guidance() -> None:
     assert actions == (SetNotification(None), MovePendingInputCursor(delta=-1))
 
 
+def test_symlink_tab_completes_pending_input_path(tmp_path) -> None:
+    (tmp_path / "docs").mkdir()
+    state = replace(
+        build_initial_app_state(),
+        current_path=str(tmp_path),
+        current_pane=replace(build_initial_app_state().current_pane, directory_path=str(tmp_path)),
+        ui_mode="SYMLINK",
+        pending_input=PendingInputState(
+            prompt="Link to: ",
+            value="do",
+            cursor_pos=2,
+            symlink_source_path=str(tmp_path / "README.md"),
+        ),
+    )
+
+    actions = dispatch_key_input(state, key="tab")
+
+    assert actions == (
+        SetNotification(None),
+        SetPendingInputValue("docs/", cursor_pos=5),
+    )
+
+
 def test_busy_key_shows_warning_message() -> None:
     state = build_initial_app_state()
     state = replace(state, ui_mode="BUSY")
@@ -457,4 +480,3 @@ def test_busy_key_shows_warning_message() -> None:
             NotificationState(level="warning", message="Input ignored while processing")
         ),
     )
-

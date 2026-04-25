@@ -9,7 +9,7 @@ CreateKind = Literal["file", "dir"]
 DeleteMode = Literal["trash", "permanent"]
 MutationResultLevel = Literal["info", "warning", "error"]
 ArchiveFormat = Literal["zip", "tar", "tar.gz", "tar.bz2", "gz", "bz2"]
-FileMutationOperation = Literal["rename", "create", "delete"]
+FileMutationOperation = Literal["rename", "create", "delete", "symlink"]
 UndoOperationKind = Literal["rename", "paste_copy", "paste_cut", "trash_delete"]
 
 
@@ -111,6 +111,15 @@ class CreatePathRequest:
 
 
 @dataclass(frozen=True)
+class CreateSymlinkRequest:
+    """A request to create a symlink to an existing source path."""
+
+    source_path: str
+    destination_path: str
+    overwrite: bool = False
+
+
+@dataclass(frozen=True)
 class DeleteRequest:
     """A request to trash or permanently delete one or more paths."""
 
@@ -118,7 +127,7 @@ class DeleteRequest:
     mode: DeleteMode = "trash"
 
 
-FileMutationRequest = RenameRequest | CreatePathRequest | DeleteRequest
+FileMutationRequest = RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest
 
 
 @dataclass(frozen=True)

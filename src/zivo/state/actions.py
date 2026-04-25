@@ -6,6 +6,7 @@ from .actions_input import (
     BeginFilterInput,
     BeginRenameInput,
     BeginShellCommandInput,
+    BeginSymlinkInput,
     BeginZipCompressInput,
     CancelFilterInput,
     CancelPendingInput,
@@ -36,12 +37,14 @@ from .actions_mutations import (
     CancelEmptyTrashConfirmation,
     CancelPasteConflict,
     CancelReplaceConfirmation,
+    CancelSymlinkOverwriteConfirmation,
     CancelZipCompressConfirmation,
     ClearSelection,
     ConfirmArchiveExtract,
     ConfirmDeleteTargets,
     ConfirmEmptyTrash,
     ConfirmReplaceTargets,
+    ConfirmSymlinkOverwrite,
     ConfirmZipCompress,
     CopyTargets,
     CutTargets,
@@ -60,6 +63,7 @@ __all__ = [
     "BeginFilterInput",
     "BeginRenameInput",
     "BeginShellCommandInput",
+    "BeginSymlinkInput",
     "BeginZipCompressInput",
     "CancelFilterInput",
     "CancelPendingInput",
@@ -89,12 +93,14 @@ __all__ = [
     "CancelEmptyTrashConfirmation",
     "CancelPasteConflict",
     "CancelReplaceConfirmation",
+    "CancelSymlinkOverwriteConfirmation",
     "CancelZipCompressConfirmation",
     "ClearSelection",
     "ConfirmArchiveExtract",
     "ConfirmDeleteTargets",
     "ConfirmEmptyTrash",
     "ConfirmReplaceTargets",
+    "ConfirmSymlinkOverwrite",
     "ConfirmZipCompress",
     "CopyTargets",
     "CutTargets",
@@ -292,6 +298,7 @@ Action = (
     | CancelFilterInput
     | BeginRenameInput
     | BeginCreateInput
+    | BeginSymlinkInput
     | BeginExtractArchiveInput
     | BeginZipCompressInput
     | BeginShellCommandInput
@@ -376,6 +383,8 @@ Action = (
     | CancelArchiveExtractConfirmation
     | ConfirmZipCompress
     | CancelZipCompressConfirmation
+    | ConfirmSymlinkOverwrite
+    | CancelSymlinkOverwriteConfirmation
     | RequestBrowserSnapshot
     | RequestDirectorySizes
     | AttributeInspectionLoaded

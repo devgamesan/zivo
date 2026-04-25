@@ -9,12 +9,14 @@ from .actions import (
     CancelPendingInput,
     CancelReplaceConfirmation,
     CancelShellCommandInput,
+    CancelSymlinkOverwriteConfirmation,
     CancelZipCompressConfirmation,
     ConfirmArchiveExtract,
     ConfirmDeleteTargets,
     ConfirmEmptyTrash,
     ConfirmFilterInput,
     ConfirmReplaceTargets,
+    ConfirmSymlinkOverwrite,
     ConfirmZipCompress,
     CycleConfigEditorValue,
     DeletePendingInputForward,
@@ -36,6 +38,7 @@ from .actions import (
 )
 from .input_common import DispatchedActions, supported, warn
 from .models import AppState
+from .reducer_pending_input import complete_pending_input_path
 
 
 def dispatch_filter_input(
@@ -98,6 +101,13 @@ def dispatch_confirm_input(
             return supported(ConfirmReplaceTargets())
         return warn("Use Enter to confirm replace or Esc to cancel")
 
+    if state.symlink_overwrite_confirmation is not None:
+        if key == "escape":
+            return supported(CancelSymlinkOverwriteConfirmation())
+        if key == "enter":
+            return supported(ConfirmSymlinkOverwrite())
+        return warn("Use Enter to overwrite the destination or Esc to return")
+
     if state.name_conflict is not None:
         if key in {"enter", "escape"}:
             return supported(DismissNameConflict())
@@ -157,6 +167,12 @@ def dispatch_input_dialog_input(
 
     if key == "ctrl+v":
         return supported()
+
+    if key == "tab":
+        completed = complete_pending_input_path(state)
+        if completed is None:
+            return warn("No matching path to complete")
+        return supported(SetPendingInputValue(completed, len(completed)))
 
     if character and character.isprintable():
         pending = state.pending_input

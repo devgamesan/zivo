@@ -65,6 +65,7 @@ def _handle_file_mutation_completed(state, action, reduce_state):
         archive_extract_progress=None,
         zip_compress_confirmation=None,
         zip_compress_progress=None,
+        symlink_overwrite_confirmation=None,
         name_conflict=None,
         pending_file_mutation_request_id=None,
         undo_stack=push_undo_entry(state, undo_entry_for_file_mutation(action.result)),
@@ -158,6 +159,7 @@ def _handle_file_mutation_failed(state, action, reduce_state):
             archive_extract_progress=None,
             zip_compress_confirmation=None,
             zip_compress_progress=None,
+            symlink_overwrite_confirmation=None,
             name_conflict=None,
             ui_mode=restore_ui_mode_after_pending_input(state),
         )

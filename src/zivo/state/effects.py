@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from zivo.models import (
     AppConfig,
     CreatePathRequest,
+    CreateSymlinkRequest,
     CreateZipArchiveRequest,
     DeleteRequest,
     ExternalLaunchRequest,
@@ -113,7 +114,7 @@ class RunFileMutationEffect:
     """Execute a rename/create mutation outside the reducer."""
 
     request_id: int
-    request: RenameRequest | CreatePathRequest | DeleteRequest
+    request: RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest
 
 
 @dataclass(frozen=True)

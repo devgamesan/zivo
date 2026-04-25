@@ -20,6 +20,39 @@ def active_current_entries(state) -> tuple[DirectoryEntryState, ...]:
 def list_matching_directory_paths(query: str, base_path: str) -> tuple[str, ...]:
     """Return matching directory candidates for go-to-path completion."""
 
+    return _list_matching_entry_paths(query, base_path, directories_only=True)
+
+
+def list_matching_path_entries(query: str, base_path: str) -> tuple[str, ...]:
+    """Return matching file or directory candidates for general path completion."""
+
+    return _list_matching_entry_paths(query, base_path, directories_only=False)
+
+
+def longest_common_completion_prefix(candidates: tuple[str, ...]) -> str:
+    """Return the longest shared completion prefix across rendered candidates."""
+
+    if not candidates:
+        return ""
+    prefix = os.path.commonprefix(candidates)
+    if not prefix:
+        return ""
+    separator_index = prefix.rfind(os.sep)
+    if os.altsep is not None:
+        separator_index = max(separator_index, prefix.rfind(os.altsep))
+    if separator_index <= 0:
+        return prefix
+    return prefix[: separator_index + 1]
+
+
+def _list_matching_entry_paths(
+    query: str,
+    base_path: str,
+    *,
+    directories_only: bool,
+) -> tuple[str, ...]:
+    """Return matching completion candidates for a partially typed path."""
+
     raw_query = query.strip()
     if not raw_query:
         return ()
@@ -41,7 +74,7 @@ def list_matching_directory_paths(query: str, base_path: str) -> tuple[str, ...]
     try:
         for child in parent.iterdir():
             try:
-                if not child.is_dir():
+                if directories_only and not child.is_dir():
                     continue
             except OSError:
                 continue

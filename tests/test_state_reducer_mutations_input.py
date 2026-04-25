@@ -2,12 +2,13 @@ from dataclasses import replace
 from pathlib import Path
 
 from tests.test_state_reducer import _reduce_state
-from zivo.models import CreatePathRequest, RenameRequest
+from zivo.models import CreatePathRequest, CreateSymlinkRequest, RenameRequest
 from zivo.state import (
     NameConflictState,
     NotificationState,
     PendingInputState,
     RunFileMutationEffect,
+    SymlinkOverwriteConfirmationState,
     build_initial_app_state,
     reduce_app_state,
 )
@@ -15,8 +16,11 @@ from zivo.state.actions import (
     BeginCreateInput,
     BeginExtractArchiveInput,
     BeginRenameInput,
+    BeginSymlinkInput,
     BeginZipCompressInput,
     CancelPendingInput,
+    CancelSymlinkOverwriteConfirmation,
+    ConfirmSymlinkOverwrite,
     DismissNameConflict,
     SetPendingInputValue,
     SubmitPendingInput,
@@ -55,6 +59,21 @@ def test_begin_create_input_sets_mode_and_kind() -> None:
         prompt="New directory: ",
         value="",
         create_kind="dir",
+    )
+
+
+def test_begin_symlink_input_sets_destination_prompt() -> None:
+    next_state = _reduce_state(
+        build_initial_app_state(),
+        BeginSymlinkInput(source_path="/home/tadashi/develop/zivo/docs"),
+    )
+
+    assert next_state.ui_mode == "SYMLINK"
+    assert next_state.pending_input == PendingInputState(
+        prompt="Link to: ",
+        value="/home/tadashi/develop/zivo/docs.link",
+        cursor_pos=len("/home/tadashi/develop/zivo/docs.link"),
+        symlink_source_path="/home/tadashi/develop/zivo/docs",
     )
 
 
@@ -246,6 +265,37 @@ def test_submit_pending_input_name_conflict_enters_confirm_mode_for_create_dir()
     assert result.effects == ()
 
 
+def test_submit_pending_input_symlink_conflict_enters_confirm_mode(tmp_path) -> None:
+    source = tmp_path / "docs"
+    source.mkdir()
+    destination = tmp_path / "docs.link"
+    destination.write_text("existing", encoding="utf-8")
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="SYMLINK",
+        current_path=str(tmp_path),
+        current_pane=replace(build_initial_app_state().current_pane, directory_path=str(tmp_path)),
+        pending_input=PendingInputState(
+            prompt="Link to: ",
+            value=str(destination),
+            cursor_pos=len(str(destination)),
+            symlink_source_path=str(source),
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitPendingInput())
+
+    assert result.state.ui_mode == "CONFIRM"
+    assert result.state.symlink_overwrite_confirmation == SymlinkOverwriteConfirmationState(
+        request=CreateSymlinkRequest(
+            source_path=str(source),
+            destination_path=str(destination),
+            overwrite=True,
+        )
+    )
+    assert result.effects == ()
+
+
 def test_dismiss_name_conflict_restores_rename_mode_and_keeps_input() -> None:
     state = replace(
         build_initial_app_state(),
@@ -282,6 +332,70 @@ def test_dismiss_name_conflict_restores_create_mode_and_keeps_input() -> None:
     assert next_state.ui_mode == "CREATE"
     assert next_state.pending_input == state.pending_input
     assert next_state.name_conflict is None
+
+
+def test_confirm_symlink_overwrite_runs_file_mutation_effect(tmp_path) -> None:
+    source = tmp_path / "docs"
+    source.mkdir()
+    destination = tmp_path / "docs.link"
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        pending_input=PendingInputState(
+            prompt="Link to: ",
+            value=str(destination),
+            cursor_pos=len(str(destination)),
+            symlink_source_path=str(source),
+        ),
+        symlink_overwrite_confirmation=SymlinkOverwriteConfirmationState(
+            request=CreateSymlinkRequest(
+                source_path=str(source),
+                destination_path=str(destination),
+                overwrite=True,
+            )
+        ),
+    )
+
+    result = reduce_app_state(state, ConfirmSymlinkOverwrite())
+
+    assert result.state.ui_mode == "BUSY"
+    assert result.effects == (
+        RunFileMutationEffect(
+            request_id=1,
+            request=CreateSymlinkRequest(
+                source_path=str(source),
+                destination_path=str(destination),
+                overwrite=True,
+            ),
+        ),
+    )
+
+
+def test_cancel_symlink_overwrite_confirmation_restores_symlink_mode(tmp_path) -> None:
+    source = tmp_path / "docs"
+    destination = tmp_path / "docs.link"
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CONFIRM",
+        pending_input=PendingInputState(
+            prompt="Link to: ",
+            value=str(destination),
+            cursor_pos=len(str(destination)),
+            symlink_source_path=str(source),
+        ),
+        symlink_overwrite_confirmation=SymlinkOverwriteConfirmationState(
+            request=CreateSymlinkRequest(
+                source_path=str(source),
+                destination_path=str(destination),
+                overwrite=True,
+            )
+        ),
+    )
+
+    next_state = _reduce_state(state, CancelSymlinkOverwriteConfirmation())
+
+    assert next_state.ui_mode == "SYMLINK"
+    assert next_state.symlink_overwrite_confirmation is None
 
 
 def test_submit_pending_input_case_only_rename_emits_mutation() -> None:

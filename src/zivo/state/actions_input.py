@@ -35,6 +35,13 @@ class BeginCreateInput:
 
 
 @dataclass(frozen=True)
+class BeginSymlinkInput:
+    """Enter symlink input mode for a single source path."""
+
+    source_path: str
+
+
+@dataclass(frozen=True)
 class BeginExtractArchiveInput:
     """Enter extract input mode for a supported archive."""
 

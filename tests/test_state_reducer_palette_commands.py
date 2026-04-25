@@ -118,6 +118,20 @@ def test_submit_command_palette_runs_create_file_flow() -> None:
         create_kind="file",
     )
 
+
+def test_submit_command_palette_runs_create_symlink_flow() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("symlink"))
+
+    next_state = _reduce_state(state, SubmitCommandPalette())
+
+    assert next_state.ui_mode == "SYMLINK"
+    assert next_state.command_palette is None
+    assert next_state.pending_input is not None
+    assert next_state.pending_input.prompt == "Link to: "
+    assert next_state.pending_input.symlink_source_path == "/home/tadashi/develop/zivo/docs"
+    assert next_state.pending_input.value.endswith("/docs.link")
+
 def test_submit_command_palette_begins_extract_archive_flow() -> None:
     archive_path = "/home/tadashi/develop/zivo/archive.zip"
     state = replace(

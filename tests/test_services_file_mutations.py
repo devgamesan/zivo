@@ -1,8 +1,9 @@
+import os
 from dataclasses import dataclass, field
 
 import pytest
 
-from zivo.models import CreatePathRequest, DeleteRequest, RenameRequest
+from zivo.models import CreatePathRequest, CreateSymlinkRequest, DeleteRequest, RenameRequest
 from zivo.services import LiveFileMutationService
 
 
@@ -14,6 +15,7 @@ class StubFileOperationAdapter:
     moved_paths: list[tuple[str, str]] = field(default_factory=list)
     created_files: list[str] = field(default_factory=list)
     created_directories: list[str] = field(default_factory=list)
+    created_symlinks: list[tuple[str, str, bool]] = field(default_factory=list)
 
     def path_exists(self, path: str) -> bool:
         return False
@@ -46,6 +48,11 @@ class StubFileOperationAdapter:
         if path in self.failing_paths:
             raise OSError("directory creation failed")
         self.created_directories.append(path)
+
+    def create_symlink(self, source: str, destination: str, *, overwrite: bool = False) -> None:
+        if source in self.failing_paths or destination in self.failing_paths:
+            raise OSError("symlink creation failed")
+        self.created_symlinks.append((source, destination, overwrite))
 
     def send_to_trash(self, path: str) -> None:
         if path in self.failing_paths:
@@ -128,6 +135,59 @@ def test_file_mutation_service_creates_directory() -> None:
     assert adapter.created_directories == ["/tmp/zivo/docs"]
     assert result.path == "/tmp/zivo/docs"
     assert result.message == "Created directory docs"
+
+
+def test_file_mutation_service_creates_symlink() -> None:
+    adapter = StubFileOperationAdapter()
+    service = LiveFileMutationService(adapter=adapter)
+
+    result = service.execute(
+        CreateSymlinkRequest(
+            source_path="/tmp/zivo/docs",
+            destination_path="/tmp/zivo/docs.link",
+        )
+    )
+
+    assert adapter.created_symlinks == [("/tmp/zivo/docs", "/tmp/zivo/docs.link", False)]
+    assert result.path == "/tmp/zivo/docs.link"
+    assert result.message == "Created symlink docs.link"
+
+
+def test_file_mutation_service_creates_relative_symlink_on_disk(tmp_path) -> None:
+    target = tmp_path / "docs"
+    target.mkdir()
+    destination = tmp_path / "docs.link"
+    service = LiveFileMutationService()
+
+    result = service.execute(
+        CreateSymlinkRequest(source_path=str(target), destination_path=str(destination))
+    )
+
+    assert destination.is_symlink()
+    assert os.readlink(destination) == "docs"
+    assert destination.resolve() == target.resolve()
+    assert result.path == str(destination)
+
+
+def test_file_mutation_service_overwrites_existing_symlink_destination(tmp_path) -> None:
+    target = tmp_path / "docs"
+    target.mkdir()
+    other = tmp_path / "other"
+    other.mkdir()
+    destination = tmp_path / "docs.link"
+    destination.symlink_to(other)
+    service = LiveFileMutationService()
+
+    service.execute(
+        CreateSymlinkRequest(
+            source_path=str(target),
+            destination_path=str(destination),
+            overwrite=True,
+        )
+    )
+
+    assert destination.is_symlink()
+    assert destination.resolve() == target.resolve()
 
 
 def test_file_mutation_service_raises_create_file_error() -> None:

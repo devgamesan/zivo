@@ -1,16 +1,23 @@
 """Pending input validation and request builders."""
 
+import os
 from pathlib import Path
 
 from zivo.archive_utils import resolve_zip_destination_input
 from zivo.models import (
     CreatePathRequest,
+    CreateSymlinkRequest,
     CreateZipArchiveRequest,
     ExtractArchiveRequest,
     RenameRequest,
 )
 
-from .reducer_path_helpers import current_entry_paths
+from .reducer_path_helpers import (
+    current_entry_paths,
+    format_go_to_path_completion,
+    list_matching_path_entries,
+    longest_common_completion_prefix,
+)
 
 
 def validate_pending_input(state, *, is_macos: bool) -> str | None:
@@ -53,6 +60,24 @@ def validate_pending_input(state, *, is_macos: bool) -> str | None:
                     return "Destination path cannot be inside a directory being compressed"
         return None
 
+    if state.pending_input.symlink_source_path is not None:
+        destination = state.pending_input.value.strip()
+        if not destination:
+            return "Destination path cannot be empty"
+        source_path = (
+            Path(state.pending_input.symlink_source_path).expanduser().resolve(strict=False)
+        )
+        resolved_destination = resolve_pending_input_destination_path(state, destination)
+        if resolved_destination is None:
+            return "Unable to resolve destination path"
+        if resolved_destination == source_path:
+            return "Destination path cannot be the source path"
+        if not resolved_destination.parent.exists() or not resolved_destination.parent.is_dir():
+            return "Destination parent directory does not exist"
+        if os.path.lexists(resolved_destination) and not state.pending_input.symlink_overwrite:
+            return f"An entry already exists at '{resolved_destination}'"
+        return None
+
     name = state.pending_input.value
     if not name:
         return "Name cannot be empty"
@@ -87,6 +112,13 @@ def is_name_conflict_validation_error(state, message: str) -> bool:
     )
 
 
+def is_symlink_destination_conflict_validation_error(state, message: str) -> bool:
+    if state.pending_input is None or state.pending_input.symlink_source_path is None:
+        return False
+    destination = resolve_pending_input_destination_path(state, state.pending_input.value.strip())
+    return destination is not None and message == f"An entry already exists at '{destination}'"
+
+
 def name_conflict_kind(state):
     if state.pending_input is not None and state.pending_input.create_kind == "file":
         return "create_file"
@@ -97,7 +129,7 @@ def name_conflict_kind(state):
 
 def build_file_mutation_request(
     state,
-) -> RenameRequest | CreatePathRequest | None:
+) -> RenameRequest | CreatePathRequest | CreateSymlinkRequest | None:
     if state.pending_input is None:
         return None
     if state.ui_mode == "RENAME" and state.pending_input.target_path is not None:
@@ -124,6 +156,18 @@ def build_file_mutation_request(
             parent_dir=parent_dir,
             name=state.pending_input.value,
             kind=state.pending_input.create_kind,
+        )
+    if state.ui_mode == "SYMLINK" and state.pending_input.symlink_source_path is not None:
+        destination = resolve_pending_input_destination_path(
+            state,
+            state.pending_input.value.strip(),
+        )
+        if destination is None:
+            return None
+        return CreateSymlinkRequest(
+            source_path=state.pending_input.symlink_source_path,
+            destination_path=str(destination),
+            overwrite=state.pending_input.symlink_overwrite,
         )
     return None
 
@@ -182,6 +226,14 @@ def pending_input_parent_and_target(state) -> tuple[str | None, str | None]:
         return (str(source_path.parent), None)
     if state.ui_mode == "ZIP" and state.pending_input.zip_source_paths is not None:
         return (state.current_pane.directory_path, None)
+    if state.ui_mode == "SYMLINK" and state.pending_input.symlink_source_path is not None:
+        destination = resolve_pending_input_destination_path(
+            state,
+            state.pending_input.value.strip(),
+        )
+        if destination is None:
+            return (None, None)
+        return (str(destination.parent), str(destination))
     return (None, None)
 
 
@@ -199,3 +251,47 @@ def _pending_input_existing_paths(state) -> tuple[str, ...]:
         if active_pane is not None:
             return tuple(entry.path for entry in active_pane.pane.entries)
     return current_entry_paths(state)
+
+
+def resolve_pending_input_base_path(state) -> str:
+    if state.layout_mode == "transfer":
+        active_pane = _active_transfer_pane(state)
+        if active_pane is not None:
+            return active_pane.current_path
+    return state.current_pane.directory_path
+
+
+def resolve_pending_input_destination_path(state, destination: str) -> Path | None:
+    raw_destination = destination.strip()
+    if not raw_destination:
+        return None
+    resolved = Path(os.path.expanduser(raw_destination))
+    if not resolved.is_absolute():
+        resolved = Path(resolve_pending_input_base_path(state)) / resolved
+    try:
+        return resolved.resolve(strict=False)
+    except (OSError, ValueError, RuntimeError):
+        return None
+
+
+def complete_pending_input_path(state) -> str | None:
+    if state.pending_input is None or state.pending_input.symlink_source_path is None:
+        return None
+    query = state.pending_input.value
+    base_path = resolve_pending_input_base_path(state)
+    candidates = list_matching_path_entries(query, base_path)
+    if not candidates:
+        return None
+    rendered = tuple(
+        format_go_to_path_completion(
+            candidate,
+            query,
+            base_path,
+            append_separator=Path(candidate).is_dir(),
+        )
+        for candidate in candidates
+    )
+    if len(rendered) == 1:
+        return rendered[0]
+    prefix = longest_common_completion_prefix(rendered)
+    return prefix if prefix and prefix != query else None

@@ -122,6 +122,16 @@ class CancelZipCompressConfirmation:
 
 
 @dataclass(frozen=True)
+class ConfirmSymlinkOverwrite:
+    """Confirm overwriting the pending symlink destination."""
+
+
+@dataclass(frozen=True)
+class CancelSymlinkOverwriteConfirmation:
+    """Return from symlink overwrite confirmation to input editing."""
+
+
+@dataclass(frozen=True)
 class ConfirmReplaceTargets:
     """Confirmed - proceed with the replace operation."""
 
