@@ -34,6 +34,8 @@ from .actions import (
     CancelCommandPalette,
     CloseCurrentTab,
     CopyPathsToClipboard,
+    CopyTargets,
+    CutTargets,
     CycleFindReplaceField,
     CycleGrepReplaceField,
     CycleGrepReplaceSelectedField,
@@ -46,6 +48,7 @@ from .actions import (
     GoBack,
     GoForward,
     GoToHomeDirectory,
+    GoToTransferHome,
     GrepSearchCompleted,
     GrepSearchFailed,
     MoveCommandPaletteCursor,
@@ -55,9 +58,12 @@ from .actions import (
     OpenPathInEditor,
     OpenPathWithDefaultApp,
     OpenTerminalAtPath,
+    PasteClipboard,
+    PasteClipboardToTransferPane,
     ReloadDirectory,
     RemoveBookmark,
     SelectAllVisibleEntries,
+    SelectAllVisibleTransferEntries,
     SelectedFilesGrepKeywordChanged,
     SetCommandPaletteQuery,
     SetFindReplaceField,
@@ -74,6 +80,8 @@ from .actions import (
     ToggleHiddenFiles,
     ToggleSplitTerminal,
     ToggleTransferMode,
+    TransferCopyToOppositePane,
+    TransferMoveToOppositePane,
     UndoLastOperation,
 )
 from .command_palette import get_command_palette_items, normalize_command_palette_cursor
@@ -81,6 +89,7 @@ from .effects import ReduceResult, RunAttributeInspectionEffect
 from .models import AppState, AttributeInspectionState, ConfigEditorState, NotificationState
 from .reducer_common import (
     ReducerFn,
+    browser_snapshot_invalidation_paths,
     expand_and_validate_path,
     finalize,
     list_matching_directory_paths,
@@ -382,10 +391,26 @@ def _run_go_to_path_command(state: AppState, reduce_state: ReducerFn) -> ReduceR
 
 
 def _run_go_to_home_directory_command(state: AppState, reduce_state: ReducerFn) -> ReduceResult:
+    if state.layout_mode == "transfer":
+        return reduce_state(state, GoToTransferHome())
     return reduce_state(state, GoToHomeDirectory())
 
 
 def _run_reload_directory_command(state: AppState, reduce_state: ReducerFn) -> ReduceResult:
+    if state.layout_mode == "transfer":
+        transfer = _active_transfer_pane(state)
+        if transfer is None:
+            return finalize(state)
+        return request_transfer_pane_snapshot(
+            state,
+            state.active_transfer_pane,
+            transfer.current_path,
+            cursor_path=transfer.pane.cursor_path,
+            invalidate_paths=browser_snapshot_invalidation_paths(
+                transfer.current_path,
+                transfer.pane.cursor_path,
+            ),
+        )
     return reduce_state(state, ReloadDirectory())
 
 
@@ -394,6 +419,11 @@ def _run_toggle_split_terminal_command(state: AppState, reduce_state: ReducerFn)
 
 
 def _run_select_all_command(state: AppState, reduce_state: ReducerFn) -> ReduceResult:
+    if state.layout_mode == "transfer":
+        return reduce_state(
+            state,
+            SelectAllVisibleTransferEntries(paths=_transfer_visible_paths(state)),
+        )
     visible_paths = tuple(entry.path for entry in select_visible_current_entry_states(state))
     return reduce_state(state, SelectAllVisibleEntries(visible_paths))
 
@@ -464,7 +494,11 @@ def _run_rename_command(
     next_state: AppState,
     reduce_state: ReducerFn,
 ) -> ReduceResult:
-    target_path = single_target_path(state)
+    target_path = (
+        _transfer_single_target_path(state)
+        if state.layout_mode == "transfer"
+        else single_target_path(state)
+    )
     if target_path is None:
         return notify(next_state, level="warning", message="Rename requires a single target")
     return reduce_state(next_state, BeginRenameInput(path=target_path))
@@ -528,10 +562,53 @@ def _run_delete_targets_command(
     next_state: AppState,
     reduce_state: ReducerFn,
 ) -> ReduceResult:
-    target_paths = select_target_paths(state)
+    target_paths = (
+        _transfer_target_paths(state)
+        if state.layout_mode == "transfer"
+        else select_target_paths(state)
+    )
     if not target_paths:
         return notify(state, level="warning", message="Nothing to delete")
     return reduce_state(next_state, BeginDeleteTargets(paths=target_paths))
+
+
+def _run_copy_targets_command(
+    state: AppState,
+    next_state: AppState,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    target_paths = (
+        _transfer_target_paths(state)
+        if state.layout_mode == "transfer"
+        else select_target_paths(state)
+    )
+    if not target_paths:
+        return notify(next_state, level="warning", message="Nothing to copy")
+    return reduce_state(next_state, CopyTargets(target_paths))
+
+
+def _run_cut_targets_command(
+    state: AppState,
+    next_state: AppState,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    target_paths = (
+        _transfer_target_paths(state)
+        if state.layout_mode == "transfer"
+        else select_target_paths(state)
+    )
+    if not target_paths:
+        return notify(next_state, level="warning", message="Nothing to cut")
+    return reduce_state(next_state, CutTargets(target_paths))
+
+
+def _run_paste_clipboard_command(
+    state: AppState,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    if state.layout_mode == "transfer":
+        return reduce_state(state, PasteClipboardToTransferPane())
+    return reduce_state(state, PasteClipboard())
 
 
 def _run_empty_trash_command(state: AppState, reduce_state: ReducerFn) -> ReduceResult:
@@ -657,6 +734,16 @@ def _run_palette_command_item(
         return reduce_state(next_state, ToggleTransferMode())
     if item_id == "undo_last_operation":
         return reduce_state(next_state, UndoLastOperation())
+    if item_id == "copy_targets":
+        return _run_copy_targets_command(state, next_state, reduce_state)
+    if item_id == "cut_targets":
+        return _run_cut_targets_command(state, next_state, reduce_state)
+    if item_id == "paste_clipboard":
+        return _run_paste_clipboard_command(next_state, reduce_state)
+    if item_id == "transfer_copy_to_opposite_pane":
+        return reduce_state(next_state, TransferCopyToOppositePane())
+    if item_id == "transfer_move_to_opposite_pane":
+        return reduce_state(next_state, TransferMoveToOppositePane())
     if item_id == "toggle_split_terminal":
         return _run_toggle_split_terminal_command(next_state, reduce_state)
     if item_id == "select_all":
@@ -758,6 +845,48 @@ def _handle_begin_command_palette(
 ) -> ReduceResult:
     del action, reduce_state
     return finalize(enter_palette(state))
+
+
+def _active_transfer_pane(state: AppState):
+    if state.layout_mode != "transfer":
+        return None
+    if state.active_transfer_pane == "left":
+        return state.transfer_left
+    return state.transfer_right
+
+
+def _transfer_visible_paths(state: AppState) -> tuple[str, ...]:
+    transfer = _active_transfer_pane(state)
+    if transfer is None:
+        return ()
+    transfer_state = replace(
+        state,
+        current_pane=transfer.pane,
+        filter=replace(state.filter, query="", active=False),
+    )
+    return tuple(entry.path for entry in select_visible_current_entry_states(transfer_state))
+
+
+def _transfer_target_paths(state: AppState) -> tuple[str, ...]:
+    transfer = _active_transfer_pane(state)
+    if transfer is None:
+        return ()
+    visible_paths = _transfer_visible_paths(state)
+    selected_paths = tuple(
+        path for path in visible_paths if path in transfer.pane.selected_paths
+    )
+    if selected_paths:
+        return selected_paths
+    if transfer.pane.cursor_path in visible_paths:
+        return (transfer.pane.cursor_path,)
+    return ()
+
+
+def _transfer_single_target_path(state: AppState) -> str | None:
+    target_paths = _transfer_target_paths(state)
+    if len(target_paths) != 1:
+        return None
+    return target_paths[0]
 
 
 def _handle_begin_file_search(

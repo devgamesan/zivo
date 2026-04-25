@@ -284,6 +284,7 @@ When a file is focused, press `e` to switch into a terminal editor in the curren
 | `N` | Create new directory in the focused pane |
 | `b` | Show bookmarks |
 | `H` | Show history |
+| `:` | Open a transfer-mode command palette with transfer-available commands only |
 | `Tab` / `Shift+Tab` | Switch browser tabs, same as normal mode |
 
 ### Split Terminal Mode
@@ -361,6 +362,7 @@ When the `Replace text` preview is open in the right pane, `Shift+↑` / `Shift+
 ## Command Palette
 
 Less frequent actions are grouped in the command palette opened with `:`.
+In transfer mode, the command palette only shows commands that are available for the active transfer pane.
 The tab strip is only shown when two or more browser tabs are open.
 
 | Command | Shown when | Behavior / Notes |

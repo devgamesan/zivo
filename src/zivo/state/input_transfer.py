@@ -4,6 +4,7 @@ from .actions import (
     ActivateNextTab,
     ActivatePreviousTab,
     BeginBookmarkSearch,
+    BeginCommandPalette,
     BeginCreateInput,
     BeginDeleteTargets,
     BeginGoToPath,
@@ -73,6 +74,7 @@ TRANSFER_KEYMAP = {
     "b",
     "tab",
     "shift+tab",
+    ":",
 }
 
 
@@ -155,6 +157,8 @@ def dispatch_transfer_input(
         return supported(UndoLastOperation())
     if key == "b":
         return supported(BeginBookmarkSearch())
+    if key == ":":
+        return supported(BeginCommandPalette())
 
     if key == "N":
         return supported(BeginCreateInput("dir"))
