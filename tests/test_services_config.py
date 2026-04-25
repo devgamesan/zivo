@@ -39,6 +39,7 @@ def test_loader_creates_default_config_when_missing(tmp_path) -> None:
     assert result.config.display.show_hidden_files is False
     assert config_path.exists()
     written = config_path.read_text(encoding="utf-8")
+    assert '# launch_mode = "window"' in written
     assert '# linux = [' in written
     assert '#   "konsole --working-directory {path}",' in written
     assert '#   "gnome-terminal --working-directory={path}",' in written
@@ -61,6 +62,7 @@ def test_loader_reads_valid_config_values(tmp_path) -> None:
     config_path.write_text(
         """
         [terminal]
+        launch_mode = "foreground"
         linux = ["konsole --working-directory {path}"]
 
         [editor]
@@ -96,6 +98,7 @@ def test_loader_reads_valid_config_values(tmp_path) -> None:
 
     assert result.created is False
     assert result.warnings == ()
+    assert result.config.terminal.launch_mode == "foreground"
     assert result.config.terminal.linux == ("konsole --working-directory {path}",)
     assert result.config.editor.command == "nvim -u NONE"
     assert result.config.display.show_hidden_files is True
@@ -124,6 +127,7 @@ def test_loader_keeps_valid_values_and_warns_for_invalid_entries(tmp_path) -> No
     config_path.write_text(
         """
         [terminal]
+        launch_mode = "popup"
         linux = ["konsole --working-directory {path}", "{broken"]
 
         [editor]
@@ -155,6 +159,7 @@ def test_loader_keeps_valid_values_and_warns_for_invalid_entries(tmp_path) -> No
 
     result = AppConfigLoader(config_path_resolver=lambda: config_path).load()
 
+    assert result.config.terminal.launch_mode == "window"
     assert result.config.terminal.linux == ("konsole --working-directory {path}",)
     assert result.config.editor.command is None
     assert result.config.display.show_hidden_files is True
@@ -169,7 +174,7 @@ def test_loader_keeps_valid_values_and_warns_for_invalid_entries(tmp_path) -> No
     assert result.config.logging.enabled is True
     assert result.config.logging.path is None
     assert result.config.bookmarks.paths == ()
-    assert len(result.warnings) == 15
+    assert len(result.warnings) == 16
 
 
 def test_loader_warns_for_invalid_editor_command_syntax(tmp_path) -> None:
@@ -197,7 +202,10 @@ def test_config_save_service_writes_normalized_config_file(tmp_path) -> None:
     saved_path = service.save(
         path=str(config_path),
         config=AppConfig(
-            terminal=TerminalConfig(linux=("konsole --working-directory {path}",)),
+            terminal=TerminalConfig(
+                launch_mode="foreground",
+                linux=("konsole --working-directory {path}",),
+            ),
             editor=EditorConfig(command="nvim -u NONE"),
             display=DisplayConfig(
                 show_hidden_files=True,
@@ -225,6 +233,7 @@ def test_config_save_service_writes_normalized_config_file(tmp_path) -> None:
 
     assert saved_path == str(config_path)
     written = config_path.read_text(encoding="utf-8")
+    assert 'launch_mode = "foreground"' in written
     assert '# macos = ["open -a Terminal {path}"]' in written
     assert '# windows = ["wt -d {path}"]' in written
     assert 'linux = ["konsole --working-directory {path}"]' in written

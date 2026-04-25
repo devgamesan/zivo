@@ -4056,7 +4056,7 @@ async def test_app_command_palette_opens_config_dialog_and_saves_changes() -> No
         assert "Path: /tmp/zivo/config.toml" in str(lines.renderable)
         assert "> Editor command: system default" in str(lines.renderable)
 
-        for _ in range(3):
+        for _ in range(4):
             await pilot.press("down")
         await pilot.press("enter")
         await pilot.press("s")
@@ -4127,7 +4127,8 @@ async def test_app_config_dialog_save_updates_theme(monkeypatch) -> None:
 
         assert app.theme == "textual-dark"
 
-        await pilot.press("down")
+        for _ in range(2):
+            await pilot.press("down")
         await pilot.press("enter")
         await _wait_for_app_theme(app, "textual-light")
         await _wait_for_predicate(
@@ -4189,7 +4190,8 @@ async def test_app_config_dialog_dismiss_restores_theme_preview() -> None:
         await pilot.press("enter")
         await _wait_for_config_dialog(app)
 
-        await pilot.press("down")
+        for _ in range(2):
+            await pilot.press("down")
         await pilot.press("enter")
         await _wait_for_app_theme(app, "textual-light")
 
@@ -4252,7 +4254,8 @@ async def test_app_config_dialog_theme_preview_updates_auto_syntax_theme() -> No
         await pilot.press("c", "o", "n", "f", "i", "g")
         await pilot.press("enter")
         await _wait_for_config_dialog(app)
-        await pilot.press("down")
+        for _ in range(2):
+            await pilot.press("down")
         await pilot.press("enter")
         await _wait_for_app_theme(app, "textual-light")
 
@@ -4319,7 +4322,7 @@ async def test_app_config_dialog_save_updates_preview_syntax_theme() -> None:
         await pilot.press("enter")
         await _wait_for_config_dialog(app)
 
-        for _ in range(2):
+        for _ in range(3):
             await pilot.press("down")
         await pilot.press("enter")
 
@@ -4418,9 +4421,17 @@ async def test_app_config_save_refreshes_live_external_launch_service() -> None:
 
         assert isinstance(app._external_launch_service, LiveExternalLaunchService)
         assert app._external_launch_service.adapter.editor_command_template.command is None
+        assert (
+            app._external_launch_service.adapter.terminal_command_templates.launch_mode
+            == "window"
+        )
 
         app._app_state = replace(app.app_state, pending_config_save_request_id=7)
-        saved_config = replace(app.app_state.config, editor=EditorConfig(command="nvim -u NONE"))
+        saved_config = replace(
+            app.app_state.config,
+            editor=EditorConfig(command="nvim -u NONE"),
+            terminal=replace(app.app_state.config.terminal, launch_mode="foreground"),
+        )
         await app.dispatch_actions(
             (
                 ConfigSaveCompleted(
@@ -4434,6 +4445,10 @@ async def test_app_config_save_refreshes_live_external_launch_service() -> None:
         assert isinstance(app._external_launch_service, LiveExternalLaunchService)
         assert (
             app._external_launch_service.adapter.editor_command_template.command == "nvim -u NONE"
+        )
+        assert (
+            app._external_launch_service.adapter.terminal_command_templates.launch_mode
+            == "foreground"
         )
 
 
@@ -4611,7 +4626,11 @@ async def test_app_command_palette_open_terminal_launches_current_directory() ->
         await _wait_for_external_launch_count(app, 1)
 
         assert launch_service.executed_requests == [
-            ExternalLaunchRequest(kind="open_terminal", path=path)
+            ExternalLaunchRequest(
+                kind="open_terminal",
+                path=path,
+                terminal_launch_mode="window",
+            )
         ]
         assert app.app_state.ui_mode == "BROWSING"
 

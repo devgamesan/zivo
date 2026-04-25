@@ -623,6 +623,7 @@ def test_submit_command_palette_runs_open_terminal_flow() -> None:
             request=ExternalLaunchRequest(
                 kind="open_terminal",
                 path="/home/tadashi/develop/zivo",
+                terminal_launch_mode="window",
             ),
         ),
     )

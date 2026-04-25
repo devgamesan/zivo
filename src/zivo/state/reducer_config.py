@@ -13,6 +13,7 @@ CONFIG_PREVIEW_SYNTAX_THEMES = SUPPORTED_PREVIEW_SYNTAX_THEMES
 CONFIG_PREVIEW_MAX_KIB = (64, 128, 256, 512, 1024)
 CONFIG_LOG_LEVELS = ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL")
 CONFIG_PASTE_ACTIONS = ("prompt", "overwrite", "skip", "rename")
+CONFIG_TERMINAL_LAUNCH_MODES = ("window", "foreground")
 CONFIG_EDITOR_COMMANDS = (None, "nvim", "vim", "nano", "hx", "micro", "emacs -nw")
 CONFIG_SPLIT_TERMINAL_POSITIONS = ("bottom", "right", "overlay")
 CONFIG_FILE_SEARCH_MAX_RESULTS = (None, 100, 500, 1000, 5000, 10000)
@@ -30,6 +31,18 @@ def cycle_config_editor_value(config: AppConfig, cursor_index: int, delta: int) 
             editor=replace(
                 config.editor,
                 command=cycle_editor_command(config.editor.command, delta),
+            ),
+        )
+    if field_id == "terminal.launch_mode":
+        return replace(
+            config,
+            terminal=replace(
+                config.terminal,
+                launch_mode=cycle_choice(
+                    CONFIG_TERMINAL_LAUNCH_MODES,
+                    config.terminal.launch_mode,
+                    delta,
+                ),
             ),
         )
     if field_id == "display.show_hidden_files":
@@ -214,6 +227,7 @@ def cycle_editor_command(current: str | None, delta: int) -> str | None:
 def config_editor_field_ids() -> tuple[str, ...]:
     return (
         "editor.command",
+        "terminal.launch_mode",
         "display.show_hidden_files",
         "display.theme",
         "display.show_directory_sizes",
@@ -236,6 +250,7 @@ def config_editor_field_ids() -> tuple[str, ...]:
 def config_editor_labels() -> tuple[str, ...]:
     return (
         "Editor command",
+        "Terminal launch mode",
         "Show hidden files",
         "Theme",
         "Show directory sizes",
@@ -256,12 +271,12 @@ def config_editor_labels() -> tuple[str, ...]:
 
 
 CONFIG_EDITOR_CATEGORIES: tuple[tuple[str, tuple[int, ...]], ...] = (
-    ("External", (0,)),
-    ("Display", (2, 5, 1, 3, 4, 6, 7, 11, 12)),
-    ("Sorting", (8, 9, 10)),
-    ("Behavior", (13, 14)),
-    ("Logging", (15,)),
-    ("File Search", (16,)),
+    ("External", (0, 1)),
+    ("Display", (3, 6, 2, 4, 5, 7, 8, 12, 13)),
+    ("Sorting", (9, 10, 11)),
+    ("Behavior", (14, 15)),
+    ("Logging", (16,)),
+    ("File Search", (17,)),
 )
 
 
@@ -305,6 +320,8 @@ def format_config_field_value(field_index: int, config: AppConfig) -> str:
     field_id = config_editor_field_ids()[field_index]
     if field_id == "editor.command":
         return _format_editor_command_value(config.editor.command)
+    if field_id == "terminal.launch_mode":
+        return config.terminal.launch_mode
     if field_id == "display.show_hidden_files":
         return _format_bool(config.display.show_hidden_files)
     if field_id == "display.theme":

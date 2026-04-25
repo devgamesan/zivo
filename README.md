@@ -399,11 +399,11 @@ The tab strip is only shown when two or more browser tabs are open.
 | `Move to trash` | At least one target is selected or focused | Moves the selected items, or the focused item, to trash (confirmation is enabled by default and can be configured). |
 | `Empty trash` | Always (Linux/macOS only) | Permanently deletes all items from the trash. Shows a confirmation dialog before emptying. Not available on Windows. |
 | `Open in file manager` | Always | Opens the current directory in the OS file manager. Also available with `M`. |
-| `Open terminal` | Always | Launches an external terminal rooted at the current directory, using `config.toml` templates before built-in fallbacks. Also available with `T`. |
+| `Open terminal` | Always | Launches an external terminal rooted at zivo's current directory, using `config.toml` templates before built-in fallbacks. The launch mode can be switched between a separate window and foreground terminal handoff. Also available with `T`. |
 | `Run shell command` | Always | Opens a one-line shell command dialog, runs the command in the current directory in the background, and returns the first output line or failure summary in the status bar. Also available with `!`. |
 | `Bookmark this directory` / `Remove bookmark` | Always | Saves or removes the current directory in `[bookmarks].paths`. The label reflects whether the current directory is already bookmarked. Also available with `B`. |
 | `Show hidden files` / `Hide hidden files` | Always | Toggles hidden-file visibility for the browser panes. The label reflects the current visibility state. Also available with `.`. |
-| `Edit config` | Always | Opens the settings overlay for startup defaults. You can edit the preferred terminal editor, hidden-file visibility, directory-size visibility, text preview visibility, preview size limit, theme, sorting, default paste-conflict behavior, and delete confirmation. Theme changes are previewed immediately. Use `↑` / `↓` or `Ctrl+n` / `Ctrl+p` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
+| `Edit config` | Always | Opens the settings overlay for startup defaults. You can edit the preferred terminal editor, external terminal launch mode, hidden-file visibility, directory-size visibility, text preview visibility, preview size limit, theme, sorting, default paste-conflict behavior, and delete confirmation. Theme changes are previewed immediately. Use `↑` / `↓` or `Ctrl+n` / `Ctrl+p` to move, `←` / `→` / `Enter` to change values, `s` to save `config.toml`, and `e` to open the raw config file in a terminal editor. |
 | `Create file` | Always | Starts the inline create-file flow in the current directory. |
 | `Create directory` | Always | Starts the inline create-directory flow in the current directory. |
 
@@ -420,6 +420,7 @@ The supported settings are:
 
 | Section | Key | Values | Description |
 | --- | --- | --- | --- |
+| `terminal` | `launch_mode` | `window` / `foreground` | Chooses how `T` opens a terminal for zivo's current directory. `window` starts a separate terminal window. `foreground` suspends zivo, opens an interactive shell in the current terminal, and returns to zivo after `exit`. |
 | `terminal` | `linux` | Array of shell-style command templates | Optional terminal launch commands for Linux. Use `{path}` as the working-directory placeholder. Invalid or empty entries are ignored. |
 | `terminal` | `macos` | Array of shell-style command templates | Optional terminal launch commands for macOS, validated the same way as Linux entries. |
 | `terminal` | `windows` | Array of shell-style command templates | Optional terminal launch commands for Windows and WSL bridge workflows. The config key is accepted even though native Windows runtime is not currently supported. |
@@ -447,6 +448,7 @@ Example:
 
 ```toml
 [terminal]
+launch_mode = "window"
 linux = ["konsole --working-directory {path}", "gnome-terminal --working-directory={path}"]
 macos = ["open -a Terminal {path}"]
 windows = ["wt -d {path}"]
