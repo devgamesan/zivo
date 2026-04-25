@@ -201,11 +201,11 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             return HelpBarState(state.config.help_bar.transfer)
         return HelpBarState(
             (
-                "[ ] focus | Space select | c copy | x cut | v paste | y copy-to-pane | "
-                "m move-to-pane | d delete | r rename",
+                "[ ] focus | y copy-to-pane | m move-to-pane | q/2 close | "
+                "Space select | v paste",
                 (
-                    "z undo | . hidden | N new-dir | b bookmarks | "
-                    "H history | G go-to | : palette | q/2 close"
+                    "c copy | x cut | d delete | r rename | z undo | . hidden | "
+                    "N new-dir | b bookmarks | H history | G go-to | : palette"
                 ),
             )
         )
