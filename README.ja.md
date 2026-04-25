@@ -424,7 +424,7 @@ zivo は起動時にユーザー設定用の `config.toml` を読み込みます
 
 | セクション | キー | 値 | 説明 |
 | --- | --- | --- | --- |
-| `terminal` | `launch_mode` | `window` / `foreground` | `T` で zivo の current directory に対して外部ターミナルをどう開くかを選びます。`window` は別ウィンドウで起動し、`foreground` は zivo を一時停止して前面のターミナル終了後に戻ります。 |
+| `terminal` | `launch_mode` | `window` / `foreground` | `T` で zivo の current directory に対してターミナルをどう開くかを選びます。`window` は別ウィンドウで起動し、`foreground` は zivo を一時停止して現在の端末で対話シェルを開き、`exit` 後に zivo へ戻ります。 |
 | `terminal` | `linux` | shell 形式コマンド文字列の配列 | Linux 向けの任意ターミナル起動コマンドです。作業ディレクトリは `{path}` で埋め込みます。空文字や不正なエントリは無視されます。 |
 | `terminal` | `macos` | shell 形式コマンド文字列の配列 | macOS 向けの任意ターミナル起動コマンドです。検証ルールは Linux と同じです。 |
 | `terminal` | `windows` | shell 形式コマンド文字列の配列 | Windows / WSL ブリッジ向けの任意ターミナル起動コマンドです。Windows ネイティブ実行は未対応ですが設定キー自体は受け付けます。 |

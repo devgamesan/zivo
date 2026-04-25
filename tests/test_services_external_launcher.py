@@ -289,13 +289,13 @@ def test_local_external_launch_adapter_runs_terminal_in_foreground_mode(tmp_path
     runner = StubForegroundRunner()
     adapter = LocalExternalLaunchAdapter(
         system_name_resolver=lambda: "Linux",
-        command_available=lambda command: command if command == "kgx" else None,
         foreground_command_runner=runner,
+        environment_variable=lambda name: "/bin/sh" if name == "SHELL" else None,
     )
 
     adapter.open_terminal(str(tmp_path), launch_mode="foreground")
 
-    assert runner.executed == [(("kgx",), str(tmp_path))]
+    assert runner.executed == [(("/bin/sh", "-i"), str(tmp_path))]
 
 
 def test_local_external_launch_adapter_copies_to_clipboard_on_linux() -> None:
@@ -450,8 +450,8 @@ def test_live_external_launch_service_opens_terminal_in_foreground_mode(tmp_path
     runner = StubForegroundRunner()
     adapter = LocalExternalLaunchAdapter(
         system_name_resolver=lambda: "Linux",
-        command_available=lambda command: command if command == "kgx" else None,
         foreground_command_runner=runner,
+        environment_variable=lambda name: "/bin/sh" if name == "SHELL" else None,
     )
     service = LiveExternalLaunchService(adapter=adapter)
     path = str(tmp_path.resolve())
@@ -464,7 +464,7 @@ def test_live_external_launch_service_opens_terminal_in_foreground_mode(tmp_path
         )
     )
 
-    assert runner.executed == [(("kgx",), path)]
+    assert runner.executed == [(("/bin/sh", "-i"), path)]
 
 
 def test_live_external_launch_service_copies_paths_with_expected_payload() -> None:

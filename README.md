@@ -420,7 +420,7 @@ The supported settings are:
 
 | Section | Key | Values | Description |
 | --- | --- | --- | --- |
-| `terminal` | `launch_mode` | `window` / `foreground` | Chooses how `T` opens the external terminal for zivo's current directory. `window` starts a separate terminal window. `foreground` suspends zivo, runs the terminal in the foreground, and returns to zivo after the terminal exits. |
+| `terminal` | `launch_mode` | `window` / `foreground` | Chooses how `T` opens a terminal for zivo's current directory. `window` starts a separate terminal window. `foreground` suspends zivo, opens an interactive shell in the current terminal, and returns to zivo after `exit`. |
 | `terminal` | `linux` | Array of shell-style command templates | Optional terminal launch commands for Linux. Use `{path}` as the working-directory placeholder. Invalid or empty entries are ignored. |
 | `terminal` | `macos` | Array of shell-style command templates | Optional terminal launch commands for macOS, validated the same way as Linux entries. |
 | `terminal` | `windows` | Array of shell-style command templates | Optional terminal launch commands for Windows and WSL bridge workflows. The config key is accepted even though native Windows runtime is not currently supported. |

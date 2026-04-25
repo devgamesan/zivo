@@ -92,14 +92,11 @@ class LocalExternalLaunchAdapter:
 
     def open_terminal(self, path: str, launch_mode: TerminalLaunchMode = "window") -> None:
         resolved_path = _resolve_directory_path(path)
-        candidates = self._terminal_candidates(self._platform_kind(), str(resolved_path))
         if launch_mode == "foreground":
-            self._run_first_available_foreground(
-                candidates,
-                context=f"open terminal in {resolved_path}",
-                cwd=str(resolved_path),
-            )
+            command = self._foreground_terminal_command()
+            self.foreground_command_runner(command, str(resolved_path))
             return
+        candidates = self._terminal_candidates(self._platform_kind(), str(resolved_path))
         self._run_first_available(
             candidates,
             context=f"open terminal in {resolved_path}",
@@ -188,29 +185,6 @@ class LocalExternalLaunchAdapter:
         for command in available_candidates:
             try:
                 self.command_runner(command, cwd, input_text)
-                return
-            except OSError as error:
-                errors.append(str(error) or f"{command[0]} failed")
-
-        raise OSError(errors[-1] if errors else f"Failed to {context}")
-
-    def _run_first_available_foreground(
-        self,
-        candidates: tuple[tuple[str, ...], ...],
-        *,
-        context: str,
-        cwd: str | None = None,
-    ) -> None:
-        available_candidates = [
-            command for command in candidates if self._command_exists(command[0])
-        ]
-        if not available_candidates:
-            raise OSError(f"No supported command found to {context}")
-
-        errors: list[str] = []
-        for command in available_candidates:
-            try:
-                self.foreground_command_runner(command, cwd)
                 return
             except OSError as error:
                 errors.append(str(error) or f"{command[0]} failed")
@@ -333,6 +307,19 @@ class LocalExternalLaunchAdapter:
         if command_path.is_absolute():
             return command_path.exists()
         return self.command_available(command) is not None
+
+    def _foreground_terminal_command(self) -> tuple[str, ...]:
+        shell = self.environment_variable("SHELL")
+        if shell:
+            try:
+                parsed = tuple(shlex.split(shell))
+            except ValueError as error:
+                raise OSError(f"Invalid SHELL value: {error}") from error
+            if parsed and self._command_exists(parsed[0]):
+                return (*parsed, "-i")
+        if self._command_exists("/bin/bash"):
+            return ("/bin/bash", "-i")
+        raise OSError("No supported interactive shell found for foreground terminal mode")
 
     def _terminal_candidates(
         self,
