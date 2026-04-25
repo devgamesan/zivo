@@ -15,6 +15,7 @@ zivo aims to be usable by everyone without complex configuration, plugin install
 - **No memorization needed**: Common actions are always visible in the help bar
 - **Never get lost**: All actions can be called from the command palette
 - **Clear 3-pane layout**: Parent, current, and right panes displayed side by side, with text preview for focused files
+- **Transfer mode**: Put two directories side by side to copy or move files with ease
 - **Tabbed browsing**: Keep multiple browser workspaces open inside one TUI and switch between them quickly
 - **Embedded terminal**: Seamlessly switch between browsing and shell with `t`
 - **Powerful search**: Jump directly to files with recursive file search and grep search
