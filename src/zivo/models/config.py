@@ -7,6 +7,7 @@ from zivo.theme_support import AUTO_PREVIEW_SYNTAX_THEME, DEFAULT_APP_THEME
 
 ConfigSortField = Literal["name", "modified", "size"]
 SplitTerminalPosition = Literal["bottom", "right", "overlay"]
+TerminalLaunchMode = Literal["window", "foreground"]
 ConfigTheme = str
 PreviewSyntaxTheme = str
 PreviewMaxKiB = Literal[64, 128, 256, 512, 1024]
@@ -18,6 +19,7 @@ PasteConflictAction = Literal["overwrite", "skip", "rename", "prompt"]
 class TerminalConfig:
     """Terminal launch command templates keyed by target platform."""
 
+    launch_mode: TerminalLaunchMode = "window"
     linux: tuple[str, ...] = ()
     macos: tuple[str, ...] = ()
     windows: tuple[str, ...] = ()

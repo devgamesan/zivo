@@ -1973,7 +1973,7 @@ def test_select_config_dialog_state_formats_editor_lines() -> None:
         config_editor=ConfigEditorState(
             path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
-            cursor_index=2,
+            cursor_index=3,
             dirty=True,
         ),
     )
@@ -1985,6 +1985,7 @@ def test_select_config_dialog_state_formats_editor_lines() -> None:
     assert "Path: /tmp/zivo/config.toml" in dialog.lines
     assert "  ── External ──" in dialog.lines
     assert "  Editor command: system default" in dialog.lines
+    assert "  Terminal launch mode: window" in dialog.lines
     assert "  ── Display ──" in dialog.lines
     assert "> Theme: textual-dark" in dialog.lines
     assert "  Preview syntax theme: auto" in dialog.lines

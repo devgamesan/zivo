@@ -17,6 +17,7 @@ from .config import (
     PreviewMaxKiB,
     PreviewSyntaxTheme,
     TerminalConfig,
+    TerminalLaunchMode,
 )
 from .external_launch import ExternalLaunchKind, ExternalLaunchRequest
 from .file_operations import (
@@ -162,6 +163,7 @@ __all__ = [
     "TabBarState",
     "TabItemState",
     "TerminalConfig",
+    "TerminalLaunchMode",
     "ThreePaneShellData",
     "TransferPaneViewState",
     "build_dummy_shell_data",

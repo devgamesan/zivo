@@ -36,6 +36,7 @@ from .shared import (
     VALID_SORT_FIELDS,
     VALID_SPLIT_TERMINAL_POSITIONS,
     VALID_TERMINAL_EDITOR_NAMES,
+    VALID_TERMINAL_LAUNCH_MODES,
     VALID_THEMES,
     VALIDATION_PATH,
 )
@@ -110,6 +111,15 @@ def load_terminal_config(section: object, warnings: list[str]) -> TerminalConfig
     if validated is None:
         return TerminalConfig()
     return TerminalConfig(
+        launch_mode=read_enum(
+            validated,
+            key="launch_mode",
+            default="window",
+            valid_values=VALID_TERMINAL_LAUNCH_MODES,
+            valid_display="window, foreground",
+            section_name="terminal",
+            warnings=warnings,
+        ),
         linux=load_command_templates(validated, "linux", warnings),
         macos=load_command_templates(validated, "macos", warnings),
         windows=load_command_templates(validated, "windows", warnings),

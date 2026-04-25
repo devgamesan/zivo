@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, Protocol
 
-from zivo.models import EditorConfig, TerminalConfig
+from zivo.models import EditorConfig, TerminalConfig, TerminalLaunchMode
 
 CommandRunner = Callable[[Sequence[str], str | None, str | None], None]
 ForegroundCommandRunner = Callable[[Sequence[str], str | None], None]
@@ -40,7 +40,7 @@ class ExternalLaunchAdapter(Protocol):
 
     def open_in_editor(self, path: str) -> None: ...
 
-    def open_terminal(self, path: str) -> None: ...
+    def open_terminal(self, path: str, launch_mode: TerminalLaunchMode = "window") -> None: ...
 
     def copy_to_clipboard(self, text: str) -> None: ...
 
@@ -90,9 +90,16 @@ class LocalExternalLaunchAdapter:
 
         raise OSError(errors[-1] if errors else f"Failed to open {resolved_path} in editor")
 
-    def open_terminal(self, path: str) -> None:
+    def open_terminal(self, path: str, launch_mode: TerminalLaunchMode = "window") -> None:
         resolved_path = _resolve_directory_path(path)
         candidates = self._terminal_candidates(self._platform_kind(), str(resolved_path))
+        if launch_mode == "foreground":
+            self._run_first_available_foreground(
+                candidates,
+                context=f"open terminal in {resolved_path}",
+                cwd=str(resolved_path),
+            )
+            return
         self._run_first_available(
             candidates,
             context=f"open terminal in {resolved_path}",
@@ -181,6 +188,29 @@ class LocalExternalLaunchAdapter:
         for command in available_candidates:
             try:
                 self.command_runner(command, cwd, input_text)
+                return
+            except OSError as error:
+                errors.append(str(error) or f"{command[0]} failed")
+
+        raise OSError(errors[-1] if errors else f"Failed to {context}")
+
+    def _run_first_available_foreground(
+        self,
+        candidates: tuple[tuple[str, ...], ...],
+        *,
+        context: str,
+        cwd: str | None = None,
+    ) -> None:
+        available_candidates = [
+            command for command in candidates if self._command_exists(command[0])
+        ]
+        if not available_candidates:
+            raise OSError(f"No supported command found to {context}")
+
+        errors: list[str] = []
+        for command in available_candidates:
+            try:
+                self.foreground_command_runner(command, cwd)
                 return
             except OSError as error:
                 errors.append(str(error) or f"{command[0]} failed")

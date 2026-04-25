@@ -62,6 +62,7 @@ LayoutMode = Literal["browser", "transfer"]
 TransferPaneId = Literal["left", "right"]
 ConfigFieldId = Literal[
     "editor.command",
+    "terminal.launch_mode",
     "display.show_hidden_files",
     "display.show_directory_sizes",
     "display.show_preview",
