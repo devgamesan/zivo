@@ -5006,7 +5006,7 @@ async def test_app_command_palette_open_in_file_manager_launches_current_directo
 
 
 @pytest.mark.asyncio
-async def test_app_command_palette_runs_shell_command_and_notifies() -> None:
+async def test_app_command_palette_runs_shell_command_and_shows_result() -> None:
     path = str(Path("/tmp/zivo-shell-command").resolve())
     shell_command_service = FakeShellCommandService(
         results={
@@ -5044,14 +5044,26 @@ async def test_app_command_palette_runs_shell_command_and_notifies() -> None:
         assert title.renderable == "Run Shell Command"
 
         await pilot.press("p", "w", "d", "enter")
-        await _wait_for_notification_message(app, path)
-        await asyncio.sleep(0.05)
+        # 結果が表示されるまで待機
+        await asyncio.sleep(0.1)
 
         assert shell_command_service.executed_commands == [(path, "pwd")]
+        # UIモードがSHELLのままであること
+        assert app.app_state.ui_mode == "SHELL"
+        # 結果がShellCommandStateに保持されていること
+        assert app.app_state.shell_command is not None
+        assert app.app_state.shell_command.result is not None
+        assert app.app_state.shell_command.result.exit_code == 0
+        assert app.app_state.shell_command.result.stdout == f"{path}\n"
+        # ダイアログが開いたままであること
+        assert dialog.display is True
+        # タイトルが結果表示モードになっていること
+        assert title.renderable == "Shell Command Result"
+
+        # ESCキーでダイアログを閉じる
+        await pilot.press("escape")
+        await asyncio.sleep(0.05)
         assert app.app_state.ui_mode == "BROWSING"
-        assert app.app_state.notification is not None
-        assert app.app_state.notification.level == "info"
-        assert app.app_state.notification.message == path
         assert dialog.display is False
 
 

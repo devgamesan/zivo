@@ -100,10 +100,11 @@ def test_submit_shell_command_emits_worker_effect() -> None:
     )
 
 
-def test_shell_command_completed_formats_notifications() -> None:
+def test_shell_command_completed_shows_result_in_dialog() -> None:
     state = replace(
         build_initial_app_state(),
         ui_mode="BUSY",
+        shell_command=ShellCommandState(cwd="/tmp/project", command="ls"),
         pending_shell_command_request_id=4,
     )
 
@@ -122,11 +123,24 @@ def test_shell_command_completed_formats_notifications() -> None:
         ),
     ).state
 
-    assert success.notification == NotificationState(level="info", message="first line")
-    assert failure.notification == NotificationState(
-        level="error",
-        message="Command failed (7): boom",
-    )
+    # UIモードがSHELLのままであること
+    assert success.ui_mode == "SHELL"
+    assert failure.ui_mode == "SHELL"
+
+    # 実行結果がShellCommandStateに保持されていること
+    assert success.shell_command is not None
+    assert success.shell_command.result is not None
+    assert success.shell_command.result.exit_code == 0
+    assert success.shell_command.result.stdout == "first line\nsecond line\n"
+
+    assert failure.shell_command is not None
+    assert failure.shell_command.result is not None
+    assert failure.shell_command.result.exit_code == 7
+    assert failure.shell_command.result.stderr == "boom\ntraceback"
+
+    # 通知が設定されていないこと
+    assert success.notification is None
+    assert failure.notification is None
 
 
 def test_select_shell_command_dialog_state_and_help() -> None:
@@ -142,7 +156,32 @@ def test_select_shell_command_dialog_state_and_help() -> None:
     assert dialog is not None
     assert dialog.cwd == "/tmp/project"
     assert dialog.command == "pwd"
+    assert dialog.result is None
     assert help_bar.lines == ("type command | enter run | esc cancel",)
+
+
+def test_select_shell_command_dialog_state_with_result() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="SHELL",
+        shell_command=ShellCommandState(
+            cwd="/tmp/project",
+            command="pwd",
+            result=ShellCommandResult(exit_code=0, stdout="/tmp/project\n"),
+        ),
+    )
+
+    dialog = select_shell_command_dialog_state(state)
+    help_bar = select_help_bar_state(state)
+
+    assert dialog is not None
+    assert dialog.title == "Shell Command Result"
+    assert dialog.cwd == "/tmp/project"
+    assert dialog.command == "pwd"
+    assert dialog.result is not None
+    assert dialog.result.exit_code == 0
+    assert dialog.result.stdout == "/tmp/project\n"
+    assert help_bar.lines == ("press esc to close",)
 
 
 def test_runtime_maps_shell_command_actions() -> None:

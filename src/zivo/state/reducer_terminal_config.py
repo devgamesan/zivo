@@ -263,12 +263,13 @@ def _handle_submit_shell_command(
             )
         )
     request_id = state.next_request_id
+    # shell_commandを保持したままにして、完了時に結果を設定できるようにする
     return finalize(
         replace(
             state,
             ui_mode="BUSY",
             notification=NotificationState(level="info", message="Running shell command..."),
-            shell_command=None,
+            # shell_command=None,  # 削除：shell_commandを保持
             pending_shell_command_request_id=request_id,
             next_request_id=request_id + 1,
         ),
@@ -549,12 +550,21 @@ def _handle_shell_command_completed(
 ) -> ReduceResult:
     if state.pending_shell_command_request_id != action.request_id:
         return finalize(state)
-    level, message = _notification_for_shell_command(action.result)
+    # UIモードをSHELLのままにし、実行結果をShellCommandStateに保持する
+    # shell_commandがNoneの場合（キャンセルされた場合など）はBROWSINGに戻る
+    if state.shell_command is None:
+        return finalize(
+            replace(
+                state,
+                ui_mode="BROWSING",
+                pending_shell_command_request_id=None,
+            )
+        )
     return finalize(
         replace(
             state,
-            ui_mode="BROWSING",
-            notification=NotificationState(level=level, message=message),
+            ui_mode="SHELL",
+            shell_command=replace(state.shell_command, result=action.result),
             pending_shell_command_request_id=None,
         )
     )

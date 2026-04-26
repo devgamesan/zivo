@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from typing import Literal
 
+from zivo.models.shell_command import ShellCommandResult
+
 EntryKind = Literal["dir", "file"]
 NotificationLevel = Literal["info", "warning", "error"]
 PreviewKind = Literal["text", "image"]
@@ -237,6 +239,7 @@ class ShellCommandDialogState:
     prompt: str
     command: str
     options: tuple[str, ...]
+    result: ShellCommandResult | None = None
 
 
 @dataclass(frozen=True)
