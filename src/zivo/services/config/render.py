@@ -38,7 +38,7 @@ def render_terminal_section(config: AppConfig) -> str:
         '# launch_mode = "window"\n'
         "# window: launch a separate terminal window.\n"
         "# foreground: suspend zivo and use the terminal in the foreground until exit.\n"
-        "# Windows currently supports window mode only.\n"
+        "# Windows currently supports window mode only; foreground is rejected there.\n"
         "# Optional OS-specific terminal launch templates.\n"
         "# Use {path} for the working directory.\n"
         "# Examples:\n"

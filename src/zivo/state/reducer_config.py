@@ -323,7 +323,7 @@ def config_editor_field_description(field_index: int, config: AppConfig) -> tupl
         return (
             "Controls how the external terminal command is launched.",
             "window opens a separate terminal app; foreground hands the current terminal over.",
-            "Windows currently supports window mode only.",
+            "Windows currently supports window mode only; foreground fails there.",
             f"Current behavior: `{config.terminal.launch_mode}`.",
         )
     if field_id == "display.show_hidden_files":

@@ -319,7 +319,9 @@ class LocalExternalLaunchAdapter:
 
     def _foreground_terminal_command(self, platform_kind: PlatformKind) -> tuple[str, ...]:
         if platform_kind == "windows":
-            raise OSError("Foreground terminal launch is not yet supported on Windows")
+            raise OSError(
+                "Foreground terminal launch is unavailable on Windows; use window mode instead"
+            )
         shell = self.environment_variable("SHELL")
         if shell:
             try:

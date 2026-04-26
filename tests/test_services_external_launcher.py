@@ -339,7 +339,7 @@ def test_local_external_launch_adapter_rejects_windows_foreground_terminal_mode(
         foreground_command_runner=StubForegroundRunner(),
     )
 
-    with pytest.raises(OSError, match="not yet supported on Windows"):
+    with pytest.raises(OSError, match="unavailable on Windows; use window mode instead"):
         adapter.open_terminal(str(tmp_path), launch_mode="foreground")
 
 

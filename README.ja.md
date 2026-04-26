@@ -383,8 +383,8 @@ Transferモードでは、アクティブな転送ペインで実行できるコ
 | `Move to trash` | 対象が 1 件以上あるとき | 選択中の項目、またはフォーカス項目をゴミ箱へ移動します（既定では確認あり、設定で変更可能）。 |
 | `Empty trash` | 常に表示（Linux/macOSのみ） | ゴミ箱内のすべての項目を完全に削除します。実行前に確認ダイアログを表示します。Windows では利用できません。 |
 | `Open in file manager` | 常に表示 | 現在ディレクトリを OS のファイルマネージャで開きます。`M` でも実行できます。 |
-| `Open terminal` | 常に表示 | `config.toml` の設定を優先しつつ、zivo の current directory を起点に外部ターミナルを起動します。別ウィンドウ起動と前面起動を設定で切り替えられます。`T` でも実行できます。 |
-| `Run shell command` | 常に表示 | 1 行シェルコマンド入力ダイアログを開き、現在ディレクトリでバックグラウンド実行します。完了後は先頭の出力行、または失敗要約を status bar に表示します。`!` でも実行できます。 |
+| `Open terminal` | 常に表示 | `config.toml` の設定を優先しつつ、zivo の current directory を起点に外部ターミナルを起動します。別ウィンドウ起動と前面起動を設定で切り替えられます。Windows では `window` のみ対応し、`foreground` を選ぶと `window` を使うよう案内付きで失敗します。`T` でも実行できます。 |
+| `Run shell command` | 常に表示 | 1 行シェルコマンド入力ダイアログを開き、現在ディレクトリでバックグラウンド実行します。完了後は先頭の出力行、または失敗要約を status bar に表示します。Windows では `powershell.exe`、次に `pwsh`、最後に `cmd.exe` を優先するため、構文は選ばれた Windows shell に従います。`!` でも実行できます。 |
 | `Bookmark this directory` / `Remove bookmark` | 常に表示 | 現在ディレクトリを `[bookmarks].paths` に追加または削除します。ラベルは現在状態を反映し、`B` でも切り替えられます。 |
 | `Show hidden files` / `Hide hidden files` | 常に表示 | ブラウザ 3 ペインの隠しファイル表示を切り替えます。ラベルは現在状態を反映し、`.` でも切り替えられます。 |
 | `Edit config` | 常に表示 | 起動時設定を編集するオーバーレイを開きます。優先ターミナルエディタ、外部ターミナル起動モード、隠しファイル表示、ディレクトリサイズ表示、テキスト preview 表示、画像 preview 表示、PDF preview 表示、Office preview 表示、テーマ、ソート、貼り付け競合時の既定動作、削除確認の有無などを編集できます。オーバーレイ内には選択中の設定が何を変えるかの説明も表示されるため、README を見返さなくても挙動を判断できます。テーマ変更はその場で即時プレビューされます。`↑` / `↓` または `Ctrl+n` / `Ctrl+p` で項目移動し、`←` / `→` / `Enter` で値変更、`s` で `config.toml` 保存、`e` で生の設定ファイルをターミナルエディタで開けます。 |
@@ -403,10 +403,10 @@ zivo は起動時にユーザー設定用の `config.toml` を読み込みます
 
 | セクション | キー | 値 | 説明 |
 | --- | --- | --- | --- |
-| `terminal` | `launch_mode` | `window` / `foreground` | `T` で zivo の current directory に対してターミナルをどう開くかを選びます。`window` は別ウィンドウで起動し、`foreground` は zivo を一時停止して現在の端末で対話シェルを開き、`exit` 後に zivo へ戻ります。 |
+| `terminal` | `launch_mode` | `window` / `foreground` | `T` で zivo の current directory に対してターミナルをどう開くかを選びます。`window` は別ウィンドウで起動し、`foreground` は zivo を一時停止して現在の端末で対話シェルを開き、`exit` 後に zivo へ戻ります。Windows では `window` のみ対応し、`foreground` は実行時に拒否されます。 |
 | `terminal` | `linux` | shell 形式コマンド文字列の配列 | Linux 向けの任意ターミナル起動コマンドです。作業ディレクトリは `{path}` で埋め込みます。空文字や不正なエントリは無視されます。 |
 | `terminal` | `macos` | shell 形式コマンド文字列の配列 | macOS 向けの任意ターミナル起動コマンドです。検証ルールは Linux と同じです。 |
-| `terminal` | `windows` | shell 形式コマンド文字列の配列 | Windows / WSL ブリッジ向けの任意ターミナル起動コマンドです。Windows ネイティブ実行は未対応ですが設定キー自体は受け付けます。 |
+| `terminal` | `windows` | shell 形式コマンド文字列の配列 | Windows / WSL ブリッジ向けの任意ターミナル起動コマンドです。Windows では `window` 起動時に利用され、`foreground` には使われません。 |
 | `editor` | `command` | shell 形式の文字列。例: `nvim -u NONE` | `e` で起動するターミナルエディタです。ファイルパスは自動で末尾に付与されるため、設定値には含めません。GUI エディタや不正なコマンドは無視されます。 |
 | `display` | `show_hidden_files` | `true` / `false` | 起動時の隠しファイル表示状態です。 |
 | `display` | `show_directory_sizes` | `true` / `false` | ペイン内に再帰ディレクトリサイズを表示します。既定値は `true` です。大きいディレクトリでは計算コストがかかる場合があります。中央ペインを `size` ソートしている間は、この設定が `false` でも自動計算されます。 |
