@@ -191,6 +191,12 @@ def dispatch_shell_command_input(
     key: str,
     character: str | None,
 ) -> DispatchedActions:
+    # 結果表示状態でESCキーを押した場合、ダイアログを閉じてBROWSINGモードに戻る
+    if state.shell_command is not None and state.shell_command.result is not None:
+        if key == "escape":
+            return supported(CancelShellCommandInput())
+        return warn("Press Esc to close")
+
     if key == "escape":
         return supported(CancelShellCommandInput())
 

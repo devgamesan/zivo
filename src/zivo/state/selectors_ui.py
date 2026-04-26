@@ -115,6 +115,10 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             )
         )
     if state.ui_mode == "SHELL":
+        # 結果表示状態の場合
+        if state.shell_command is not None and state.shell_command.result is not None:
+            return HelpBarState(("press esc to close",))
+        # コマンド入力状態の場合
         if state.config.help_bar.shell:
             return HelpBarState(state.config.help_bar.shell)
         return HelpBarState(("type command | enter run | esc cancel",))
@@ -756,12 +760,25 @@ def select_shell_command_dialog_state(state: AppState) -> ShellCommandDialogStat
     if state.ui_mode != "SHELL" or state.shell_command is None:
         return None
 
+    # 結果がある場合は結果表示モード
+    if state.shell_command.result is not None:
+        return ShellCommandDialogState(
+            title="Shell Command Result",
+            cwd=state.shell_command.cwd,
+            prompt="Command: ",
+            command=state.shell_command.command,
+            options=("esc close",),
+            result=state.shell_command.result,
+        )
+
+    # コマンド入力モード
     return ShellCommandDialogState(
         title="Run Shell Command",
         cwd=state.shell_command.cwd,
         prompt="Command: ",
         command=state.shell_command.command,
         options=("enter run", "esc cancel"),
+        result=None,
     )
 
 
