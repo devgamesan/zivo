@@ -16,6 +16,7 @@ from zivo.models import (
     PasteConflict,
     PasteConflictAction,
     PasteRequest,
+    ShellCommandResult,
     UndoEntry,
 )
 from zivo.models.shell_data import EntryKind, NotificationLevel
@@ -271,6 +272,7 @@ class ShellCommandState:
 
     cwd: str
     command: str = ""
+    result: ShellCommandResult | None = None
 
 
 @dataclass(frozen=True)
