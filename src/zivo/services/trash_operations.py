@@ -232,8 +232,30 @@ class MacOsTrashService:
 
 
 @dataclass(frozen=True)
+class WindowsTrashService:
+    """Trash operations for native Windows."""
+
+    def get_trash_path(self) -> str | None:
+        return None
+
+    def empty_trash(self) -> tuple[int, str]:
+        return 0, "Empty trash is not supported on Windows yet"
+
+    def capture_restorable_trash(
+        self,
+        path: str,
+        send_to_trash: Callable[[], None],
+    ) -> TrashRestoreRecord | None:
+        send_to_trash()
+        return None
+
+    def restore(self, record: TrashRestoreRecord) -> str:
+        raise OSError("Trash restore is not supported on Windows")
+
+
+@dataclass(frozen=True)
 class UnsupportedPlatformTrashService:
-    """Placeholder for unsupported platforms."""
+    """Placeholder for platforms without any trash integration."""
 
     def get_trash_path(self) -> str | None:
         return None
@@ -296,7 +318,12 @@ def _write_restore_metadata(
 ) -> Path:
     """Write a restore metadata file and return its path."""
     timestamp = datetime.now().strftime("%Y%m%dT%H%M%S")
-    safe_name = original_path.replace("/", "_").lstrip("_")
+    safe_name = (
+        original_path.replace("\\", "_")
+        .replace("/", "_")
+        .replace(":", "_")
+        .lstrip("_")
+    )
     metadata_path = metadata_dir / f"{timestamp}_{safe_name}.restoreinfo"
 
     content = (
@@ -310,7 +337,7 @@ def _write_restore_metadata(
 
 
 def resolve_trash_service(
-) -> LinuxTrashService | MacOsTrashService | UnsupportedPlatformTrashService:
+) -> LinuxTrashService | MacOsTrashService | WindowsTrashService | UnsupportedPlatformTrashService:
     """Return appropriate trash service based on platform."""
 
     system = platform.system()
@@ -318,4 +345,6 @@ def resolve_trash_service(
         return LinuxTrashService()
     if system == "Darwin":
         return MacOsTrashService()
+    if system == "Windows":
+        return WindowsTrashService()
     return UnsupportedPlatformTrashService()

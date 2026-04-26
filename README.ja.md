@@ -91,7 +91,7 @@ Overlay表示:
 | Ubuntu | サポート | 現時点で主要な動作確認対象です。 |
 | Ubuntu (WSL) | サポート | WSL 上の Ubuntu を動作確認対象としています。 |
 | macOS | サポート | ゴミ箱操作にはターミナルへのフルディスクアクセス権限が必要です。 |
-| Windows | 一部対応 | 最低限の起動と基本的なブラウズは利用できますが、Windows ネイティブ実行はまだ完全な機能互換ではありません。 |
+| Windows | 一部対応 | Windows ネイティブでも起動、基本ブラウズ、`Move to trash` は利用できますが、まだ完全な機能互換ではありません。 |
 
 ## インストール
 
@@ -156,7 +156,7 @@ sudo apt install chafa pandoc poppler-utils ripgrep wslu
 brew install chafa pandoc poppler ripgrep
 ```
 
-Windows ネイティブでは、現時点では最低限の起動と基本的なブラウズを主な対象としています。埋め込み split terminal のような POSIX 前提の機能は引き続き利用できず、`t` を押した場合も起動を試みずに非対応メッセージを表示します。そのため、Windows ネイティブ実行向けの依存ツール案内は対象外です。
+Windows ネイティブでは、現時点では起動、基本的なブラウズ、`Move to trash` のような主要ファイル操作を主な対象としています。埋め込み split terminal のような POSIX 前提の機能は引き続き利用できず、trash restore や `Empty trash` も未対応のため、Windows ネイティブ実行向けの依存ツール案内は対象外です。
 
 macOS では、使用しているターミナルアプリに **フルディスクアクセス** 権限を付与してください。**システム設定 > プライバシーとセキュリティ > フルディスクアクセス** を開き、zivo を実行するターミナルアプリ（Terminal.app、iTerm2、Alacritty など）を有効にしてください。この権限がない場合、`~/.Trash` などの保護されたディレクトリにアクセスする操作が失敗します。
 
@@ -367,7 +367,7 @@ Transferモードでは、アクティブな転送ペインで実行できるコ
 | `Go to home directory` | 常に表示 | ホームディレクトリへ移動します。 |
 | `Reload directory` | 常に表示 | 現在ディレクトリを再読み込みします。 |
 | `Toggle transfer mode` / `Close transfer mode` | 常に表示 | 通常の 3 ペインブラウザと 2 ペイン転送レイアウトを切り替えます。転送モード中は `q` / `2`、通常モードからは `2` でも実行できます。 |
-| `Undo last file operation` | Undo 履歴があるとき | 直前の Undo 対象リネーム、貼り付け、ゴミ箱移動を取り消します。`z` でも実行できます。ゴミ箱からの復元は現在 Linux のみ対応です。 |
+| `Undo last file operation` | Undo 履歴があるとき | 直前の Undo 対象リネーム、貼り付け、ゴミ箱移動を取り消します。`z` でも実行できます。ゴミ箱からの復元は現在 Linux と macOS で対応し、Windows では未対応です。 |
 | `Toggle split terminal` | POSIX 環境 | 埋め込み split terminal を開閉します。Windows ネイティブではコマンドパレット上でも無効表示のままで、`t` の直接入力でも非対応メッセージを表示します。 |
 | `Select all` | 現在ディレクトリに表示中の項目が 1 件以上あるとき | 現在ディレクトリで表示中の項目をすべて選択します。 |
 | `Replace text in selected files` | ファイルがフォーカス中、または現在ディレクトリで 1 件以上のファイルが選択中のとき | 選択中のファイル、または未選択時はフォーカス中のファイルを対象に 2 フィールドの置換パレットを開きます。一致したファイル一覧がパレットに表示され、`↑↓` と `Ctrl+n` / `Ctrl+p` で移動すると右ペインに選択中ファイルの diff を表示します。`Enter` で一括置換を実行します。`Shift+↑` / `Shift+↓` で diff preview をスクロールします。 |
@@ -380,8 +380,8 @@ Transferモードでは、アクティブな転送ペインで実行できるコ
 | `Extract archive` | 単一の対応アーカイブファイルが選択中またはフォーカス中のとき | `.zip` / `.tar` / `.tar.gz` / `.tar.bz2` の展開を開始します。展開先入力は絶対パスと相対パスの両方に対応し、相対パスはアーカイブ親ディレクトリ基準で解決されます。初期値はアーカイブと同じ階層にある同名ディレクトリの絶対パスです。既存パスとの衝突がある場合は事前確認し、展開中は status bar に entry 件数ベースの進捗を表示します。 |
 | `Open in editor` | 単一ファイルが選択中またはフォーカス中のとき | フォーカス中のファイルを `editor.command` -> `$EDITOR` -> 組み込み既定値の順でターミナルエディタで開きます。 |
 | `Copy path` | 対象が 1 件以上あるとき | 選択中のパス一覧、または未選択時はフォーカス中のパスをシステムクリップボードへコピーします。`C` でも実行できます。 |
-| `Move to trash` | 対象が 1 件以上あるとき | 選択中の項目、またはフォーカス項目をゴミ箱へ移動します（既定では確認あり、設定で変更可能）。 |
-| `Empty trash` | 常に表示（Linux/macOSのみ） | ゴミ箱内のすべての項目を完全に削除します。実行前に確認ダイアログを表示します。Windows では利用できません。 |
+| `Move to trash` | 対象が 1 件以上あるとき | 選択中の項目、またはフォーカス項目をゴミ箱へ移動します（既定では確認あり、設定で変更可能）。Windows では `send2trash` 経由で Recycle Bin を使いますが、undo restore は利用できません。 |
+| `Empty trash` | 常に表示（Linux/macOSのみ） | ゴミ箱内のすべての項目を完全に削除します。実行前に確認ダイアログを表示します。Windows での対応はまだありません。 |
 | `Open in file manager` | 常に表示 | 現在ディレクトリを OS のファイルマネージャで開きます。`M` でも実行できます。 |
 | `Open terminal` | 常に表示 | `config.toml` の設定を優先しつつ、zivo の current directory を起点に外部ターミナルを起動します。別ウィンドウ起動と前面起動を設定で切り替えられます。Windows では `window` のみ対応し、`foreground` を選ぶと `window` を使うよう案内付きで失敗します。`T` でも実行できます。 |
 | `Run shell command` | 常に表示 | 1 行シェルコマンド入力ダイアログを開き、現在ディレクトリでバックグラウンド実行します。完了後は先頭の出力行、または失敗要約を status bar に表示します。Windows では `powershell.exe`、次に `pwsh`、最後に `cmd.exe` を優先するため、構文は選ばれた Windows shell に従います。`!` でも実行できます。 |
@@ -397,7 +397,7 @@ zivo は起動時にユーザー設定用の `config.toml` を読み込みます
 
 - Linux: `${XDG_CONFIG_HOME:-~/.config}/zivo/config.toml`
 - macOS: `~/Library/Application Support/zivo/config.toml`
-- Windows 向けの設定パスも予約していますが、Windows ネイティブ実行自体は引き続き非対応です
+- Windows 向けの設定パスをサポートしており、Windows ネイティブ実行でも利用できます
 
 設定できる項目は次のとおりです。
 

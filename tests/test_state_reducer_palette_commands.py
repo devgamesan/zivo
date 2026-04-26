@@ -931,6 +931,16 @@ def test_submit_command_palette_deletes_targets() -> None:
     assert result.state.command_palette is None
     assert result.state.delete_confirmation is not None
 
+
+def test_command_palette_hides_empty_trash_on_windows(monkeypatch) -> None:
+    monkeypatch.setattr(command_palette_module.platform, "system", lambda: "Windows")
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert "Empty trash" not in [item.label for item in palette_state.items]
+
 def test_submit_command_palette_uses_selected_paths_for_copy_path() -> None:
     initial_state = build_initial_app_state()
     state = replace(
