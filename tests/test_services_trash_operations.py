@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from zivo.models import TrashRestoreRecord
-from zivo.services.trash_operations import LinuxTrashService, MacOsTrashService
+from zivo.services.trash_operations import LinuxTrashService, MacOsTrashService, WindowsTrashService
 
 
 def test_linux_trash_service_captures_restorable_metadata(tmp_path, monkeypatch) -> None:
@@ -272,3 +272,34 @@ def test_macos_capture_returns_none_when_no_new_entry(
     record = service.capture_restorable_trash(str(original_path), lambda: None)
 
     assert record is None
+
+
+def test_windows_trash_service_sends_to_trash_without_restore_metadata() -> None:
+    sent_to_trash: list[str] = []
+
+    service = WindowsTrashService()
+    record = service.capture_restorable_trash(
+        "C:/Users/test/docs",
+        lambda: sent_to_trash.append("C:/Users/test/docs"),
+    )
+
+    assert sent_to_trash == ["C:/Users/test/docs"]
+    assert record is None
+
+
+def test_windows_trash_service_reports_empty_trash_as_unsupported() -> None:
+    count, error = WindowsTrashService().empty_trash()
+
+    assert count == 0
+    assert error == "Empty trash is not supported on Windows yet"
+
+
+def test_windows_trash_service_restore_is_unsupported() -> None:
+    record = TrashRestoreRecord(
+        original_path="C:/Users/test/docs",
+        trashed_path="C:/$Recycle.Bin/docs",
+        metadata_path="",
+    )
+
+    with pytest.raises(OSError, match="Trash restore is not supported on Windows"):
+        WindowsTrashService().restore(record)

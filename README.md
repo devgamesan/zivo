@@ -87,7 +87,7 @@ Overlay display:
 | Ubuntu | Supported | Primary verified environment at the moment. |
 | Ubuntu (WSL) | Supported | WSL running Ubuntu is part of the verified environments. |
 | macOS | Supported | Grant Full Disk Access to your terminal for trash operations. |
-| Windows | Partial | Minimum startup and basic browsing are supported, but native Windows still lacks full feature parity. |
+| Windows | Partial | Native Windows supports startup, basic browsing, and `Move to trash`, but still lacks full feature parity. |
 
 ## Installation
 
@@ -152,7 +152,7 @@ sudo apt install chafa pandoc poppler-utils ripgrep wslu
 brew install chafa pandoc poppler ripgrep
 ```
 
-On native Windows, zivo currently focuses on minimum startup and basic browsing. POSIX-oriented features such as the embedded split terminal are still unavailable there, and pressing `t` shows a non-supported warning instead of trying to launch it, so native Windows dependency guidance remains intentionally limited.
+On native Windows, zivo currently focuses on startup, basic browsing, and core file actions such as `Move to trash`. POSIX-oriented features such as the embedded split terminal are still unavailable there, and trash restore / `Empty trash` remain unsupported, so native Windows dependency guidance remains intentionally limited.
 
 On macOS, grant **Full Disk Access** to your terminal application. Open **System Settings > Privacy & Security > Full Disk Access** and enable the terminal app you use to run zivo (for example Terminal.app, iTerm2, or Alacritty). Without this permission, operations that access `~/.Trash` or other protected directories will fail.
 
@@ -363,7 +363,7 @@ The tab strip is only shown when two or more browser tabs are open.
 | `Go to home directory` | Always | Navigates to the home directory. |
 | `Reload directory` | Always | Reloads the current directory. |
 | `Toggle transfer mode` / `Close transfer mode` | Always | Switches between the normal three-pane browser and the two-pane transfer layout. Also available with `q` / `2` while transfer mode is open, and `2` from normal mode. |
-| `Undo last file operation` | Undo history is not empty | Reverses the most recent undoable rename, paste, or trash operation. Also available with `z`. Trash restore is currently Linux-only. |
+| `Undo last file operation` | Undo history is not empty | Reverses the most recent undoable rename, paste, or trash operation. Also available with `z`. Trash restore is currently supported on Linux and macOS, but not on Windows. |
 | `Toggle split terminal` | POSIX environments | Opens or closes the embedded split terminal. It stays disabled in the command palette on native Windows, and direct `t` input shows an unavailable warning. |
 | `Select all` | Current directory has at least one visible entry | Selects every currently visible entry in the current directory, respecting hidden-file visibility and any active filter. |
 | `Replace text in selected files` | A file is focused or one or more files are selected in the current directory | Opens a two-field replacement palette for the selected files, or the focused file when nothing is explicitly selected. Matching files appear in the palette, `↑↓` and `Ctrl+n` / `Ctrl+p` move between them, and the right pane shows the selected file's diff before `Enter` applies the replacement. `Shift+↑` / `Shift+↓` scrolls the diff preview. |
@@ -376,8 +376,8 @@ The tab strip is only shown when two or more browser tabs are open.
 | `Extract archive` | Exactly one supported archive file is selected or focused | Starts archive extraction for `.zip`, `.tar`, `.tar.gz`, or `.tar.bz2`. The destination input accepts absolute and relative paths. Relative paths are resolved from the archive file's parent directory, and the default value is a same-name directory next to the archive. Existing destination paths are confirmed before extraction, and the status bar shows entry-count progress while the extraction runs. |
 | `Open in editor` | Exactly one file is selected or focused | Opens the focused file in a terminal editor, using `editor.command` -> `$EDITOR` -> built-in defaults. |
 | `Copy path` | At least one target is selected or focused | Copies the selected path list, or the focused path when nothing is selected, to the system clipboard. Also available with `C`. |
-| `Move to trash` | At least one target is selected or focused | Moves the selected items, or the focused item, to trash (confirmation is enabled by default and can be configured). |
-| `Empty trash` | Always (Linux/macOS only) | Permanently deletes all items from the trash. Shows a confirmation dialog before emptying. Not available on Windows. |
+| `Move to trash` | At least one target is selected or focused | Moves the selected items, or the focused item, to trash (confirmation is enabled by default and can be configured). On Windows this uses the Recycle Bin via `send2trash`, but undo restore is not available there. |
+| `Empty trash` | Always (Linux/macOS only) | Permanently deletes all items from the trash. Shows a confirmation dialog before emptying. Windows support is not available yet. |
 | `Open in file manager` | Always | Opens the current directory in the OS file manager. Also available with `M`. |
 | `Open terminal` | Always | Launches an external terminal rooted at zivo's current directory, using `config.toml` templates before built-in fallbacks. The launch mode can be switched between a separate window and foreground terminal handoff. On Windows, `window` mode is supported and `foreground` is rejected with guidance to switch back to `window`. Also available with `T`. |
 | `Run shell command` | Always | Opens a one-line shell command dialog, runs the command in the current directory in the background, and returns the first output line or failure summary in the status bar. On Windows, zivo prefers `powershell.exe`, then `pwsh`, then `cmd.exe`, so command syntax follows the selected Windows shell rather than POSIX `sh`. Also available with `!`. |
