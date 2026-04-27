@@ -152,7 +152,7 @@ sudo apt install chafa pandoc poppler-utils ripgrep wslu
 brew install chafa pandoc poppler ripgrep
 ```
 
-On native Windows, zivo currently focuses on startup, basic browsing, and core file actions such as `Move to trash`. POSIX-oriented features such as the embedded split terminal are still unavailable there, and trash restore / `Empty trash` remain unsupported, so native Windows dependency guidance remains intentionally limited.
+On native Windows, zivo currently focuses on startup, basic browsing, and core file actions such as `Move to trash`. POSIX-oriented features such as the embedded split terminal are still unavailable there, and trash restore / `Empty trash` remain unsupported, so native Windows dependency guidance remains intentionally limited. Pressing `←` from a drive root such as `C:\` returns to a drive list so you can move to another drive without leaving zivo.
 
 On macOS, grant **Full Disk Access** to your terminal application. Open **System Settings > Privacy & Security > Full Disk Access** and enable the terminal app you use to run zivo (for example Terminal.app, iTerm2, or Alacritty). Without this permission, operations that access `~/.Trash` or other protected directories will fail.
 
@@ -359,7 +359,7 @@ The tab strip is only shown when two or more browser tabs are open.
 | `Show bookmarks` | Always | Opens the saved bookmark list and jumps to the selected directory. |
 | `Go back` | Directory history has a previous entry | Moves to the previous directory in history. |
 | `Go forward` | Directory history has a forward entry | Moves to the next directory in history. |
-| `Go to path` | Always | Opens go-to-path input to navigate to a specific path, shows matching directories, and supports `Tab` completion for the selected candidate. |
+| `Go to path` | Always | Opens go-to-path input to navigate to a specific path, shows matching directories, and supports `Tab` completion for the selected candidate. On native Windows, drive roots are also offered so you can switch between drives quickly. |
 | `Go to home directory` | Always | Navigates to the home directory. |
 | `Reload directory` | Always | Reloads the current directory. |
 | `Toggle transfer mode` / `Close transfer mode` | Always | Switches between the normal three-pane browser and the two-pane transfer layout. Also available with `q` / `2` while transfer mode is open, and `2` from normal mode. |

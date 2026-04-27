@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 from zivo.archive_utils import is_supported_archive_path
 from zivo.platform_support import is_split_terminal_supported
+from zivo.windows_paths import display_path
 
 from .entry_state_helpers import select_visible_entry_states
 from .models import AppState
@@ -588,6 +589,10 @@ def _matches_query(item: CommandPaletteItem, query: str) -> bool:
 
 def _display_path(path: str) -> str:
     """Replace home directory prefix with ~ for display."""
+
+    rendered = display_path(path)
+    if rendered != path:
+        return rendered
     home = os.path.expanduser("~")
     if path.startswith(home + "/"):
         return "~" + path[len(home):]

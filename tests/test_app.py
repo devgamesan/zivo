@@ -88,6 +88,7 @@ from zivo.ui import (
     TabBar,
 )
 from zivo.ui.panes import MainPane
+from zivo.windows_paths import WINDOWS_DRIVES_ROOT
 
 skip_if_windows_split_terminal_unsupported = pytest.mark.skipif(
     os.name == "nt",
@@ -1913,6 +1914,61 @@ async def test_app_left_can_move_above_initial_directory() -> None:
         await _wait_for_path(app, grandparent_path)
 
         assert app.app_state.current_pane.cursor_path == parent_path
+
+
+@pytest.mark.asyncio
+async def test_app_left_on_windows_drive_root_returns_to_drive_list(monkeypatch) -> None:
+    monkeypatch.setattr("zivo.windows_paths.platform.system", lambda: "Windows")
+    drive_entries = (
+        DirectoryEntryState("C:\\", "C:\\", "dir"),
+        DirectoryEntryState("D:\\", "D:\\", "dir"),
+    )
+    c_drive_entries = (
+        DirectoryEntryState("C:\\Users", "Users", "dir"),
+        DirectoryEntryState("C:\\Temp", "Temp", "dir"),
+    )
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            WINDOWS_DRIVES_ROOT: BrowserSnapshot(
+                current_path=WINDOWS_DRIVES_ROOT,
+                parent_pane=PaneState(
+                    directory_path=WINDOWS_DRIVES_ROOT,
+                    entries=(),
+                ),
+                current_pane=PaneState(
+                    directory_path=WINDOWS_DRIVES_ROOT,
+                    entries=drive_entries,
+                    cursor_path="C:\\",
+                ),
+                child_pane=PaneState(directory_path="C:\\", entries=c_drive_entries),
+            ),
+            "C:\\": BrowserSnapshot(
+                current_path="C:\\",
+                parent_pane=PaneState(
+                    directory_path=WINDOWS_DRIVES_ROOT,
+                    entries=drive_entries,
+                    cursor_path="C:\\",
+                ),
+                current_pane=PaneState(
+                    directory_path="C:\\",
+                    entries=c_drive_entries,
+                    cursor_path="C:\\Users",
+                ),
+                child_pane=PaneState(directory_path="C:\\Users", entries=()),
+            ),
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path="C:\\")
+
+    async with app.run_test() as pilot:
+        await _wait_for_path(app, "C:\\")
+        current_path_bar = await _wait_for_current_path_bar(app)
+        assert str(current_path_bar.renderable) == "Current Path: C:\\"
+
+        await pilot.press("left")
+        await _wait_for_path(app, WINDOWS_DRIVES_ROOT)
+        assert str(current_path_bar.renderable) == "Current Path: Drives"
+        assert app.app_state.current_pane.cursor_path == "C:\\"
 
 
 @pytest.mark.asyncio
