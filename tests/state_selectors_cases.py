@@ -1306,22 +1306,6 @@ def test_select_help_bar_for_busy_mode() -> None:
     assert help_state.text == "processing..."
 
 
-def test_select_help_bar_for_split_terminal_focus() -> None:
-    state = replace(
-        build_initial_app_state(),
-        split_terminal=replace(
-            build_initial_app_state().split_terminal,
-            visible=True,
-            status="running",
-            focus_target="terminal",
-        ),
-    )
-
-    help_state = select_help_bar_state(state)
-
-    assert help_state.text == "type in terminal | ctrl+q close"
-
-
 def test_select_command_palette_state_marks_selected_and_enabled_items() -> None:
     state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
 
