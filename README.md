@@ -157,6 +157,8 @@ eval "$(zivo init bash)"  # for bash
 eval "$(zivo init zsh)"   # for zsh
 ```
 
+**Note**: Shell integration (`zivo-cd`) is currently not supported on Windows. Use plain `zivo` on Windows.
+
 This defines a shell function named `zivo-cd`. Start zivo with `zivo-cd` when you want the parent shell to `cd` into the last directory on exit:
 
 ```bash

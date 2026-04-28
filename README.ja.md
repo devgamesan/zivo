@@ -161,6 +161,8 @@ eval "$(zivo init bash)"  # bash 用
 eval "$(zivo init zsh)"   # zsh 用
 ```
 
+**注**: シェル統合 (`zivo-cd`) は現在 Windows ではサポートされていません。Windows では通常の `zivo` を使用してください。
+
 これにより `zivo-cd` というシェル関数が定義されます。終了後に親シェルを最後のディレクトリへ `cd` させたいときは、`zivo` ではなく `zivo-cd` で起動します。
 
 ```bash
