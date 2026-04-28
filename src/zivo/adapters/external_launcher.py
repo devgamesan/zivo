@@ -23,7 +23,10 @@ EnvironmentVariableReader = Callable[[str], str | None]
 TextFileReader = Callable[[str], str]
 PlatformKind = Literal["linux", "wsl", "darwin", "windows"]
 TERMINAL_EDITOR_NAMES = frozenset(
-    {"emacs", "helix", "hx", "kak", "micro", "nano", "nvim", "vi", "vim"}
+    {"edit", "emacs", "helix", "hx", "kak", "micro", "msedit", "nano", "nvim", "vi", "vim"}
+)
+EMBEDDED_LINE_NUMBER_EDITOR_NAMES = frozenset(
+    {"edit", "msedit"}
 )
 
 _PLATFORM_TEMPLATE_KEYS: dict[PlatformKind, tuple[str, ...]] = {
@@ -270,11 +273,14 @@ class LocalExternalLaunchAdapter:
         path: str,
         line_number: int | None = None,
     ) -> tuple[tuple[str, ...], ...]:
+        is_windows = self._platform_kind() == "windows"
         commands: list[tuple[str, ...]] = []
         configured_editor_command = self.editor_command_template.command
         if configured_editor_command:
             candidate = _build_command_candidate(
-                tuple(shlex.split(configured_editor_command)), path, line_number
+                tuple(shlex.split(configured_editor_command, posix=not is_windows)),
+                path,
+                line_number,
             )
             if candidate is not None:
                 commands.append(candidate)
@@ -282,7 +288,9 @@ class LocalExternalLaunchAdapter:
         editor_command = self.environment_variable("EDITOR")
         if editor_command:
             try:
-                parsed_command = tuple(shlex.split(editor_command))
+                parsed_command = tuple(
+                    shlex.split(editor_command, posix=not is_windows)
+                )
             except ValueError as error:
                 raise OSError(f"Invalid EDITOR value: {error}") from error
             candidate = _build_command_candidate(parsed_command, path, line_number)
@@ -298,7 +306,7 @@ class LocalExternalLaunchAdapter:
         line_number: int | None = None,
     ) -> tuple[tuple[str, ...], ...]:
         if line_number is not None:
-            return (
+            commands = (
                 ("nvim", f"+{line_number}", path),
                 ("vim", f"+{line_number}", path),
                 ("nano", f"+{line_number}", path),
@@ -306,14 +314,21 @@ class LocalExternalLaunchAdapter:
                 ("micro", f"+{line_number}", path),
                 ("emacs", "-nw", f"+{line_number}", path),
             )
-        return (
-            ("nvim", path),
-            ("vim", path),
-            ("nano", path),
-            ("hx", path),
-            ("micro", path),
-            ("emacs", "-nw", path),
-        )
+        else:
+            commands = (
+                ("nvim", path),
+                ("vim", path),
+                ("nano", path),
+                ("hx", path),
+                ("micro", path),
+                ("emacs", "-nw", path),
+            )
+        if self._platform_kind() == "windows":
+            if line_number is not None:
+                commands = commands + (("edit", f"{path}:{line_number}"),)
+            else:
+                commands = commands + (("edit", path),)
+        return commands
 
     def _command_exists(self, command: str) -> bool:
         command_path = Path(command)
@@ -576,6 +591,9 @@ def _build_command_candidate(
     if not parsed_command or not _is_terminal_editor_command(parsed_command[0]):
         return None
     if line_number is not None:
+        editor_name = Path(parsed_command[0]).name.casefold()
+        if editor_name in EMBEDDED_LINE_NUMBER_EDITOR_NAMES:
+            return parsed_command + (f"{path}:{line_number}",)
         return parsed_command + (f"+{line_number}", path)
     return parsed_command + (path,)
 
