@@ -144,7 +144,7 @@ sudo apt install chafa pandoc poppler-utils ripgrep wslu
 brew install chafa pandoc poppler ripgrep
 ```
 
-Windows ネイティブでは、現時点では起動、基本的なブラウズ、`Move to trash` のような主要ファイル操作を主な対象としています。埋め込み split terminal のような POSIX 前提の機能は引き続き利用できず、trash restore や `Empty trash` も未対応のため、Windows ネイティブ実行向けの依存ツール案内は対象外です。
+Windows ネイティブでは、現時点では起動、基本的なブラウズ、`Move to trash` のような主要ファイル操作を主な対象としています。埋め込み split terminal のような POSIX 前提の機能は引き続き利用できず、trash restore は未対応のため、Windows ネイティブ実行向けの依存ツール案内は対象外です。
 
 macOS では、使用しているターミナルアプリに **フルディスクアクセス** 権限を付与してください。**システム設定 > プライバシーとセキュリティ > フルディスクアクセス** を開き、zivo を実行するターミナルアプリ（Terminal.app、iTerm2、Alacritty など）を有効にしてください。この権限がない場合、`~/.Trash` などの保護されたディレクトリにアクセスする操作が失敗します。
 
@@ -362,7 +362,7 @@ Transferモードでは、アクティブな転送ペインで実行できるコ
 | `Open in editor` | 単一ファイルが選択中またはフォーカス中のとき | フォーカス中のファイルを `editor.command` -> `$EDITOR` -> 組み込み既定値の順でターミナルエディタで開きます。 |
 | `Copy path` | 対象が 1 件以上あるとき | 選択中のパス一覧、または未選択時はフォーカス中のパスをシステムクリップボードへコピーします。`C` でも実行できます。 |
 | `Move to trash` | 対象が 1 件以上あるとき | 選択中の項目、またはフォーカス項目をゴミ箱へ移動します（既定では確認あり、設定で変更可能）。Windows では `send2trash` 経由で Recycle Bin を使いますが、undo restore は利用できません。 |
-| `Empty trash` | 常に表示（Linux/macOSのみ） | ゴミ箱内のすべての項目を完全に削除します。実行前に確認ダイアログを表示します。Windows での対応はまだありません。 |
+| `Empty trash` | 常に表示 | ゴミ箱内のすべての項目を完全に削除します。実行前に確認ダイアログを表示します。Windows では PowerShell の `Clear-RecycleBin` を使用してごみ箱を空にします。 |
 | `Open in file manager` | 常に表示 | 現在ディレクトリを OS のファイルマネージャで開きます。`M` でも実行できます。 |
 | `Open terminal` | 常に表示 | `config.toml` の設定を優先しつつ、zivo の current directory を起点に外部ターミナルを起動します。`T` と `t` でも実行できます。 |
 | `Run shell command` | 常に表示 | 1 行シェルコマンド入力ダイアログを開き、現在ディレクトリでバックグラウンド実行します。完了後は先頭の出力行、または失敗要約を status bar に表示します。Windows では `powershell.exe`、次に `pwsh`、最後に `cmd.exe` を優先するため、構文は選ばれた Windows shell に従います。`!` でも実行できます。 |

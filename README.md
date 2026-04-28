@@ -140,7 +140,7 @@ sudo apt install chafa pandoc poppler-utils ripgrep wslu
 brew install chafa pandoc poppler ripgrep
 ```
 
-On native Windows, zivo currently focuses on startup, basic browsing, and core file actions such as `Move to trash`. POSIX-oriented features such as the embedded split terminal are still unavailable there, and trash restore / `Empty trash` remain unsupported, so native Windows dependency guidance remains intentionally limited. Pressing `←` from a drive root such as `C:\` returns to a drive list so you can move to another drive without leaving zivo.
+On native Windows, zivo currently focuses on startup, basic browsing, and core file actions such as `Move to trash`. POSIX-oriented features such as the embedded split terminal are still unavailable there, and trash restore remains unsupported, so native Windows dependency guidance remains intentionally limited. Pressing `←` from a drive root such as `C:\` returns to a drive list so you can move to another drive without leaving zivo.
 
 On macOS, grant **Full Disk Access** to your terminal application. Open **System Settings > Privacy & Security > Full Disk Access** and enable the terminal app you use to run zivo (for example Terminal.app, iTerm2, or Alacritty). Without this permission, operations that access `~/.Trash` or other protected directories will fail.
 
@@ -358,7 +358,7 @@ The tab strip is only shown when two or more browser tabs are open.
 | `Open in editor` | Exactly one file is selected or focused | Opens the focused file in a terminal editor, using `editor.command` -> `$EDITOR` -> built-in defaults. |
 | `Copy path` | At least one target is selected or focused | Copies the selected path list, or the focused path when nothing is selected, to the system clipboard. Also available with `C`. |
 | `Move to trash` | At least one target is selected or focused | Moves the selected items, or the focused item, to trash (confirmation is enabled by default and can be configured). On Windows this uses the Recycle Bin via `send2trash`, but undo restore is not available there. |
-| `Empty trash` | Always (Linux/macOS only) | Permanently deletes all items from the trash. Shows a confirmation dialog before emptying. Windows support is not available yet. |
+| `Empty trash` | Always | Permanently deletes all items from the trash. Shows a confirmation dialog before emptying. On Windows this uses PowerShell's `Clear-RecycleBin` to empty the Recycle Bin. |
 | `Open in file manager` | Always | Opens the current directory in the OS file manager. Also available with `M`. |
 | `Open terminal` | Always | Launches an external terminal rooted at zivo's current directory, using `config.toml` templates before built-in fallbacks. Also available with `T` and `t`. |
 | `Run shell command` | Always | Opens a one-line shell command dialog, runs the command in the current directory in the background, and returns the first output line or failure summary in the status bar. On Windows, zivo prefers `powershell.exe`, then `pwsh`, then `cmd.exe`, so command syntax follows the selected Windows shell rather than POSIX `sh`. Also available with `!`. |

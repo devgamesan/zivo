@@ -239,7 +239,15 @@ class WindowsTrashService:
         return None
 
     def empty_trash(self) -> tuple[int, str]:
-        return 0, "Empty trash is not supported on Windows yet"
+        result = subprocess.run(
+            ["powershell.exe", "-NoProfile", "-Command", "Clear-RecycleBin -Force"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        if result.returncode != 0:
+            return 0, "Failed to empty Recycle Bin"
+        return 1, ""
 
     def capture_restorable_trash(
         self,

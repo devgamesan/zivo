@@ -672,7 +672,7 @@ def _transfer_single_target_entry(state: AppState):
 
 def _is_empty_trash_supported() -> bool:
     """Check if empty trash is supported on current platform."""
-    return platform.system() in ("Linux", "Darwin")
+    return platform.system() in ("Linux", "Darwin", "Windows")
 
 
 def _is_split_terminal_supported() -> bool:

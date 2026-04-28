@@ -287,11 +287,32 @@ def test_windows_trash_service_sends_to_trash_without_restore_metadata() -> None
     assert record is None
 
 
-def test_windows_trash_service_reports_empty_trash_as_unsupported() -> None:
+def test_windows_empty_trash_powershell_success(monkeypatch) -> None:
+    mock_run = MagicMock(return_value=MagicMock(returncode=0, stderr=""))
+    monkeypatch.setattr("zivo.services.trash_operations.subprocess.run", mock_run)
+
+    count, error = WindowsTrashService().empty_trash()
+
+    assert count == 1
+    assert error == ""
+    mock_run.assert_called_once_with(
+        ["powershell.exe", "-NoProfile", "-Command", "Clear-RecycleBin -Force"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+
+def test_windows_empty_trash_powershell_failure(monkeypatch) -> None:
+    mock_run = MagicMock(
+        return_value=MagicMock(returncode=1, stderr="access denied")
+    )
+    monkeypatch.setattr("zivo.services.trash_operations.subprocess.run", mock_run)
+
     count, error = WindowsTrashService().empty_trash()
 
     assert count == 0
-    assert error == "Empty trash is not supported on Windows yet"
+    assert error == "Failed to empty Recycle Bin"
 
 
 def test_windows_trash_service_restore_is_unsupported() -> None:
