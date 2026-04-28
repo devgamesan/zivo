@@ -254,11 +254,132 @@ class WindowsTrashService:
         path: str,
         send_to_trash: Callable[[], None],
     ) -> TrashRestoreRecord | None:
+        before = self._get_recycle_bin_original_paths()
+
         send_to_trash()
-        return None
+
+        after = self._get_recycle_bin_original_paths()
+        new_paths = sorted(after - before)
+
+        resolved_original = str(Path(path).expanduser().resolve(strict=False))
+        lower_original = resolved_original.lower()
+        lower_new = [p.lower() for p in new_paths]
+        if lower_original in lower_new:
+            match = resolved_original
+        elif not new_paths:
+            match = None
+        else:
+            match = new_paths[-1]
+
+        if match is None:
+            return None
+
+        name = Path(match).name
+
+        return TrashRestoreRecord(
+            original_path=match,
+            trashed_path=name,
+            metadata_path="",
+        )
 
     def restore(self, record: TrashRestoreRecord) -> str:
-        raise OSError("Trash restore is not supported on Windows")
+        escaped_path = record.original_path.replace("'", "''")
+        escaped_name = record.trashed_path.replace("'", "''")
+        ps_script = (
+            f"$shell = New-Object -ComObject Shell.Application;"
+            f"$rb = $shell.NameSpace(0xa);"
+            f"$items = $rb.Items();"
+            f"$targetPath = '{escaped_path}'.ToLower();"
+            f"$targetName = '{escaped_name}'.ToLower();"
+            f"$count = $items.Count;"
+            f"$bestItem = $null;"
+            f"for ($i = 0; $i -lt $count; $i++) {{"
+            f"  $item = $items.Item($i);"
+            f"  $dir = $rb.GetDetailsOf($item, 1);"
+            f"  $name = $rb.GetDetailsOf($item, 0);"
+            f"  if ($dir -and $name) {{"
+            f"    $fullPath = (Join-Path $dir $name).ToLower();"
+            f"    if ($fullPath -eq $targetPath) {{"
+            f"      $bestItem = $item;"
+            f"      break;"
+            f"    }}"
+            f"  }}"
+            f"}}"
+            f"if ($bestItem -eq $null) {{ exit 1 }};"
+            f"$bestItem.InvokeVerb('undelete');"
+            f"$checkItems = $rb.Items();"
+            f"for ($i = 0; $i -lt $checkItems.Count; $i++) {{"
+            f"  $vItem = $checkItems.Item($i);"
+            f"  $vDir = $rb.GetDetailsOf($vItem, 1);"
+            f"  $vName = $rb.GetDetailsOf($vItem, 0);"
+            f"  if ($vDir -and $vName) {{"
+            f"    $vFull = (Join-Path $vDir $vName).ToLower();"
+            f"    if ($vFull -eq $targetPath) {{"
+            f"      $bestItem.InvokeVerb('restore');"
+            f"      break;"
+            f"    }}"
+            f"  }}"
+            f"}}"
+            f"for ($i = 0; $i -lt $checkItems.Count; $i++) {{"
+            f"  $vItem = $checkItems.Item($i);"
+            f"  $vDir = $rb.GetDetailsOf($vItem, 1);"
+            f"  $vName = $rb.GetDetailsOf($vItem, 0);"
+            f"  if ($vDir -and $vName) {{"
+            f"    $vFull = (Join-Path $vDir $vName).ToLower();"
+            f"    if ($vFull -eq $targetPath) {{ exit 2 }}"
+            f"  }}"
+            f"}}"
+        )
+        try:
+            result = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-Command", ps_script],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except FileNotFoundError:
+            raise OSError(
+                f"Failed to restore '{record.original_path}' from Recycle Bin: "
+                "PowerShell not available"
+            )
+        if result.returncode == 1:
+            raise OSError(
+                f"Failed to restore '{record.original_path}' from Recycle Bin: "
+                "item not found"
+            )
+        if result.returncode == 2:
+            raise OSError(
+                f"Failed to restore '{record.original_path}' from Recycle Bin: "
+                "restore verb had no effect"
+            )
+        return record.original_path
+
+    @staticmethod
+    def _get_recycle_bin_original_paths() -> set[str]:
+        ps_script = (
+            "$shell = New-Object -ComObject Shell.Application;"
+            "$rb = $shell.NameSpace(0xa);"
+            "$items = $rb.Items();"
+            "$count = $items.Count;"
+            "for ($i = 0; $i -lt $count; $i++) {"
+            "  $item = $items.Item($i);"
+            "  $dir = $rb.GetDetailsOf($item, 1);"
+            "  $name = $rb.GetDetailsOf($item, 0);"
+            "  if ($dir -and $name) { Join-Path $dir $name }"
+            "}"
+        )
+        try:
+            result = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-Command", ps_script],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except FileNotFoundError:
+            return set()
+        if result.returncode != 0:
+            return set()
+        return {line.strip() for line in result.stdout.splitlines() if line.strip()}
 
 
 @dataclass(frozen=True)
