@@ -200,17 +200,18 @@ def test_begin_empty_trash_enters_confirm_mode(monkeypatch) -> None:
     assert next_state.pending_input is None
 
 
-def test_begin_empty_trash_on_windows_shows_error(monkeypatch) -> None:
+def test_begin_empty_trash_on_windows_enters_confirm_mode(monkeypatch) -> None:
     monkeypatch.setattr("platform.system", lambda: "Windows")
 
-    next_state = _reduce_state(build_initial_app_state(), BeginEmptyTrash())
+    state = build_initial_app_state()
 
-    assert next_state.ui_mode == "BROWSING"
-    assert next_state.empty_trash_confirmation is None
-    assert next_state.notification == NotificationState(
-        level="error",
-        message="Empty trash is not supported on this platform",
-    )
+    next_state = _reduce_state(state, BeginEmptyTrash())
+
+    assert next_state.ui_mode == "CONFIRM"
+    assert next_state.empty_trash_confirmation is not None
+    assert next_state.empty_trash_confirmation.platform == "windows"
+    assert next_state.command_palette is None
+    assert next_state.pending_input is None
 
 
 def test_cancel_empty_trash_confirmation_returns_to_browsing() -> None:
