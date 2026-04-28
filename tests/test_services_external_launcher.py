@@ -332,15 +332,35 @@ def test_local_external_launch_adapter_runs_terminal_in_foreground_mode(tmp_path
     assert runner.executed == [(("bash", "-i"), str(tmp_path))]
 
 
-def test_local_external_launch_adapter_rejects_windows_foreground_terminal_mode(tmp_path) -> None:
+def test_windows_foreground_terminal_uses_powershell(tmp_path) -> None:
+    runner = StubForegroundRunner()
+    pwsh = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
     adapter = LocalExternalLaunchAdapter(
         system_name_resolver=lambda: "Windows",
-        command_available=lambda command: command,
-        foreground_command_runner=StubForegroundRunner(),
+        command_available=lambda command: pwsh
+        if command == "powershell.exe"
+        else None,
+        foreground_command_runner=runner,
     )
 
-    with pytest.raises(OSError, match="unavailable on Windows; use window mode instead"):
-        adapter.open_terminal(str(tmp_path), launch_mode="foreground")
+    adapter.open_terminal(str(tmp_path), launch_mode="foreground")
+
+    assert runner.executed == [
+        ((pwsh, "-NoExit", "-NoLogo"), str(tmp_path))
+    ]
+
+
+def test_windows_foreground_terminal_falls_back_to_cmd(tmp_path) -> None:
+    runner = StubForegroundRunner()
+    adapter = LocalExternalLaunchAdapter(
+        system_name_resolver=lambda: "Windows",
+        command_available=lambda command: None,
+        foreground_command_runner=runner,
+    )
+
+    adapter.open_terminal(str(tmp_path), launch_mode="foreground")
+
+    assert runner.executed == [(("cmd.exe", "/k"), str(tmp_path))]
 
 
 def test_local_external_launch_adapter_copies_to_clipboard_on_linux() -> None:
@@ -531,6 +551,32 @@ def test_live_external_launch_service_opens_terminal_in_foreground_mode(tmp_path
     )
 
     assert runner.executed == [(("bash", "-i"), path)]
+
+
+def test_live_external_launch_service_opens_terminal_in_windows_foreground_mode(tmp_path) -> None:
+    runner = StubForegroundRunner()
+    pwsh = "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe"
+    adapter = LocalExternalLaunchAdapter(
+        system_name_resolver=lambda: "Windows",
+        command_available=lambda command: pwsh
+        if command == "powershell.exe"
+        else None,
+        foreground_command_runner=runner,
+    )
+    service = LiveExternalLaunchService(adapter=adapter)
+    path = str(tmp_path.resolve())
+
+    service.execute(
+        ExternalLaunchRequest(
+            kind="open_terminal",
+            path=path,
+            terminal_launch_mode="foreground",
+        )
+    )
+
+    assert runner.executed == [
+        ((pwsh, "-NoExit", "-NoLogo"), path)
+    ]
 
 
 def test_live_external_launch_service_copies_paths_with_expected_payload() -> None:

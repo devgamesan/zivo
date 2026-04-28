@@ -323,9 +323,10 @@ class LocalExternalLaunchAdapter:
 
     def _foreground_terminal_command(self, platform_kind: PlatformKind) -> tuple[str, ...]:
         if platform_kind == "windows":
-            raise OSError(
-                "Foreground terminal launch is unavailable on Windows; use window mode instead"
-            )
+            powershell = self.command_available("powershell.exe")
+            if powershell is not None:
+                return (powershell, "-NoExit", "-NoLogo")
+            return ("cmd.exe", "/k")
         shell = self.environment_variable("SHELL")
         if shell:
             try:
