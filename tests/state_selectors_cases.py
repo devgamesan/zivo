@@ -1971,7 +1971,8 @@ def test_select_config_dialog_state_formats_editor_lines() -> None:
     assert "  Sets the application theme used by the panes, dialogs, and status UI." in dialog.lines
     assert "  Changing this here previews the theme immediately before saving." in dialog.lines
     assert "  Current behavior: `textual-dark`." in dialog.lines
-    assert "Editor presets: system default, nvim, vim, nano, hx, micro, emacs -nw" in dialog.lines
+    hint = "Editor presets: system default, nvim, vim, nano, hx, micro, emacs -nw, edit"
+    assert hint in dialog.lines
     assert "Terminal launch templates: edit config.toml with e" in dialog.lines
     assert dialog.options == (
         "↑↓/Ctrl+n/p choose",

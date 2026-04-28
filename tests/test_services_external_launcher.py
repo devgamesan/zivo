@@ -806,6 +806,62 @@ def test_build_command_candidate_returns_none_for_gui_editor() -> None:
     assert result is None
 
 
+def test_build_command_candidate_for_edit_with_line_number() -> None:
+    result = _build_command_candidate(("edit",), "/tmp/file.py", line_number=42)
+    assert result == ("edit", "/tmp/file.py:42")
+
+
+def test_build_command_candidate_for_edit_without_line_number() -> None:
+    result = _build_command_candidate(("edit",), "/tmp/file.py")
+    assert result == ("edit", "/tmp/file.py")
+
+
+def test_build_command_candidate_for_msedit_with_line_number() -> None:
+    result = _build_command_candidate(("msedit",), "/tmp/file.py", line_number=10)
+    assert result == ("msedit", "/tmp/file.py:10")
+
+
+# --- Tests for Windows editor support ---
+
+
+def test_windows_default_editor_commands_include_edit(tmp_path) -> None:
+    readme = tmp_path / "README.md"
+    readme.write_text("plain\n", encoding="utf-8")
+    runner = StubForegroundRunner()
+    adapter = LocalExternalLaunchAdapter(
+        system_name_resolver=lambda: "Windows",
+        command_available=lambda command: command if command == "edit" else None,
+        foreground_command_runner=runner,
+        environment_variable=lambda _name: None,
+        editor_command_template=EditorConfig(command=None),
+    )
+
+    adapter.open_in_editor(str(readme))
+
+    assert runner.executed == [
+        (("edit", str(readme.resolve())), str(tmp_path.resolve()))
+    ]
+
+
+def test_windows_default_editor_commands_include_edit_with_line_number(tmp_path) -> None:
+    readme = tmp_path / "README.md"
+    readme.write_text("plain\n", encoding="utf-8")
+    runner = StubForegroundRunner()
+    adapter = LocalExternalLaunchAdapter(
+        system_name_resolver=lambda: "Windows",
+        command_available=lambda command: command if command == "edit" else None,
+        foreground_command_runner=runner,
+        environment_variable=lambda _name: None,
+        editor_command_template=EditorConfig(command=None),
+    )
+
+    adapter.open_in_editor(str(readme), line_number=42)
+
+    assert runner.executed == [
+        (("edit", f"{str(readme.resolve())}:42"), str(tmp_path.resolve()))
+    ]
+
+
 # --- Tests for _command_exists ---
 
 
