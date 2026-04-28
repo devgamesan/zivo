@@ -10,7 +10,6 @@ from textual.app import App, ComposeResult, ScreenStackError
 from textual.binding import Binding
 from textual.containers import Container, Vertical
 from textual.css.query import NoMatches
-from textual.message import Message
 from textual.timer import Timer
 from textual.worker import Worker
 
@@ -137,22 +136,6 @@ def _preview_scroll_delta(state: AppState, key: str) -> int | None:
 
 class zivoApp(App[None]):
     """Three-pane shell with reducer-driven file operations."""
-
-    class SplitTerminalOutput(Message):
-        """Forward PTY output from background threads into the app loop."""
-
-        def __init__(self, session_id: int, data: str) -> None:
-            self.session_id = session_id
-            self.data = data
-            super().__init__()
-
-    class SplitTerminalExitedMessage(Message):
-        """Forward PTY exit notifications into the app loop."""
-
-        def __init__(self, session_id: int, exit_code: int | None) -> None:
-            self.session_id = session_id
-            self.exit_code = exit_code
-            super().__init__()
 
     TITLE = "zivo"
     SUB_TITLE = "Three-pane shell"
@@ -412,29 +395,6 @@ class zivoApp(App[None]):
             row_region.y,
         )
 
-    def _update_split_terminal_overlay_geometry(self) -> None:
-        """Constrain the overlay terminal above the help and status bars."""
-
-        try:
-            split_terminal_layer = self.query_one("#split-terminal-layer", Container)
-            body = self.query_one("#body")
-            help_bar = self.query_one("#help-bar", HelpBar)
-        except NoMatches:
-            return
-
-        body_region = body.region
-        help_bar_region = help_bar.region
-        overlay_height = help_bar_region.y - body_region.y
-        if body_region.width <= 0 or overlay_height <= 0:
-            return
-
-        split_terminal_layer.styles.width = body_region.width
-        split_terminal_layer.styles.height = overlay_height
-        split_terminal_layer.styles.offset = (
-            body_region.x,
-            body_region.y,
-        )
-
     async def on_mount(self) -> None:
         """Load the initial directory snapshot after the UI mounts."""
 
@@ -478,7 +438,7 @@ class zivoApp(App[None]):
             event.prevent_default()
 
     async def on_paste(self, event: events.Paste) -> None:
-        """Handle clipboard paste in input dialog and split terminal modes."""
+        """Handle clipboard paste in input dialog modes."""
 
         if self._app_state.ui_mode in {"RENAME", "CREATE", "EXTRACT", "ZIP", "SYMLINK"}:
             if self._app_state.pending_input is not None:
@@ -489,21 +449,6 @@ class zivoApp(App[None]):
                 )
                 event.stop()
                 event.prevent_default()
-            return
-
-        st = self._app_state.split_terminal
-        if (
-            st.visible
-            and st.status == "running"
-            and st.focus_target == "terminal"
-        ):
-            from zivo.state.actions import SendSplitTerminalInput
-
-            await self.dispatch_actions(
-                (SendSplitTerminalInput(event.text),)
-            )
-            event.stop()
-            event.prevent_default()
 
     async def action_dispatch_bound_key(self, key: str) -> None:
         """Handle priority key bindings through the central dispatcher."""
@@ -559,10 +504,6 @@ class zivoApp(App[None]):
                 await self.query_one("#body").remove()
             except NoMatches:
                 pass
-            try:
-                await self.query_one("#split-terminal-layer").remove()
-            except NoMatches:
-                pass
         if changed or theme_changed or layout_changed:
             await self._refresh_shell(theme_changed=theme_changed)
         schedule_effects(self, effects)
@@ -603,7 +544,7 @@ class zivoApp(App[None]):
         await handle_worker_state_changed(self, event)
 
     async def on_resize(self, event: events.Resize) -> None:
-        """Keep the split-terminal PTY dimensions roughly aligned with the viewport."""
+        """Update the terminal height on resize."""
 
         await self.dispatch_actions((SetTerminalHeight(height=event.size.height),))
         self._sync_overlay_layout(event.size.width)
@@ -627,7 +568,6 @@ class zivoApp(App[None]):
         self._update_command_palette_geometry()
         self._update_config_dialog_geometry()
         self._update_input_dialog_geometry()
-        self._update_split_terminal_overlay_geometry()
 
 
 def create_app(
