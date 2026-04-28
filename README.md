@@ -146,10 +146,10 @@ On Windows, drive roots such as `C:\` support pressing `←` to return to the dr
 
 Install the required dependencies from their official websites:
 
-- Document preview: [pandoc 3.8.3+](https://pandoc.org/installing.html)
-- Image preview: [chafa](https://github.com/hpjansson/chafa/releases) or via `scoop install chafa`
-- PDF preview (`pdftotext`): [poppler for Windows](https://github.com/oschwartz10612/poppler-windows/releases)
-- Grep search: [ripgrep](https://github.com/BurntSushi/ripgrep/releases)
+- Document preview: [pandoc](https://pandoc.org/)
+- Image preview: [chafa](https://hpjansson.org/chafa/)
+- PDF preview (`pdftotext`): [poppler for Windows](https://github.com/oschwartz10612/poppler-windows)
+- Grep search: [ripgrep](https://github.com/BurntSushi/ripgrep)
 
 On macOS, grant **Full Disk Access** to your terminal application. Open **System Settings > Privacy & Security > Full Disk Access** and enable the terminal app you use to run zivo (for example Terminal.app, iTerm2, or Alacritty). Without this permission, operations that access `~/.Trash` or other protected directories will fail.
 
