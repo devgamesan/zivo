@@ -16,7 +16,6 @@ from textual.worker import Worker
 
 from zivo.adapters import LocalExternalLaunchAdapter
 from zivo.app_runtime import (
-    cancel_pending_runtime_work,
     handle_worker_state_changed,
     schedule_effects,
     sync_runtime_state,

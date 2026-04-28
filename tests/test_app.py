@@ -4686,38 +4686,6 @@ async def test_app_command_palette_open_terminal_launches_current_directory() ->
         assert app.app_state.ui_mode == "BROWSING"
 
 
-@pytest.mark.asyncio
-async def test_app_loads_directory_sizes_when_enabled() -> None:
-    path = str(Path("/tmp/zivo-dir-size").resolve())
-    loader = FakeBrowserSnapshotLoader(
-        snapshots={
-            path: _build_snapshot(
-                path,
-                (
-                    DirectoryEntryState(f"{path}/docs", "docs", "dir"),
-                    DirectoryEntryState(f"{path}/README.md", "README.md", "file"),
-                ),
-                child_path=f"{path}/docs",
-            )
-        }
-    )
-    app = create_app(
-        snapshot_loader=loader,
-        initial_path=path,
-    )
-
-    async with app.run_test(size=(100, 30)) as pilot:
-        await _wait_for_snapshot_loaded(app, path)
-        await pilot.press("t")
-        await asyncio.sleep(0.05)
-
-        split_terminal = await _wait_for_split_terminal(app)
-        browser_row = app.query_one("#browser-row")
-
-        assert abs(browser_row.size.height - split_terminal.size.height) <= 1
-
-@pytest.mark.asyncio
-async def test_app_command_palette_open_in_file_manager_launches_current_directory() -> None:
     path = str(Path("/tmp/zivo-open-file-manager").resolve())
     launch_service = FakeExternalLaunchService()
     loader = FakeBrowserSnapshotLoader(

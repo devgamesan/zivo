@@ -40,7 +40,9 @@ class ExternalLaunchAdapter(Protocol):
 
     def open_in_editor(self, path: str) -> None: ...
 
-    def open_terminal(self, path: str, launch_mode: Literal["window", "foreground"] = "window") -> None: ...
+    def open_terminal(
+        self, path: str, launch_mode: Literal["window", "foreground"] = "window"
+    ) -> None: ...
 
     def copy_to_clipboard(self, text: str) -> None: ...
 
@@ -90,7 +92,9 @@ class LocalExternalLaunchAdapter:
 
         raise OSError(errors[-1] if errors else f"Failed to open {resolved_path} in editor")
 
-    def open_terminal(self, path: str, launch_mode: Literal["window", "foreground"] = "window") -> None:
+    def open_terminal(
+        self, path: str, launch_mode: Literal["window", "foreground"] = "window"
+    ) -> None:
         resolved_path = _resolve_directory_path(path)
         if launch_mode == "foreground":
             command = self._foreground_terminal_command()
