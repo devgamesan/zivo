@@ -4,6 +4,7 @@ from .actions import (
     Action,
     ActivateNextTab,
     ActivatePreviousTab,
+    ActivateTabByIndex,
     AddBookmark,
     BeginBookmarkSearch,
     BeginCommandPalette,
@@ -78,7 +79,7 @@ BROWSING_KEYMAP = {
     "h": "go_to_parent",
     "R": "reload_directory",
     "q": "exit_current_path",
-    "2": "toggle_transfer_mode",
+    "p": "toggle_transfer_mode",
     "r": "begin_rename",
     "!": "begin_shell_command",
     ":": "begin_command_palette",
@@ -146,6 +147,10 @@ def dispatch_browsing_input(
             multi_key_command_dispatch=multi_key_command_dispatch,
         )
 
+    direct_tab_actions = dispatch_direct_tab_input(state, key=key)
+    if direct_tab_actions:
+        return direct_tab_actions
+
     command = BROWSING_KEYMAP.get(key)
     if command is not None:
         handler = BROWSING_COMMAND_DISPATCH.get(command)
@@ -167,6 +172,17 @@ def dispatch_browsing_input(
 
 def noop_browsing_handler(_state: AppState, _ctx: BrowsingCtx) -> DispatchedActions:
     return ()
+
+
+def dispatch_direct_tab_input(state: AppState, *, key: str) -> DispatchedActions:
+    if len(key) != 1 or not key.isdigit():
+        return ()
+
+    tab_number = 10 if key == "0" else int(key)
+    tab_count = len(state.browser_tabs) if state.browser_tabs else 1
+    if tab_number > tab_count:
+        return warn(f"Tab {tab_number} is not open")
+    return supported(ActivateTabByIndex(tab_number - 1))
 
 
 def simple(action_cls: type[Action]) -> BrowsingHandler:

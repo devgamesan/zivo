@@ -32,6 +32,7 @@ from zivo.state import (
 from zivo.state.actions import (
     ActivateNextTab,
     ActivatePreviousTab,
+    ActivateTabByIndex,
     AddBookmark,
     BeginFilterInput,
     BeginHistorySearch,
@@ -2579,6 +2580,24 @@ def test_activate_tabs_restores_per_tab_filter_state() -> None:
     state = _reduce_state(state, ActivateNextTab())
     assert state.active_tab_index == 1
     assert state.filter.query == "read"
+
+
+def test_activate_tab_by_index_selects_requested_tab() -> None:
+    state = _reduce_state(build_initial_app_state(), OpenNewTab())
+    state = _reduce_state(state, SetFilterQuery("read"))
+
+    state = _reduce_state(state, ActivateTabByIndex(0))
+
+    assert state.active_tab_index == 0
+    assert state.filter.query == ""
+
+
+def test_activate_tab_by_index_ignores_out_of_range_index() -> None:
+    state = _reduce_state(build_initial_app_state(), OpenNewTab())
+
+    next_state = _reduce_state(state, ActivateTabByIndex(9))
+
+    assert next_state == state
 
 def test_close_current_tab_warns_when_only_one_tab_remains() -> None:
     next_state = _reduce_state(build_initial_app_state(), CloseCurrentTab())

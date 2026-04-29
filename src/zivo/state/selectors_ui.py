@@ -199,7 +199,7 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             return HelpBarState(state.config.help_bar.transfer)
         return HelpBarState(
             (
-                "[ ] focus | y copy-to-pane | m move-to-pane | Esc close",
+                "1-9/0 tabs | [ ] focus | y copy-to-pane | m move-to-pane | p/Esc close",
                 "Space select | c copy | x cut | v paste | d delete | r rename",
                 "z undo | . hidden | N new-dir | b bookmarks | H history | G go-to | : palette",
             )
@@ -209,7 +209,7 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
     split_terminal_hint = " | t term" if is_split_terminal_supported() else ""
     browsing_shortcuts = (
         "n new-file | N new-dir | H history | "
-        f"b bookmarks{split_terminal_hint} | : palette | q quit"
+        f"b bookmarks{split_terminal_hint} | p transfer | : palette | q quit"
     )
     return HelpBarState(
         (

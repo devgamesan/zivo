@@ -3,6 +3,7 @@
 from .actions import (
     ActivateNextTab,
     ActivatePreviousTab,
+    ActivateTabByIndex,
     BeginBookmarkSearch,
     BeginCommandPalette,
     BeginCreateInput,
@@ -73,6 +74,7 @@ TRANSFER_KEYMAP = {
     "tab",
     "shift+tab",
     ":",
+    "p",
 }
 
 
@@ -87,6 +89,10 @@ def dispatch_transfer_input(
     if transfer is None:
         return supported(ToggleTransferMode())
     visible_paths = _visible_paths(state, transfer.pane)
+
+    direct_tab_actions = _dispatch_direct_tab_input(state, key=key)
+    if direct_tab_actions:
+        return direct_tab_actions
 
     if key == "tab":
         return supported(ActivateNextTab())
@@ -157,6 +163,8 @@ def dispatch_transfer_input(
         return supported(BeginBookmarkSearch())
     if key == ":":
         return supported(BeginCommandPalette())
+    if key == "p":
+        return supported(ToggleTransferMode())
 
     if key == "N":
         return supported(BeginCreateInput("dir"))
@@ -221,8 +229,9 @@ def dispatch_transfer_input(
         return supported(PasteClipboardToTransferPane())
 
     return warn(
-        "Use [], space, c copy, x cut, v paste, y copy-to-pane, m move-to-pane, "
-        "d delete, r rename, z undo, b bookmarks, H history, . hidden, or Esc to close"
+        "Use 1-9/0 for tabs, [], space, c copy, x cut, v paste, y copy-to-pane, "
+        "m move-to-pane, d delete, r rename, z undo, b bookmarks, H history, "
+        ". hidden, or p/Esc to close"
     )
 
 
@@ -242,3 +251,14 @@ def _visible_paths(state: AppState, pane: PaneState) -> tuple[str, ...]:
             state.sort,
         )
     )
+
+
+def _dispatch_direct_tab_input(state: AppState, *, key: str) -> DispatchedActions:
+    if len(key) != 1 or not key.isdigit():
+        return ()
+
+    tab_number = 10 if key == "0" else int(key)
+    tab_count = len(state.browser_tabs) if state.browser_tabs else 1
+    if tab_number > tab_count:
+        return warn(f"Tab {tab_number} is not open")
+    return supported(ActivateTabByIndex(tab_number - 1))

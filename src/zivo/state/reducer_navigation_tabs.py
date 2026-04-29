@@ -5,6 +5,7 @@ from dataclasses import replace
 from .actions import (
     ActivateNextTab,
     ActivatePreviousTab,
+    ActivateTabByIndex,
     CloseCurrentTab,
     OpenNewTab,
 )
@@ -43,6 +44,17 @@ def _handle_activate_next_tab(
     if len(tabs) <= 1:
         return finalize(state)
     return activate_tab(state, (state.active_tab_index + 1) % len(tabs), reduce_state)
+
+
+def _handle_activate_tab_by_index(
+    state: AppState,
+    action: ActivateTabByIndex,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    tabs = select_browser_tabs(state)
+    if action.index < 0 or action.index >= len(tabs):
+        return finalize(state)
+    return activate_tab(state, action.index, reduce_state)
 
 
 def _handle_activate_previous_tab(
@@ -85,6 +97,7 @@ def _handle_close_current_tab(
 
 TAB_NAVIGATION_HANDLERS = {
     OpenNewTab: _handle_open_new_tab,
+    ActivateTabByIndex: _handle_activate_tab_by_index,
     ActivateNextTab: _handle_activate_next_tab,
     ActivatePreviousTab: _handle_activate_previous_tab,
     CloseCurrentTab: _handle_close_current_tab,

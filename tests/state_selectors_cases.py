@@ -1276,7 +1276,7 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
         "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to | [ ] preview",
         (
             "n new-file | N new-dir | H history | "
-            f"b bookmarks{split_terminal_hint} | : palette | q quit"
+            f"b bookmarks{split_terminal_hint} | p transfer | : palette | q quit"
         ),
     )
     assert help_state.text == (
@@ -1284,7 +1284,7 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
         "d delete | r rename | z undo\n"
         "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to | [ ] preview\n"
         "n new-file | N new-dir | H history | "
-        f"b bookmarks{split_terminal_hint} | : palette | q quit"
+        f"b bookmarks{split_terminal_hint} | p transfer | : palette | q quit"
     )
 
 
@@ -1294,12 +1294,12 @@ def test_select_help_bar_for_transfer_mode_prioritizes_transfer_actions() -> Non
     help_state = select_help_bar_state(state)
 
     assert help_state.lines == (
-        "[ ] focus | y copy-to-pane | m move-to-pane | Esc close",
+        "1-9/0 tabs | [ ] focus | y copy-to-pane | m move-to-pane | p/Esc close",
         "Space select | c copy | x cut | v paste | d delete | r rename",
         "z undo | . hidden | N new-dir | b bookmarks | H history | G go-to | : palette",
     )
     assert help_state.text == (
-        "[ ] focus | y copy-to-pane | m move-to-pane | Esc close\n"
+        "1-9/0 tabs | [ ] focus | y copy-to-pane | m move-to-pane | p/Esc close\n"
         "Space select | c copy | x cut | v paste | d delete | r rename\n"
         "z undo | . hidden | N new-dir | b bookmarks | H history | G go-to | : palette"
     )

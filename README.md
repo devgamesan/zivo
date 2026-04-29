@@ -227,6 +227,7 @@ You can open an external terminal directly from zivo. Press `t` to suspend zivo 
 | `T` | Open terminal at current directory (separate window) |
 | `o` | Open new tab |
 | `w` | Close current tab |
+| `1`-`9`, `0` | Switch to tab 1-9, or tab 10 with `0` |
 | `tab` | Switch to next tab |
 | `shift+tab` | Switch to previous tab |
 | `M` | Open current directory in file manager |
@@ -236,7 +237,7 @@ You can open an external terminal directly from zivo. Press `t` to suspend zivo 
 | `]` | Scroll the right-pane text preview down by a page |
 | `{` | Go back in history |
 | `}` | Go forward in history |
-| `2` | Toggle two-pane transfer mode |
+| `p` | Toggle two-pane transfer mode |
 
 ### Transfer Mode
 
@@ -267,7 +268,9 @@ You can open an external terminal directly from zivo. Press `t` to suspend zivo 
 | `b` | Show bookmarks |
 | `H` | Show history |
 | `:` | Open a transfer-mode command palette with transfer-available commands only |
+| `1`-`9`, `0` | Switch to tab 1-9, or tab 10 with `0` |
 | `Tab` / `Shift+Tab` | Switch browser tabs, same as normal mode |
+| `p` / `Esc` | Return to normal mode |
 
 ### Input Dialogs
 
@@ -355,7 +358,7 @@ The tab strip is only shown when two or more browser tabs are open.
 | `Go to path` | Always | Opens go-to-path input to navigate to a specific path, shows matching directories, and supports `Tab` completion for the selected candidate. On native Windows, drive roots are also offered so you can switch between drives quickly. |
 | `Go to home directory` | Always | Navigates to the home directory. |
 | `Reload directory` | Always | Reloads the current directory. |
-| `Toggle transfer mode` / `Close transfer mode` | Always | Switches between the normal three-pane browser and the two-pane transfer layout. Also available with `q` / `2` while transfer mode is open, and `2` from normal mode. |
+| `Toggle transfer mode` / `Close transfer mode` | Always | Switches between the normal three-pane browser and the two-pane transfer layout. Also available with `p` from normal mode, and `p` / `Esc` while transfer mode is open. |
 | `Undo last file operation` | Undo history is not empty | Reverses the most recent undoable rename, paste, or trash operation. Also available with `z`. |
 | `Select all` | Current directory has at least one visible entry | Selects every currently visible entry in the current directory, respecting hidden-file visibility and any active filter. |
 | `Replace text in selected files` | A file is focused or one or more files are selected in the current directory | Opens a two-field replacement palette for the selected files, or the focused file when nothing is explicitly selected. Matching files appear in the palette, `↑↓` and `Ctrl+n` / `Ctrl+p` move between them, and the right pane shows the selected file's diff before `Enter` applies the replacement. `Shift+↑` / `Shift+↓` scrolls the diff preview. |

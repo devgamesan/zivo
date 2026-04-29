@@ -1,8 +1,9 @@
 from tests.test_state_reducer import _reduce_state
-from zivo.state import build_initial_app_state, dispatch_key_input
+from zivo.state import NotificationState, build_initial_app_state, dispatch_key_input
 from zivo.state.actions import (
     ActivateNextTab,
     ActivatePreviousTab,
+    ActivateTabByIndex,
     BeginCommandPalette,
     BeginDeleteTargets,
     BeginGoToPath,
@@ -12,6 +13,7 @@ from zivo.state.actions import (
     CopyTargets,
     CutTargets,
     FocusTransferPane,
+    OpenNewTab,
     PasteClipboardToTransferPane,
     SetNotification,
     ToggleHiddenFiles,
@@ -100,6 +102,33 @@ def test_transfer_mode_keeps_tab_keys_for_browser_tabs() -> None:
     assert dispatch_key_input(state, key="shift+tab") == (
         SetNotification(None),
         ActivatePreviousTab(),
+    )
+
+
+def test_transfer_mode_number_activates_direct_tab() -> None:
+    state = _reduce_state(build_initial_app_state(), OpenNewTab())
+    state = _reduce_state(state, ToggleTransferMode())
+
+    assert dispatch_key_input(state, key="1") == (
+        SetNotification(None),
+        ActivateTabByIndex(0),
+    )
+
+
+def test_transfer_mode_number_warns_when_target_tab_is_missing() -> None:
+    state = _reduce_state(build_initial_app_state(), ToggleTransferMode())
+
+    assert dispatch_key_input(state, key="2") == (
+        SetNotification(NotificationState(level="warning", message="Tab 2 is not open")),
+    )
+
+
+def test_transfer_mode_p_toggles_back_to_browser_mode() -> None:
+    state = _reduce_state(build_initial_app_state(), ToggleTransferMode())
+
+    assert dispatch_key_input(state, key="p") == (
+        SetNotification(None),
+        ToggleTransferMode(),
     )
 
 

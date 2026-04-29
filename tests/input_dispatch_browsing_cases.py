@@ -3,6 +3,11 @@
 import os
 
 from .input_dispatch_helpers import *
+from .state_test_helpers import reduce_state
+
+
+def _reduce_state(state, action):
+    return reduce_state(state, action)
 
 
 def test_browsing_down_dispatches_move_cursor() -> None:
@@ -609,6 +614,42 @@ def test_browsing_shift_tab_activates_previous_tab() -> None:
     actions = dispatch_key_input(state, key="shift+tab")
 
     assert actions == (SetNotification(None), ActivatePreviousTab())
+
+
+def test_browsing_number_activates_direct_tab() -> None:
+    state = _reduce_state(build_initial_app_state(), OpenNewTab())
+
+    actions = dispatch_key_input(state, key="1", character="1")
+
+    assert actions == (SetNotification(None), ActivateTabByIndex(0))
+
+
+def test_browsing_zero_activates_tenth_tab() -> None:
+    state = build_initial_app_state()
+    for _ in range(9):
+        state = _reduce_state(state, OpenNewTab())
+
+    actions = dispatch_key_input(state, key="0", character="0")
+
+    assert actions == (SetNotification(None), ActivateTabByIndex(9))
+
+
+def test_browsing_number_warns_when_target_tab_is_missing() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="2", character="2")
+
+    assert actions == (
+        SetNotification(NotificationState(level="warning", message="Tab 2 is not open")),
+    )
+
+
+def test_browsing_p_toggles_transfer_mode() -> None:
+    state = build_initial_app_state()
+
+    actions = dispatch_key_input(state, key="p", character="p")
+
+    assert actions == (SetNotification(None), ToggleTransferMode())
 
 
 def test_search_palette_j_key_updates_query() -> None:

@@ -22,6 +22,13 @@ class ActivatePreviousTab:
 
 
 @dataclass(frozen=True)
+class ActivateTabByIndex:
+    """Activate a browser tab by its zero-based index."""
+
+    index: int
+
+
+@dataclass(frozen=True)
 class CloseCurrentTab:
     """Close the currently active browser tab."""
 

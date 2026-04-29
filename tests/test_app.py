@@ -2671,7 +2671,7 @@ async def test_app_displays_browsing_help_bar() -> None:
         "d delete | r rename | z undo\n"
         "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to | [ ] preview\n"
         "n new-file | N new-dir | H history | "
-        f"b bookmarks{split_terminal_hint} | : palette | q quit"
+        f"b bookmarks{split_terminal_hint} | p transfer | : palette | q quit"
     )
 
     async with app.run_test():
@@ -2703,7 +2703,7 @@ async def test_app_transfer_mode_refreshes_left_cursor_and_focuses_right_pane() 
         await _wait_for_snapshot_loaded(app, path)
         await _wait_for_row_count(app, 3)
 
-        await pilot.press("2")
+        await pilot.press("p")
         right_table = await _wait_for_transfer_right_table(app)
         left_table = app.query_one("#current-pane-table", DataTable)
         left_pane = app.query_one("#current-pane", MainPane)
@@ -2744,14 +2744,14 @@ async def test_app_displays_transfer_help_bar() -> None:
     )
     app = create_app(snapshot_loader=loader, initial_path=path)
     expected_help = (
-        "[ ] focus | y copy-to-pane | m move-to-pane | Esc close\n"
+        "1-9/0 tabs | [ ] focus | y copy-to-pane | m move-to-pane | p/Esc close\n"
         "Space select | c copy | x cut | v paste | d delete | r rename\n"
         "z undo | . hidden | N new-dir | b bookmarks | H history | G go-to | : palette"
     )
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
-        await pilot.press("2")
+        await pilot.press("p")
         help_bar = await _wait_for_help_bar_text(app, expected_help)
 
         assert str(help_bar.renderable) == expected_help
@@ -2773,7 +2773,7 @@ async def test_app_opens_command_palette_from_transfer_mode_with_colon() -> None
 
     async with app.run_test() as pilot:
         await _wait_for_snapshot_loaded(app, path)
-        await pilot.press("2")
+        await pilot.press("p")
         await pilot.press(":")
         palette = await _wait_for_command_palette(app)
 

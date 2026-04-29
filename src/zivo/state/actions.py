@@ -115,6 +115,7 @@ __all__ = [
 from .actions_navigation import (
     ActivateNextTab,
     ActivatePreviousTab,
+    ActivateTabByIndex,
     AddBookmark,
     ClearTransferSelection,
     CloseCurrentTab,
@@ -314,6 +315,7 @@ Action = (
     | SetFilterQuery
     | PasteIntoPendingInput
     | OpenNewTab
+    | ActivateTabByIndex
     | ActivateNextTab
     | ActivatePreviousTab
     | CloseCurrentTab

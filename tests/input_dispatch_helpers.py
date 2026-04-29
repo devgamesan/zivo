@@ -20,6 +20,7 @@ from zivo.state import (
 from zivo.state.actions import (
     ActivateNextTab,
     ActivatePreviousTab,
+    ActivateTabByIndex,
     AddBookmark,
     BeginBookmarkSearch,
     BeginCommandPalette,
@@ -87,6 +88,7 @@ from zivo.state.actions import (
     SubmitPendingInput,
     ToggleHiddenFiles,
     ToggleSelectionAndAdvance,
+    ToggleTransferMode,
     UndoLastOperation,
 )
 
