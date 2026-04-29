@@ -358,6 +358,7 @@ def _handle_cancel_command_palette(
         "replace_in_found_files",
         "replace_in_grep_files",
         "grep_replace_selected",
+        "selected_files_grep",
     }:
         return sync_child_pane(next_state, next_state.current_pane.cursor_path, reduce_state)
     return finalize(next_state)
