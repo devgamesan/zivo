@@ -290,8 +290,11 @@ You can open an external terminal directly from zivo. Press `t` to suspend zivo 
 | `b` | Show bookmarks |
 | `H` | Show history |
 | `:` | Open a transfer-mode command palette with transfer-available commands only |
+| `o` | Open new tab |
+| `w` | Close current tab |
 | `1`-`9`, `0` | Switch to tab 1-9, or tab 10 with `0` |
-| `Tab` / `Shift+Tab` | Switch browser tabs, same as normal mode |
+| `tab` | Switch to next tab |
+| `shift+tab` | Switch to previous tab |
 | `p` / `Esc` | Return to normal mode |
 
 ### Input Dialogs
