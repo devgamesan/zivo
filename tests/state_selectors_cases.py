@@ -2908,6 +2908,93 @@ def test_detect_preview_disabled_message_returns_none_for_directory() -> None:
     assert message is None
 
 
+def test_select_shell_data_builds_sfg_preview_for_palette_selection() -> None:
+    initial_state = build_initial_app_state()
+    path = "/home/tadashi/develop/zivo/README.md"
+    grep_result = GrepSearchResultState(
+        path=path,
+        display_path="README.md",
+        line_number=5,
+        line_text="TODO: update docs",
+    )
+    state = replace(
+        initial_state,
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="selected_files_grep",
+            query="todo",
+            sfg_target_paths=(path,),
+            sfg_results=(grep_result,),
+        ),
+        child_pane=PaneState(
+            directory_path="/home/tadashi/develop/zivo",
+            entries=(),
+            mode="preview",
+            preview_path=path,
+            preview_title="Preview: README.md:5",
+            preview_content="line3\nline4\nTODO: update docs\nline6\n",
+            preview_start_line=2,
+            preview_highlight_line=5,
+        ),
+    )
+
+    shell = select_shell_data(state)
+
+    assert shell.child_pane.is_preview is True
+    assert shell.child_pane.title == "Preview: README.md:5"
+    assert shell.child_pane.preview_path == path
+    assert shell.child_pane.preview_start_line == 2
+    assert shell.child_pane.preview_highlight_line == 5
+
+
+def test_select_shell_data_builds_sfg_preview_falls_back_to_empty_for_no_results() -> None:
+    initial_state = build_initial_app_state()
+    state = replace(
+        initial_state,
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="selected_files_grep",
+            query="todo",
+            sfg_results=(),
+        ),
+    )
+
+    shell = select_shell_data(state)
+
+    assert shell.child_pane.is_preview is False
+    assert shell.child_pane.title == "Child Directory"
+
+
+def test_select_shell_data_builds_sfg_preview_falls_back_to_empty_when_preview_disabled() -> None:
+    initial_state = build_initial_app_state()
+    config = replace(
+        initial_state.config,
+        display=replace(initial_state.config.display, enable_text_preview=False),
+    )
+    path = "/home/tadashi/develop/zivo/README.md"
+    grep_result = GrepSearchResultState(
+        path=path,
+        display_path="README.md",
+        line_number=5,
+        line_text="TODO: update docs",
+    )
+    state = replace(
+        initial_state,
+        config=config,
+        ui_mode="PALETTE",
+        command_palette=CommandPaletteState(
+            source="selected_files_grep",
+            query="todo",
+            sfg_results=(grep_result,),
+        ),
+    )
+
+    shell = select_shell_data(state)
+
+    assert shell.child_pane.is_preview is False
+    assert shell.child_pane.title == "Child Directory"
+
+
 def test_detect_preview_disabled_message_returns_none_for_null_cursor() -> None:
     """Test that preview disabled message is None for null cursor."""
     from zivo.state.selectors_panes import _detect_preview_disabled_message
