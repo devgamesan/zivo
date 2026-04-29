@@ -98,6 +98,7 @@ from zivo.ui import (
     InputDialog,
     MainPane,
     ShellCommandDialog,
+    SidePane,
     StatusBar,
 )
 
@@ -678,6 +679,38 @@ class zivoApp(App[None]):
 
         await self.dispatch_actions((SetTerminalHeight(height=event.size.height),))
         self._sync_overlay_layout(event.size.width)
+
+    async def on_side_pane_entry_clicked(self, message: SidePane.EntryClicked) -> None:
+        """Handle left parent-pane double clicks from the widget message path."""
+
+        if message.pane_id != "parent-pane" or not message.double_click:
+            return
+        entry = next(
+            (entry for entry in self._app_state.parent_pane.entries if entry.path == message.path),
+            None,
+        )
+        if entry is None:
+            return
+        if entry.kind == "dir":
+            await self.dispatch_actions((RequestBrowserSnapshot(message.path, blocking=True),))
+            return
+        await self.dispatch_actions((OpenPathWithDefaultApp(message.path),))
+
+    async def on_child_pane_entry_clicked(self, message: ChildPane.EntryClicked) -> None:
+        """Handle right child-pane double clicks from the widget message path."""
+
+        if not message.double_click:
+            return
+        await self._open_or_enter_path(message.path)
+
+    def on_child_pane_preview_clicked(self, _message: ChildPane.PreviewClicked) -> None:
+        """Move focus to the preview scroll container when the preview is clicked."""
+
+        try:
+            preview = self.query_one("#child-pane-preview-scroll", VerticalScroll)
+        except NoMatches:
+            return
+        self.set_focus(preview)
 
     async def _refresh_shell(self, *, theme_changed: bool = False) -> None:
         try:

@@ -1306,6 +1306,53 @@ async def test_app_mouse_double_click_enters_directory() -> None:
 
 
 @pytest.mark.asyncio
+async def test_app_parent_pane_double_click_opens_file_with_default_app() -> None:
+    path = str(Path("/tmp/zivo-parent-file-open/current").resolve())
+    parent_path = str(Path(path).parent)
+    parent_file = f"{parent_path}/notes.txt"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: BrowserSnapshot(
+                current_path=path,
+                parent_pane=PaneState(
+                    directory_path=parent_path,
+                    entries=(
+                        DirectoryEntryState(path, "current", "dir"),
+                        DirectoryEntryState(parent_file, "notes.txt", "file"),
+                    ),
+                    cursor_path=path,
+                ),
+                current_pane=PaneState(
+                    directory_path=path,
+                    entries=(DirectoryEntryState(f"{path}/README.md", "README.md", "file"),),
+                    cursor_path=f"{path}/README.md",
+                ),
+                child_pane=PaneState(
+                    directory_path=path,
+                    entries=(),
+                ),
+            )
+        }
+    )
+    external_launch_service = FakeExternalLaunchService()
+    app = create_app(
+        snapshot_loader=loader,
+        external_launch_service=external_launch_service,
+        initial_path=path,
+    )
+
+    async with app.run_test():
+        await _wait_for_snapshot_loaded(app, path)
+        await app.on_side_pane_entry_clicked(
+            SidePane.EntryClicked("parent-pane", parent_file, double_click=True)
+        )
+        await _wait_for_external_launch_count(app, 1)
+
+        assert len(external_launch_service.executed_requests) == 1
+        assert external_launch_service.executed_requests[0].path == parent_file
+
+
+@pytest.mark.asyncio
 async def test_app_hides_text_preview_in_child_pane_when_preview_disabled() -> None:
     path = str(Path("/tmp/zivo-preview-disabled").resolve())
     readme = f"{path}/README.md"
