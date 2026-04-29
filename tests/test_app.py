@@ -1056,6 +1056,51 @@ async def test_app_renders_text_preview_in_child_pane_for_file_cursor() -> None:
 
 
 @pytest.mark.asyncio
+async def test_app_renders_image_preview_in_child_pane_for_file_cursor() -> None:
+    path = str(Path("/tmp/zivo-image-preview").resolve())
+    image = f"{path}/preview.png"
+    preview_content = (
+        "\x1b[31m@@\x1b[0m\n"
+        "\x1b[32m##\x1b[0m\n"
+        "\x1b[34m..\x1b[0m\n"
+    ) * 40
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: BrowserSnapshot(
+                current_path=path,
+                parent_pane=PaneState(
+                    directory_path="/tmp",
+                    entries=(
+                        DirectoryEntryState(path, "zivo-image-preview", "dir"),
+                        DirectoryEntryState("/tmp/sibling", "sibling", "dir"),
+                    ),
+                    cursor_path=path,
+                ),
+                current_pane=PaneState(
+                    directory_path=path,
+                    entries=(DirectoryEntryState(image, "preview.png", "file"),),
+                    cursor_path=image,
+                ),
+                child_pane=PaneState(
+                    directory_path=path,
+                    entries=(),
+                    mode="preview",
+                    preview_path=image,
+                    preview_content=preview_content,
+                    preview_kind="image",
+                ),
+            )
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test():
+        await _wait_for_snapshot_loaded(app, path)
+        await _wait_for_row_count(app, 1)
+        await _wait_for_child_preview(app, "Preview: preview.png", "@@")
+
+
+@pytest.mark.asyncio
 async def test_app_browsing_preview_scrolls_with_brackets() -> None:
     path = str(Path("/tmp/zivo-preview-scroll").resolve())
     readme = f"{path}/README.md"

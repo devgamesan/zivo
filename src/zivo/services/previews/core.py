@@ -183,6 +183,9 @@ GREP_PREVIEW_ERROR_MESSAGE = "Preview unavailable: failed to load context"
 
 GrepContextCacheKey = tuple[str, int, int, int, int, int]
 _ANSI_CONTROL_SEQUENCE_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
+_ANSI_OSC_SEQUENCE_RE = re.compile(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
+_ANSI_STRING_SEQUENCE_RE = re.compile(r"\x1b[P^_X].*?(?:\x1b\\)", re.DOTALL)
+_ANSI_ESCAPE_SEQUENCE_RE = re.compile(r"\x1b(?:[@-Z\\-_])")
 
 
 def _normalize_preview_newlines(text: str) -> str:
@@ -190,11 +193,15 @@ def _normalize_preview_newlines(text: str) -> str:
 
 
 def _strip_non_sgr_ansi(text: str) -> str:
+    text = _ANSI_OSC_SEQUENCE_RE.sub("", text)
+    text = _ANSI_STRING_SEQUENCE_RE.sub("", text)
+
     def _replace(match: re.Match[str]) -> str:
         sequence = match.group(0)
         return sequence if sequence.endswith("m") else ""
 
-    return _ANSI_CONTROL_SEQUENCE_RE.sub(_replace, text)
+    text = _ANSI_CONTROL_SEQUENCE_RE.sub(_replace, text)
+    return _ANSI_ESCAPE_SEQUENCE_RE.sub("", text)
 
 
 @dataclass(frozen=True)
