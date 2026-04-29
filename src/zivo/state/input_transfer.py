@@ -16,6 +16,7 @@ from .actions import (
     CopyTargets,
     CutTargets,
     EnterTransferDirectory,
+    ExitCurrentPath,
     FocusTransferPane,
     GoToTransferHome,
     GoToTransferParent,
@@ -169,6 +170,8 @@ def dispatch_transfer_input(
         return supported(BeginCommandPalette())
     if key == "p":
         return supported(ToggleTransferMode())
+    if key == "q":
+        return supported(ExitCurrentPath())
 
     if key == "o":
         return supported(OpenNewTab())
