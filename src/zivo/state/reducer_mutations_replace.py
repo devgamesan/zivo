@@ -93,6 +93,7 @@ def _handle_confirm_replace_targets(
 def _handle_cancel_replace_confirmation(
     state: AppState,
     action: CancelReplaceConfirmation,
+    reduce_state=None,
 ) -> ReduceResult:
     """Cancel the replace operation and return to the command palette."""
     if state.replace_confirmation is None:

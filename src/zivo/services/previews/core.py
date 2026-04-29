@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from dataclasses import dataclass, field
@@ -181,10 +182,26 @@ IMAGE_PREVIEW_DEPENDENCY_MESSAGE = "Preview unavailable: install `chafa` for ima
 GREP_PREVIEW_ERROR_MESSAGE = "Preview unavailable: failed to load context"
 
 GrepContextCacheKey = tuple[str, int, int, int, int, int]
+_ANSI_CONTROL_SEQUENCE_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
+_ANSI_OSC_SEQUENCE_RE = re.compile(r"\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)")
+_ANSI_STRING_SEQUENCE_RE = re.compile(r"\x1b[P^_X].*?(?:\x1b\\)", re.DOTALL)
+_ANSI_ESCAPE_SEQUENCE_RE = re.compile(r"\x1b(?:[@-Z\\-_])")
 
 
 def _normalize_preview_newlines(text: str) -> str:
     return text.replace("\r\n", "\n")
+
+
+def _strip_non_sgr_ansi(text: str) -> str:
+    text = _ANSI_OSC_SEQUENCE_RE.sub("", text)
+    text = _ANSI_STRING_SEQUENCE_RE.sub("", text)
+
+    def _replace(match: re.Match[str]) -> str:
+        sequence = match.group(0)
+        return sequence if sequence.endswith("m") else ""
+
+    text = _ANSI_CONTROL_SEQUENCE_RE.sub(_replace, text)
+    return _ANSI_ESCAPE_SEQUENCE_RE.sub("", text)
 
 
 @dataclass(frozen=True)
@@ -332,6 +349,7 @@ class PandocDocumentPreviewLoader:
 class ChafaImagePreviewLoader:
     chafa_path: str | None = field(default=None, init=False, repr=False)
     chafa_missing: bool = field(default=False, init=False, repr=False)
+    supports_animate_option: bool | None = field(default=None, init=False, repr=False)
 
     def load_preview(
         self,
@@ -342,26 +360,29 @@ class ChafaImagePreviewLoader:
         chafa = self._resolve_chafa()
         if chafa is None:
             return None
+        args = self._build_chafa_command(
+            chafa,
+            path,
+            preview_columns=preview_columns,
+        )
         try:
-            result = subprocess.run(
-                [
-                    chafa,
-                    "--format",
-                    "symbols",
-                    "--colors",
-                    "full",
-                    "--animate",
-                    "off",
-                    "--fit-width",
-                    "--size",
-                    f"{max(1, preview_columns)}x",
-                    str(path),
-                ],
-                check=True,
-                capture_output=True,
+            result = subprocess.run(args, check=True, capture_output=True)
+            self.supports_animate_option = "--animate" in args
+        except subprocess.CalledProcessError as error:
+            if not self._should_retry_without_animate(error, args):
+                return FilePreviewState.error()
+            self.supports_animate_option = False
+            fallback_args = self._build_chafa_command(
+                chafa,
+                path,
+                preview_columns=preview_columns,
             )
+            try:
+                result = subprocess.run(fallback_args, check=True, capture_output=True)
+            except (OSError, subprocess.SubprocessError, ValueError):
+                return FilePreviewState.error()
         except (OSError, subprocess.SubprocessError, ValueError):
-            return None
+            return FilePreviewState.error()
 
         try:
             content = _normalize_preview_newlines(result.stdout.decode("utf-8"))
@@ -369,9 +390,47 @@ class ChafaImagePreviewLoader:
             content = _normalize_preview_newlines(
                 result.stdout.decode("utf-8", errors="ignore")
             )
+        content = _strip_non_sgr_ansi(content)
         if not content.strip():
-            return None
+            return FilePreviewState.error()
         return FilePreviewState.with_content(content, False, content_kind="image")
+
+    def _build_chafa_command(
+        self,
+        chafa: str,
+        path: Path,
+        *,
+        preview_columns: int,
+    ) -> list[str]:
+        args = [
+            chafa,
+            "--format",
+            "symbols",
+            "--colors",
+            "full",
+        ]
+        if self.supports_animate_option is False:
+            args.extend(["--duration", "0"])
+        else:
+            args.extend(["--animate", "off"])
+        args.extend(
+            [
+                "--size",
+                f"{max(1, preview_columns)}x",
+                str(path),
+            ]
+        )
+        return args
+
+    def _should_retry_without_animate(
+        self,
+        error: subprocess.CalledProcessError,
+        args: list[str],
+    ) -> bool:
+        if "--animate" not in args:
+            return False
+        stderr = error.stderr or b""
+        return b"Unknown option --animate" in stderr
 
     def _resolve_chafa(self) -> str | None:
         if self.chafa_missing:
@@ -489,6 +548,13 @@ def _load_text_preview(
         return FilePreviewState.error()
 
     if b"\x00" in chunk[:preview_limit]:
+        if _has_image_signature(path, header=chunk[:32]):
+            if not enable_image_preview:
+                return FilePreviewState.unavailable()
+            loader = image_preview_loader or ChafaImagePreviewLoader()
+            preview = loader.load_preview(path, preview_columns=max(1, preview_columns))
+            if preview is not None:
+                return preview
         return FilePreviewState.unsupported()
 
     truncated = len(chunk) > preview_limit
@@ -496,6 +562,13 @@ def _load_text_preview(
     try:
         preview_text = _normalize_preview_newlines(preview_bytes.decode("utf-8"))
     except UnicodeDecodeError:
+        if _has_image_signature(path, header=chunk[:32]):
+            if not enable_image_preview:
+                return FilePreviewState.unavailable()
+            loader = image_preview_loader or ChafaImagePreviewLoader()
+            preview = loader.load_preview(path, preview_columns=max(1, preview_columns))
+            if preview is not None:
+                return preview
         return FilePreviewState.unsupported()
 
     return FilePreviewState.with_content(preview_text, truncated)
@@ -633,6 +706,31 @@ def _is_pdf_preview_candidate(path: Path) -> bool:
 
 def _is_image_preview_candidate(path: Path) -> bool:
     return path.suffix.casefold() in IMAGE_PREVIEW_EXTENSIONS
+
+
+def _has_image_signature(path: Path, *, header: bytes | None = None) -> bool:
+    if header is None:
+        try:
+            with path.open("rb") as handle:
+                header = handle.read(32)
+        except OSError:
+            return False
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return True
+    if header.startswith((b"\xff\xd8\xff", b"GIF87a", b"GIF89a", b"BM")):
+        return True
+    if header.startswith((b"II*\x00", b"MM\x00*")):
+        return True
+    if header.startswith(b"RIFF") and header[8:12] == b"WEBP":
+        return True
+    if len(header) >= 12 and header[4:12] in {
+        b"ftypavif",
+        b"ftypavis",
+        b"ftypmif1",
+        b"ftypmsf1",
+    }:
+        return True
+    return False
 
 
 def _is_office_preview_candidate(path: Path) -> bool:
