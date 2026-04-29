@@ -296,6 +296,7 @@ You can open an external terminal directly from zivo. Press `t` to suspend zivo 
 | `tab` | Switch to next tab |
 | `shift+tab` | Switch to previous tab |
 | `p` / `Esc` | Return to normal mode |
+| `q` | Exit the application |
 
 ### Input Dialogs
 
