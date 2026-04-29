@@ -6,7 +6,9 @@
 ![Release](https://img.shields.io/github/v/release/devgamesan/zivo)
 ![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)
 
-[日本語版 README](README.ja.md)
+---
+[English](README.md) | [日本語](README.ja.md)
+---
 
 zivo is a simple and intuitive TUI file manager that lets you browse, search, and operate files without memorizing commands — a Zero-friction Interface for Viewing & Operations.
 
@@ -23,7 +25,7 @@ zivo aims to be usable by everyone without complex configuration, plugin install
 
 ## Features
 
-- Simple three-pane layout for parent / current / right panes. When the cursor is on a directory, the right pane shows its children. When the cursor is on a common text file, the right pane shows a syntax-highlighted text preview. Common image formats can be previewed as character art through `chafa`, and `pdf`, `docx`, `xlsx`, and `pptx` files can also be previewed in the right pane. You can switch to a two-pane transfer layout for side-by-side directory copy and move workflows. You can navigate directories, multi-select items, copy, cut, paste, undo recent file operations, move items to trash, delete files, copy paths, rename, create files or directories, extract archives, create zip archives, replace text across selected files with a preview, replace text in files found by file search or grep search, search for files, run grep searches, and execute one-line shell commands entirely from the keyboard. Common actions stay visible in the help bar at the bottom.
+- Simple three-pane layout for parent / current / right panes. When the cursor is on a directory, the right pane shows its children. When the cursor is on a common text file, the right pane shows a syntax-highlighted text preview. Common image formats can be previewed as character art through `chafa`, and `pdf`, `docx`, `xlsx`, and `pptx` files can also be previewed in the right pane. You can switch to a two-pane transfer layout for side-by-side directory copy and move workflows. You can navigate directories, multi-select items, copy, cut, paste, undo recent file operations, move items to trash, delete files, copy paths, rename, create files or directories, extract archives, create zip archives, preview and replace text across selected files, replace text in files found by file search or grep search, search for files, run grep searches, and execute one-line shell commands entirely from the keyboard. Common actions stay visible in the help bar at the bottom.
 
   ![](docs/resources/screen-entire-screen.png)
 
@@ -31,11 +33,25 @@ zivo aims to be usable by everyone without complex configuration, plugin install
 
   ![](docs/resources/screen-command-palette.png)
 
-- The beginning of a text file can be previewed directly in the right pane, so you can quickly inspect the file without opening it. The preview size limit is configurable from `64 KiB` up to `1024 KiB`.
+- The beginning of text files, pdfs, docx, xlsx, and pptx files can be previewed directly, so you can quickly inspect the file without opening it. The preview is limited to the first 64 KiB of the file.
 
   ![](docs/resources/screen-text-preview.png)
 
+- Images can be previewed as character-based art using chafa.
+
+  ![](docs/resources/screen-image-preview.png)
+
 - Multiple tabs let you keep separate working directories open in one zivo session. You can open a new tab, switch to the next or previous tab, and close the current tab without leaving the TUI.
+
+  ![](docs/resources/screen-tabs.png)
+
+- You can switch to a two-pane transfer layout that places directories side by side for easy copy and move operations.
+
+  ![](docs/resources/screen-transfer-mode.png)
+
+- Press `!` to execute one-line shell commands in the current directory. Command results are displayed in the status bar, making it convenient for quick tasks while maintaining your zivo session.
+
+  ![](docs/resources/screen-oneline-shell.png)
 
 - Recursive file search makes it easy to jump to the file you want. Just type part of the name to instantly filter through thousands of files and reach your target without drilling through the directory tree manually. Search results also support file preview, making it easy to find what you are looking for.
 
@@ -44,6 +60,10 @@ zivo aims to be usable by everyone without complex configuration, plugin install
 - Recursive grep search is available under the current directory. You can jump from search results directly to the matching file. Context lines around each match can be previewed, making it easy to find what you are looking for. The palette includes `Filter: Filename`, `Include extensions`, and `Exclude extensions` fields so you can narrow matches before opening them. You can also open the matching location directly in a terminal editor.
 
   ![](docs/resources/screen-grep-command.png)
+
+- Text replacement with preview and execution is available for selected files and files found through searches. A diff preview is displayed in the right pane, allowing you to verify changes before applying batch replacements. You can specify replacement target files through multiple methods: selected files, file search results, or grep search results. You can also narrow targets by filename pattern or extensions, or perform grep search with a keyword before replacement. To prevent accidental changes, you can always verify replacements with a preview before execution.
+
+  ![](docs/resources/screen-grep-replace.png)
 
 - Filter input and sort switching are supported. The example below filters by `.py` and sorts by modified time in descending order.
 
@@ -60,6 +80,8 @@ zivo aims to be usable by everyone without complex configuration, plugin install
 - Press `e` on a file to switch into a terminal editor in the current terminal session. Editors such as `nvim`, `vim`, and `nano` can be used seamlessly. The following shows an example of opening Vim from zivo.
 
   ![](docs/resources/screen-terminal-editor.png)
+
+- Press `t` to pause zivo and open an interactive shell in the foreground in your current terminal. When you exit the shell with `exit`, zivo automatically resumes, eliminating the need to manage separate windows or terminal multiplexers. This is convenient for temporary command execution or directory operations while maintaining your zivo session.
 
 - Multiple themes are available so you can choose your preferred look.
 
@@ -268,8 +290,11 @@ You can open an external terminal directly from zivo. Press `t` to suspend zivo 
 | `b` | Show bookmarks |
 | `H` | Show history |
 | `:` | Open a transfer-mode command palette with transfer-available commands only |
+| `o` | Open new tab |
+| `w` | Close current tab |
 | `1`-`9`, `0` | Switch to tab 1-9, or tab 10 with `0` |
-| `Tab` / `Shift+Tab` | Switch browser tabs, same as normal mode |
+| `tab` | Switch to next tab |
+| `shift+tab` | Switch to previous tab |
 | `p` / `Esc` | Return to normal mode |
 
 ### Input Dialogs
