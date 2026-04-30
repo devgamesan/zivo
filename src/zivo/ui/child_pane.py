@@ -10,6 +10,7 @@ from textual import events
 from textual.app import ComposeResult
 from textual.containers import Vertical, VerticalScroll
 from textual.css.query import NoMatches
+from textual.message import Message
 from textual.widgets import Label, Static
 
 from zivo.models.shell_data import ChildPaneViewState
@@ -32,6 +33,21 @@ class ChildPane(Vertical):
     PREVIEW_HORIZONTAL_PADDING = 2
     SELECTED_DIRECTORY_STYLE = "ft-directory-sel"
     SELECTED_CUT_STYLE = "ft-cut"
+    class EntryClicked(Message):
+        """Notify the app that a child-pane entry was clicked."""
+
+        def __init__(self, pane_id: str | None, path: str, *, double_click: bool) -> None:
+            super().__init__()
+            self.pane_id = pane_id
+            self.path = path
+            self.double_click = double_click
+
+    class PreviewClicked(Message):
+        """Notify the app that the preview region was clicked."""
+
+        def __init__(self, pane_id: str | None) -> None:
+            super().__init__()
+            self.pane_id = pane_id
 
     def __init__(
         self,
@@ -45,6 +61,7 @@ class ChildPane(Vertical):
         self._ft_styles: dict[str, Style] = {}
         self._last_render_width = 0
         self._last_render_signature: object | None = None
+        self._last_clicked_path: str | None = None
 
     @property
     def list_view_id(self) -> str | None:
@@ -87,7 +104,7 @@ class ChildPane(Vertical):
             id=self.preview_scroll_id,
             classes="pane-preview-scroll",
         )
-        preview_scroll.can_focus = False
+        preview_scroll.can_focus = True
         preview_scroll.display = self._state.is_preview
         list_content.display = not self._state.is_preview
         yield list_content
@@ -106,6 +123,20 @@ class ChildPane(Vertical):
 
     def on_resize(self, _event: events.Resize) -> None:
         self._refresh_rendered_content()
+
+    def on_click(self, event: events.Click) -> None:
+        if self._state.is_preview:
+            event.stop()
+            self.post_message(self.PreviewClicked(self.id))
+            return
+        meta = event.style.meta
+        if "entry_path" not in meta:
+            return
+        path = str(meta["entry_path"])
+        double_click = path == self._last_clicked_path
+        self._last_clicked_path = path
+        event.stop()
+        self.post_message(self.EntryClicked(self.id, path, double_click=double_click))
 
     async def set_state(self, state: ChildPaneViewState) -> None:
         if state == self._state:

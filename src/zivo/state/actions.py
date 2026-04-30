@@ -155,6 +155,7 @@ from .actions_navigation import (
     SelectAllVisibleTransferEntries,
     SetCursorPath,
     SetSort,
+    SetTransferCursorPath,
     ShowAttributes,
     ToggleHiddenFiles,
     ToggleTransferMode,
@@ -360,6 +361,7 @@ Action = (
     | MoveTransferCursor
     | JumpTransferCursor
     | MoveTransferCursorByPage
+    | SetTransferCursorPath
     | MoveTransferCursorAndSelectRange
     | ToggleTransferSelectionAndAdvance
     | ClearTransferSelection

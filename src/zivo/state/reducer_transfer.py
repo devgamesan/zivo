@@ -26,6 +26,7 @@ from .actions import (
     MoveTransferCursorByPage,
     PasteClipboardToTransferPane,
     SelectAllVisibleTransferEntries,
+    SetTransferCursorPath,
     ToggleTransferMode,
     ToggleTransferSelectionAndAdvance,
     TransferCopyToOppositePane,
@@ -244,6 +245,42 @@ def _handle_move_transfer_cursor_by_page(
                 pane=replace(
                     transfer.pane,
                     cursor_path=comparable_path(action.visible_paths[next_index]),
+                    selection_anchor_path=None,
+                ),
+            ),
+        )
+    )
+
+
+def _handle_set_transfer_cursor_path(
+    state: AppState,
+    action: SetTransferCursorPath,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    del reduce_state
+    if state.layout_mode != "transfer":
+        return finalize(state)
+    transfer = _require_transfer_pane(state, state.active_transfer_pane)
+    visible_paths = tuple(
+        entry.path for entry in select_visible_entry_states(
+            transfer.pane.entries,
+            state.directory_size_cache,
+            state.show_hidden,
+            "",
+            False,
+            state.sort,
+        )
+    )
+    if action.path is not None and action.path not in visible_paths:
+        return finalize(state)
+    return finalize(
+        _replace_active_transfer_pane(
+            state,
+            replace(
+                transfer,
+                pane=replace(
+                    transfer.pane,
+                    cursor_path=comparable_path(action.path),
                     selection_anchor_path=None,
                 ),
             ),
@@ -629,6 +666,7 @@ _TRANSFER_HANDLERS: dict[type[Action], Callable[[AppState, Action, ReducerFn], R
     MoveTransferCursor: _handle_move_transfer_cursor,
     JumpTransferCursor: _handle_jump_transfer_cursor,
     MoveTransferCursorByPage: _handle_move_transfer_cursor_by_page,
+    SetTransferCursorPath: _handle_set_transfer_cursor_path,
     MoveTransferCursorAndSelectRange: _handle_move_transfer_cursor_and_select_range,
     ToggleTransferSelectionAndAdvance: _handle_toggle_transfer_selection_and_advance,
     ClearTransferSelection: _handle_clear_transfer_selection,

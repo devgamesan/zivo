@@ -218,6 +218,13 @@ class MoveTransferCursorByPage:
 
 
 @dataclass(frozen=True)
+class SetTransferCursorPath:
+    """Set the active transfer-pane cursor to a specific absolute path."""
+
+    path: str | None
+
+
+@dataclass(frozen=True)
 class MoveTransferCursorAndSelectRange:
     """Move the active transfer cursor and select the anchored range."""
 

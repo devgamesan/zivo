@@ -157,7 +157,7 @@ def test_main_print_last_dir_runs_app_with_tty_streams_when_stdout_is_captured(
 
     def run_with_tty_streams(*, mouse: bool = True) -> None:
         app.run_calls += 1
-        assert mouse is False
+        assert mouse is True
         assert sys.stdin is tty_stdin
         assert sys.stdout is tty_stdout
         assert sys.stderr is tty_stderr

@@ -33,6 +33,7 @@ It keeps common actions visible in the help bar, and lets you run everything els
 - **Transfer mode**: copy and move files between two directories side by side
 - **Search and grep**: find files, grep recursively, and jump to results
 - **Safe replace**: preview diffs before applying batch replacements
+- **Supplementary mouse support**: click rows and panes, open entries with consecutive clicks, and scroll previews
 
 ---
 
