@@ -33,9 +33,11 @@ from .actions_input import (
     SubmitShellCommand,
 )
 from .actions_mutations import (
+    BeginCustomActionConfirmation,
     BeginDeleteTargets,
     BeginEmptyTrash,
     CancelArchiveExtractConfirmation,
+    CancelCustomActionConfirmation,
     CancelDeleteConfirmation,
     CancelEmptyTrashConfirmation,
     CancelPasteConflict,
@@ -44,6 +46,7 @@ from .actions_mutations import (
     CancelZipCompressConfirmation,
     ClearSelection,
     ConfirmArchiveExtract,
+    ConfirmCustomAction,
     ConfirmDeleteTargets,
     ConfirmEmptyTrash,
     ConfirmReplaceTargets,
@@ -94,7 +97,9 @@ __all__ = [
     # Mutation actions
     "BeginDeleteTargets",
     "BeginEmptyTrash",
+    "BeginCustomActionConfirmation",
     "CancelArchiveExtractConfirmation",
+    "CancelCustomActionConfirmation",
     "CancelDeleteConfirmation",
     "CancelEmptyTrashConfirmation",
     "CancelPasteConflict",
@@ -103,6 +108,7 @@ __all__ = [
     "CancelZipCompressConfirmation",
     "ClearSelection",
     "ConfirmArchiveExtract",
+    "ConfirmCustomAction",
     "ConfirmDeleteTargets",
     "ConfirmEmptyTrash",
     "ConfirmReplaceTargets",
@@ -222,6 +228,8 @@ from .actions_runtime import (
     ConfigSaveCompleted,
     ConfigSaveFailed,
     CurrentPaneSnapshotLoaded,
+    CustomActionCompleted,
+    CustomActionFailed,
     DirectorySizesFailed,
     DirectorySizesLoaded,
     ExternalLaunchCompleted,
@@ -373,6 +381,7 @@ Action = (
     | TransferMoveToOppositePane
     | PasteClipboardToTransferPane
     | BeginDeleteTargets
+    | BeginCustomActionConfirmation
     | ToggleSelection
     | ToggleSelectionAndAdvance
     | ClearSelection
@@ -389,7 +398,9 @@ Action = (
     | ConfirmEmptyTrash
     | CancelEmptyTrashConfirmation
     | ConfirmArchiveExtract
+    | ConfirmCustomAction
     | CancelArchiveExtractConfirmation
+    | CancelCustomActionConfirmation
     | ConfirmZipCompress
     | CancelZipCompressConfirmation
     | ConfirmSymlinkOverwrite
@@ -432,4 +443,6 @@ Action = (
     | ShellCommandFailed
     | ConfigSaveCompleted
     | ConfigSaveFailed
+    | CustomActionCompleted
+    | CustomActionFailed
 )

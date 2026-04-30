@@ -26,6 +26,7 @@ def render_app_config(config: AppConfig) -> str:
         render_bookmarks_section(config),
         render_help_bar_section(config),
         render_file_search_section(config),
+        render_actions_section(config),
     ]
     return "\n\n".join(sections) + "\n"
 
@@ -158,6 +159,58 @@ def render_file_search_section(config: AppConfig) -> str:
         "# max_results = 1000\n"
         f"{max_results_line}"
     )
+
+
+def render_actions_section(config: AppConfig) -> str:
+    lines = [
+        "[actions]",
+        "# Optional command palette custom actions.",
+        "# See docs/custom-actions.md for full syntax, examples, and safety notes.",
+    ]
+    if not config.actions.custom:
+        lines.extend(
+            [
+                "#",
+                "# [[actions.custom]]",
+                '# name = "Optimize PNG"',
+                '# command = ["oxipng", "-o", "4", "{file}"]',
+                '# when = "single_file"',
+                '# mode = "background"',
+                '# extensions = ["png"]',
+                "#",
+                "# [[actions.custom]]",
+                '# name = "Open lazygit"',
+                '# command = ["lazygit"]',
+                '# when = "always"',
+                '# mode = "terminal"',
+                '# cwd = "{cwd}"',
+                "#",
+                "# [[actions.custom]]",
+                '# name = "Open lazygit in new terminal"',
+                '# command = ["lazygit"]',
+                '# when = "always"',
+                '# mode = "terminal_window"',
+                '# cwd = "{cwd}"',
+            ]
+        )
+        return "\n".join(lines)
+
+    for action in config.actions.custom:
+        lines.extend(
+            [
+                "",
+                "[[actions.custom]]",
+                f"name = {render_toml_string(action.name)}",
+                f"command = [{render_command_array(action.command)}]",
+                f"when = {render_toml_string(action.when)}",
+                f"mode = {render_toml_string(action.mode)}",
+            ]
+        )
+        if action.cwd is not None:
+            lines.append(f"cwd = {render_toml_string(action.cwd)}")
+        if action.extensions:
+            lines.append(f"extensions = [{render_command_array(action.extensions)}]")
+    return "\n".join(lines)
 
 
 def render_command_array(commands: tuple[str, ...]) -> str:

@@ -6,6 +6,8 @@ from zivo.models import (
     AppConfig,
     CreateZipArchiveRequest,
     CreateZipArchiveResult,
+    CustomActionExecutionRequest,
+    CustomActionResult,
     ExternalLaunchRequest,
     ExtractArchiveRequest,
     ExtractArchiveResult,
@@ -332,6 +334,24 @@ class ShellCommandFailed:
     """Apply a shell command worker failure."""
 
     request_id: int
+    message: str
+
+
+@dataclass(frozen=True)
+class CustomActionCompleted:
+    """Apply a completed custom action execution."""
+
+    request_id: int
+    request: CustomActionExecutionRequest
+    result: CustomActionResult
+
+
+@dataclass(frozen=True)
+class CustomActionFailed:
+    """Apply a failed custom action execution."""
+
+    request_id: int
+    request: CustomActionExecutionRequest
     message: str
 
 

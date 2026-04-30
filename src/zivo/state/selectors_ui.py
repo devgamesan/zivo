@@ -90,6 +90,8 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             return HelpBarState(("enter overwrite zip | esc return to input",))
         if state.replace_confirmation is not None:
             return HelpBarState(("enter confirm replace | esc cancel",))
+        if state.custom_action_confirmation is not None:
+            return HelpBarState(("enter run custom action | esc cancel",))
         if state.name_conflict is not None:
             return HelpBarState(("enter return to input | esc return to input",))
         return HelpBarState(("resolve conflict in dialog",))
@@ -603,6 +605,24 @@ def select_conflict_dialog_state(state: AppState) -> ConflictDialogState | None:
             title=title,
             message=message,
             options=("enter confirm", "esc cancel"),
+        )
+
+    if state.custom_action_confirmation is not None:
+        request = state.custom_action_confirmation.request
+        command = " ".join(request.command)
+        mode_display = {
+            "background": "background mode",
+            "terminal": "the current terminal",
+            "terminal_window": "a new terminal window",
+        }.get(request.mode, f"{request.mode} mode")
+        message = (
+            f"Run {request.name} in {mode_display} from {request.cwd}? "
+            f"Command: {command}"
+        )
+        return ConflictDialogState(
+            title="Custom Action Confirmation",
+            message=message,
+            options=("enter run", "esc cancel"),
         )
 
     if state.name_conflict is not None:

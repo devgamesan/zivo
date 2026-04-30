@@ -7,6 +7,7 @@ from zivo.models import (
     CreatePathRequest,
     CreateSymlinkRequest,
     CreateZipArchiveRequest,
+    CustomActionExecutionRequest,
     DeleteRequest,
     ExternalLaunchRequest,
     ExtractArchiveRequest,
@@ -221,6 +222,14 @@ class RunShellCommandEffect:
     command: str
 
 
+@dataclass(frozen=True)
+class RunCustomActionEffect:
+    """Execute a resolved custom action."""
+
+    request_id: int
+    request: CustomActionExecutionRequest
+
+
 Effect = (
     LoadBrowserSnapshotEffect
     | LoadChildPaneSnapshotEffect
@@ -243,6 +252,7 @@ Effect = (
     | RunTextReplaceApplyEffect
     | RunConfigSaveEffect
     | RunShellCommandEffect
+    | RunCustomActionEffect
 )
 
 

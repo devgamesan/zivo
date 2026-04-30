@@ -11,6 +11,7 @@ from zivo.models import (
     CreateKind,
     CreateSymlinkRequest,
     CreateZipArchiveRequest,
+    CustomActionExecutionRequest,
     DeleteMode,
     ExtractArchiveRequest,
     PasteConflict,
@@ -251,6 +252,13 @@ class ReplaceConfirmationState:
     replacement_text: str
     target_paths: tuple[str, ...]
     total_match_count: int
+
+
+@dataclass(frozen=True)
+class CustomActionConfirmationState:
+    """Pending confirmation for a resolved custom action command."""
+
+    request: CustomActionExecutionRequest
 
 
 @dataclass(frozen=True)
@@ -540,6 +548,7 @@ class AppState:
     zip_compress_progress: ZipCompressProgressState | None = None
     symlink_overwrite_confirmation: SymlinkOverwriteConfirmationState | None = None
     replace_confirmation: ReplaceConfirmationState | None = None
+    custom_action_confirmation: CustomActionConfirmationState | None = None
     attribute_inspection: AttributeInspectionState | None = None
     config_editor: ConfigEditorState | None = None
     shell_command: ShellCommandState | None = None
@@ -563,6 +572,7 @@ class AppState:
     pending_attribute_inspection_request_id: int | None = None
     pending_config_save_request_id: int | None = None
     pending_shell_command_request_id: int | None = None
+    pending_custom_action_request_id: int | None = None
     undo_stack: tuple[UndoEntry, ...] = ()
     pending_undo_entry: UndoEntry | None = None
     pending_undo_request_id: int | None = None

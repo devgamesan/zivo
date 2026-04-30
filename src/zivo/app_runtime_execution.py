@@ -1,5 +1,6 @@
 """Runtime scheduling helpers for execution-oriented effects."""
 
+import subprocess
 import sys
 import threading
 from concurrent.futures import CancelledError as FutureCancelledError
@@ -11,12 +12,14 @@ from typing import Any
 from textual.app import SuspendNotSupported
 
 from zivo.app_runtime_core import WorkerSpec, run_worker
+from zivo.models import CustomActionResult
 from zivo.state import (
     RunArchiveExtractEffect,
     RunArchivePreparationEffect,
     RunAttributeInspectionEffect,
     RunClipboardPasteEffect,
     RunConfigSaveEffect,
+    RunCustomActionEffect,
     RunExternalLaunchEffect,
     RunFileMutationEffect,
     RunShellCommandEffect,
@@ -26,6 +29,8 @@ from zivo.state import (
 )
 from zivo.state.actions import (
     ArchiveExtractProgress,
+    CustomActionCompleted,
+    CustomActionFailed,
     ExternalLaunchCompleted,
     ExternalLaunchFailed,
     ZipCompressProgress,
@@ -78,6 +83,110 @@ def schedule_shell_command(app: Any, effect: RunShellCommandEffect) -> None:
             group="shell-command",
             description=effect.cwd,
             exclusive=True,
+        ),
+    )
+
+
+def schedule_custom_action(app: Any, effect: RunCustomActionEffect) -> None:
+    if effect.request.mode == "terminal":
+        run_terminal_custom_action(app, effect)
+        return
+    if effect.request.mode == "terminal_window":
+        run_terminal_window_custom_action(app, effect)
+        return
+    run_worker(
+        app,
+        effect,
+        partial(app._custom_action_service.execute, effect.request),
+        WorkerSpec(
+            name=f"custom-action:{effect.request_id}",
+            group="custom-action",
+            description=effect.request.name,
+            exclusive=True,
+        ),
+    )
+
+
+def run_terminal_custom_action(app: Any, effect: RunCustomActionEffect) -> None:
+    suspend_context = nullcontext()
+    try:
+        suspend_context = app.suspend()
+    except SuspendNotSupported:
+        app.call_next(
+            app.dispatch_actions,
+            (
+                CustomActionFailed(
+                    request_id=effect.request_id,
+                    request=effect.request,
+                    message="Terminal custom actions require suspend support",
+                ),
+            ),
+        )
+        return
+
+    try:
+        with suspend_context:
+            subprocess.run(
+                list(effect.request.command),
+                cwd=effect.request.cwd,
+                check=True,
+                stdin=sys.stdin,
+                stdout=sys.stdout,
+                stderr=sys.stderr,
+            )
+    except (OSError, subprocess.CalledProcessError) as error:
+        app.refresh(repaint=True, layout=True)
+        app.call_next(
+            app.dispatch_actions,
+            (
+                CustomActionFailed(
+                    request_id=effect.request_id,
+                    request=effect.request,
+                    message=str(error) or "Operation failed",
+                ),
+            ),
+        )
+        return
+
+    app.refresh(repaint=True, layout=True)
+    app.call_next(
+        app.dispatch_actions,
+        (
+            CustomActionCompleted(
+                request_id=effect.request_id,
+                request=effect.request,
+                result=CustomActionResult(effect.request.name),
+            ),
+        ),
+    )
+
+
+def run_terminal_window_custom_action(app: Any, effect: RunCustomActionEffect) -> None:
+    try:
+        app._external_launch_service.run_in_terminal_window(
+            effect.request.cwd, effect.request.command
+        )
+    except OSError as error:
+        app.call_next(
+            app.dispatch_actions,
+            (
+                CustomActionFailed(
+                    request_id=effect.request_id,
+                    request=effect.request,
+                    message=str(error) or "Failed to open terminal window",
+                ),
+            ),
+        )
+        return
+
+    app.call_next(
+        app.dispatch_actions,
+        (
+            CustomActionCompleted(
+                request_id=effect.request_id,
+                request=effect.request,
+                result=CustomActionResult(effect.request.name),
+            ),
         ),
     )
 

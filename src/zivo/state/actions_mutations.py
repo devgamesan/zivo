@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 
-from zivo.models import ConflictResolution, DeleteMode
+from zivo.models import ConflictResolution, CustomActionExecutionRequest, DeleteMode
 
 
 @dataclass(frozen=True)
@@ -139,3 +139,20 @@ class ConfirmReplaceTargets:
 @dataclass(frozen=True)
 class CancelReplaceConfirmation:
     """Cancelled - abort the replace operation."""
+
+
+@dataclass(frozen=True)
+class BeginCustomActionConfirmation:
+    """Show the resolved custom action before running it."""
+
+    request: CustomActionExecutionRequest
+
+
+@dataclass(frozen=True)
+class ConfirmCustomAction:
+    """Run the pending custom action."""
+
+
+@dataclass(frozen=True)
+class CancelCustomActionConfirmation:
+    """Cancel the pending custom action."""

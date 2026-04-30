@@ -3,6 +3,11 @@
 from dataclasses import replace
 
 from zivo.archive_utils import is_supported_archive_path
+from zivo.models import (
+    CustomActionContext,
+    CustomActionExpansionError,
+    expand_custom_action,
+)
 
 from .actions import (
     ActivateNextTab,
@@ -10,6 +15,7 @@ from .actions import (
     AddBookmark,
     BeginBookmarkSearch,
     BeginCreateInput,
+    BeginCustomActionConfirmation,
     BeginDeleteTargets,
     BeginEmptyTrash,
     BeginExtractArchiveInput,
@@ -497,12 +503,40 @@ def _run_selected_files_grep_command(
     return reduce_state(next_state, BeginSelectedFilesGrep(target_paths=target_paths))
 
 
+def _run_custom_action_command(
+    state: AppState,
+    next_state: AppState,
+    item_id: str,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    try:
+        action_index = int(item_id.split(":", 1)[1])
+        action = state.config.actions.custom[action_index]
+    except (IndexError, ValueError):
+        return notify(next_state, level="warning", message="Custom action is no longer available")
+
+    target_files = selected_current_file_paths(state)
+    focused_file = target_files[0] if len(target_files) == 1 else None
+    context = CustomActionContext(
+        cwd=state.current_path,
+        focused_file=focused_file,
+        selection=select_target_paths(state),
+    )
+    try:
+        request = expand_custom_action(action, context)
+    except CustomActionExpansionError as error:
+        return notify(next_state, level="error", message=str(error))
+    return reduce_state(next_state, BeginCustomActionConfirmation(request))
+
+
 def _run_palette_command_item(
     state: AppState,
     next_state: AppState,
     item_id: str,
     reduce_state: ReducerFn,
 ) -> ReduceResult:
+    if item_id.startswith("custom_action:"):
+        return _run_custom_action_command(state, next_state, item_id, reduce_state)
     if item_id == "new_tab":
         return _run_new_tab_command(next_state, reduce_state)
     if item_id == "next_tab":

@@ -5,8 +5,10 @@ import zivo.state.command_palette as command_palette_module
 import zivo.state.reducer_palette as reducer_palette_module
 from tests.state_test_helpers import reduce_state
 from zivo.models import (
+    ActionsConfig,
     AppConfig,
     BookmarkConfig,
+    CustomActionConfig,
     ExternalLaunchRequest,
 )
 from zivo.state import (
@@ -23,6 +25,7 @@ from zivo.state import (
     PendingKeySequenceState,
     RunAttributeInspectionEffect,
     RunConfigSaveEffect,
+    RunCustomActionEffect,
     RunExternalLaunchEffect,
     TransferPaneState,
     build_initial_app_state,
@@ -36,6 +39,7 @@ from zivo.state.actions import (
     BeginGoToPath,
     BeginHistorySearch,
     CancelCommandPalette,
+    ConfirmCustomAction,
     DismissAttributeDialog,
     MoveCommandPaletteCursor,
     OpenNewTab,
@@ -119,6 +123,113 @@ def test_submit_command_palette_runs_create_file_flow() -> None:
         prompt="New file: ",
         value="",
         create_kind="file",
+    )
+
+
+def test_custom_action_single_file_appears_in_command_palette() -> None:
+    file_path = "/home/tadashi/develop/zivo/image.png"
+    state = replace(
+        build_initial_app_state(
+            config=AppConfig(
+                actions=ActionsConfig(
+                    custom=(
+                        CustomActionConfig(
+                            name="Optimize PNG",
+                            command=("oxipng", "{file}"),
+                            when="single_file",
+                            extensions=("png",),
+                        ),
+                    )
+                )
+            )
+        ),
+        current_pane=replace(
+            build_initial_app_state().current_pane,
+            entries=(DirectoryEntryState(file_path, "image.png", "file"),),
+            cursor_path=file_path,
+        ),
+    )
+    state = _reduce_state(state, BeginCommandPalette())
+
+    items = command_palette_module.get_command_palette_items(state)
+
+    assert any(item.id == "custom_action:0" and item.label == "Optimize PNG" for item in items)
+
+
+def test_submit_custom_action_enters_confirmation_with_expanded_command() -> None:
+    file_path = "/home/tadashi/develop/zivo/image.png"
+    state = replace(
+        build_initial_app_state(
+            config=AppConfig(
+                actions=ActionsConfig(
+                    custom=(
+                        CustomActionConfig(
+                            name="Optimize PNG",
+                            command=("oxipng", "-o", "4", "{file}"),
+                            when="single_file",
+                            cwd="{cwd}",
+                            extensions=("png",),
+                        ),
+                    )
+                )
+            )
+        ),
+        current_pane=replace(
+            build_initial_app_state().current_pane,
+            entries=(DirectoryEntryState(file_path, "image.png", "file"),),
+            cursor_path=file_path,
+        ),
+    )
+    state = _reduce_state(state, BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("Optimize"))
+
+    next_state = _reduce_state(state, SubmitCommandPalette())
+
+    assert next_state.ui_mode == "CONFIRM"
+    assert next_state.custom_action_confirmation is not None
+    assert next_state.custom_action_confirmation.request.name == "Optimize PNG"
+    assert next_state.custom_action_confirmation.request.command == (
+        "oxipng",
+        "-o",
+        "4",
+        file_path,
+    )
+    assert next_state.custom_action_confirmation.request.mode == "background"
+
+
+def test_confirm_custom_action_emits_run_effect() -> None:
+    file_path = "/home/tadashi/develop/zivo/image.png"
+    state = replace(
+        build_initial_app_state(
+            config=AppConfig(
+                actions=ActionsConfig(
+                    custom=(
+                        CustomActionConfig(
+                            name="Optimize PNG",
+                            command=("oxipng", "{file}"),
+                            when="single_file",
+                        ),
+                    )
+                )
+            )
+        ),
+        current_pane=replace(
+            build_initial_app_state().current_pane,
+            entries=(DirectoryEntryState(file_path, "image.png", "file"),),
+            cursor_path=file_path,
+        ),
+    )
+    state = _reduce_state(state, BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("Optimize"))
+    state = _reduce_state(state, SubmitCommandPalette())
+
+    result = reduce_app_state(state, ConfirmCustomAction())
+
+    assert result.state.pending_custom_action_request_id == 1
+    assert any(
+        isinstance(effect, RunCustomActionEffect)
+        and effect.request.command == ("oxipng", file_path)
+        for effect in result.effects
     )
 
 
@@ -1105,3 +1216,66 @@ def test_begin_command_palette_clears_pending_key_sequence() -> None:
 
     assert next_state.ui_mode == "PALETTE"
     assert next_state.pending_key_sequence is None
+
+
+def test_submit_command_palette_begins_terminal_window_custom_action_confirmation() -> None:
+    state = replace(
+        build_initial_app_state(
+            config=AppConfig(
+                actions=ActionsConfig(
+                    custom=(
+                        CustomActionConfig(
+                            name="Open lazygit in new terminal",
+                            command=("lazygit",),
+                            when="always",
+                            mode="terminal_window",
+                            cwd="{cwd}",
+                        ),
+                    )
+                )
+            )
+        ),
+    )
+    state = _reduce_state(state, BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("lazygit in new"))
+
+    next_state = _reduce_state(state, SubmitCommandPalette())
+
+    assert next_state.ui_mode == "CONFIRM"
+    assert next_state.custom_action_confirmation is not None
+    assert next_state.custom_action_confirmation.request.name == "Open lazygit in new terminal"
+    assert next_state.custom_action_confirmation.request.command == ("lazygit",)
+    assert next_state.custom_action_confirmation.request.mode == "terminal_window"
+
+
+def test_confirm_terminal_window_custom_action_stays_in_browsing() -> None:
+    state = replace(
+        build_initial_app_state(
+            config=AppConfig(
+                actions=ActionsConfig(
+                    custom=(
+                        CustomActionConfig(
+                            name="Open lazygit in new terminal",
+                            command=("lazygit",),
+                            when="always",
+                            mode="terminal_window",
+                            cwd="{cwd}",
+                        ),
+                    )
+                )
+            )
+        ),
+    )
+    state = _reduce_state(state, BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("lazygit in new"))
+    state = _reduce_state(state, SubmitCommandPalette())
+
+    result = reduce_app_state(state, ConfirmCustomAction())
+
+    assert result.state.ui_mode == "BROWSING"
+    assert result.state.pending_custom_action_request_id == 1
+    assert any(
+        isinstance(effect, RunCustomActionEffect)
+        and effect.request.mode == "terminal_window"
+        for effect in result.effects
+    )

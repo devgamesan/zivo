@@ -1,6 +1,7 @@
 """Models used across the zivo application."""
 
 from .config import (
+    ActionsConfig,
     AppConfig,
     BehaviorConfig,
     BookmarkConfig,
@@ -8,6 +9,9 @@ from .config import (
     ConfigLogLevel,
     ConfigSortField,
     ConfigTheme,
+    CustomActionConfig,
+    CustomActionMode,
+    CustomActionWhen,
     DisplayConfig,
     EditorConfig,
     FileSearchConfig,
@@ -18,6 +22,14 @@ from .config import (
     PreviewMaxKiB,
     PreviewSyntaxTheme,
     TerminalConfig,
+)
+from .custom_action import (
+    CustomActionContext,
+    CustomActionExecutionRequest,
+    CustomActionExpansionError,
+    CustomActionResult,
+    custom_action_matches,
+    expand_custom_action,
 )
 from .external_launch import ExternalLaunchKind, ExternalLaunchRequest
 from .file_operations import (
@@ -88,6 +100,7 @@ from .shell_data import (
 
 __all__ = [
     "AppConfig",
+    "ActionsConfig",
     "ArchiveFormat",
     "AttributeDialogState",
     "BehaviorConfig",
@@ -101,11 +114,18 @@ __all__ = [
     "ConfigLogLevel",
     "ConfigSortField",
     "ConfigTheme",
+    "CustomActionConfig",
+    "CustomActionContext",
+    "CustomActionMode",
+    "CustomActionWhen",
     "ConflictDialogState",
     "CurrentPaneRowUpdate",
     "CurrentPaneSizeUpdate",
     "CurrentPaneUpdateHint",
     "CurrentSummaryState",
+    "CustomActionExecutionRequest",
+    "CustomActionExpansionError",
+    "CustomActionResult",
     "ConflictResolution",
     "CreateKind",
     "CreatePathRequest",
@@ -167,4 +187,6 @@ __all__ = [
     "ThreePaneShellData",
     "TransferPaneViewState",
     "build_dummy_shell_data",
+    "custom_action_matches",
+    "expand_custom_action",
 ]

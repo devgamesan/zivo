@@ -44,6 +44,11 @@ from .config import (
     render_app_config,
     resolve_config_path,
 )
+from .custom_actions import (
+    CustomActionService,
+    FakeCustomActionService,
+    LiveCustomActionService,
+)
 from .directory_size import (
     DirectorySizeService,
     FakeDirectorySizeService,
@@ -113,6 +118,7 @@ __all__ = [
     "BrowserSnapshotLoader",
     "ClipboardOperationService",
     "ConfigSaveService",
+    "CustomActionService",
     "default_zip_destination",
     "DirectorySizeService",
     "ExternalLaunchService",
@@ -131,6 +137,7 @@ __all__ = [
     "InvalidGrepSearchQueryError",
     "FakeBrowserSnapshotLoader",
     "FakeClipboardOperationService",
+    "FakeCustomActionService",
     "FakeExternalLaunchService",
     "FileMutationService",
     "LoggingSetupResult",
@@ -143,6 +150,7 @@ __all__ = [
     "LiveFileMutationService",
     "LiveDirectorySizeService",
     "LiveClipboardOperationService",
+    "LiveCustomActionService",
     "LiveBrowserSnapshotLoader",
     "PREVIEW_PERMISSION_DENIED_MESSAGE",
     "LiveConfigSaveService",

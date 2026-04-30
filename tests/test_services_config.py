@@ -1,9 +1,11 @@
 from pathlib import Path
 
 from zivo.models import (
+    ActionsConfig,
     AppConfig,
     BehaviorConfig,
     BookmarkConfig,
+    CustomActionConfig,
     DisplayConfig,
     EditorConfig,
     FileSearchConfig,
@@ -117,6 +119,27 @@ def test_loader_reads_valid_config_values(tmp_path) -> None:
 
         [bookmarks]
         paths = ["{bookmark_a_toml}", "{bookmark_b_toml}", "{bookmark_a_toml}"]
+
+        [[actions.custom]]
+        name = "Optimize PNG"
+        command = ["oxipng", "-o", "4", "{{file}}"]
+        when = "single_file"
+        mode = "background"
+        extensions = ["png", ".jpg"]
+
+        [[actions.custom]]
+        name = "Open lazygit"
+        command = ["lazygit"]
+        when = "always"
+        mode = "terminal"
+        cwd = "{{cwd}}"
+
+        [[actions.custom]]
+        name = "Open lazygit in new terminal"
+        command = ["lazygit"]
+        when = "always"
+        mode = "terminal_window"
+        cwd = "{{cwd}}"
         """,
         encoding="utf-8",
     )
@@ -147,6 +170,29 @@ def test_loader_reads_valid_config_values(tmp_path) -> None:
     assert result.config.logging.enabled is False
     assert result.config.logging.path == "~/logs/zivo.log"
     assert result.config.bookmarks.paths == (bookmark_a, bookmark_b)
+    assert result.config.actions.custom == (
+        CustomActionConfig(
+            name="Optimize PNG",
+            command=("oxipng", "-o", "4", "{file}"),
+            when="single_file",
+            mode="background",
+            extensions=("png", "jpg"),
+        ),
+        CustomActionConfig(
+            name="Open lazygit",
+            command=("lazygit",),
+            when="always",
+            mode="terminal",
+            cwd="{cwd}",
+        ),
+        CustomActionConfig(
+            name="Open lazygit in new terminal",
+            command=("lazygit",),
+            when="always",
+            mode="terminal_window",
+            cwd="{cwd}",
+        ),
+    )
 
 
 def test_loader_keeps_valid_values_and_warns_for_invalid_entries(tmp_path) -> None:
@@ -270,6 +316,17 @@ def test_config_save_service_writes_normalized_config_file(tmp_path) -> None:
                 path="/tmp/zivo-errors.log",
             ),
             bookmarks=BookmarkConfig(paths=("/tmp/project", "/tmp/docs")),
+            actions=ActionsConfig(
+                custom=(
+                    CustomActionConfig(
+                        name="Open lazygit",
+                        command=("lazygit",),
+                        when="always",
+                        mode="terminal",
+                        cwd="{cwd}",
+                    ),
+                )
+            ),
         ),
     )
 
@@ -278,6 +335,10 @@ def test_config_save_service_writes_normalized_config_file(tmp_path) -> None:
     assert '# macos = ["open -a Terminal {path}"]' in written
     assert '# windows = ["wt -d {path}"]' in written
     assert 'linux = ["konsole --working-directory {path}"]' in written
+    assert "[[actions.custom]]" in written
+    assert 'name = "Open lazygit"' in written
+    assert 'command = ["lazygit"]' in written
+    assert 'mode = "terminal"' in written
     assert 'command = "nvim -u NONE"' in written
     assert 'command = "codium --goto {path}:{line}:{column}"' in written
     assert 'fallback_command = "codium {path}"' in written
