@@ -8,7 +8,12 @@ from zivo.archive_utils import is_supported_archive_path
 from .actions import RequestDirectorySizes
 from .effects import Effect, LoadChildPaneSnapshotEffect, ReduceResult
 from .entry_state_helpers import current_entry_for_path, visible_current_entry_states
-from .models import DirectoryEntryState, DirectorySizeCacheEntry, PaneState
+from .models import (
+    DirectoryEntryState,
+    DirectorySizeCacheEntry,
+    GrepSearchResultState,
+    PaneState,
+)
 from .reducer_requests import ReducerFn
 
 IMAGE_PREVIEW_EXTENSIONS = frozenset(
@@ -111,11 +116,87 @@ def upsert_directory_size_entries(
     return tuple(sorted(cache_by_path.values(), key=lambda entry: entry.path))
 
 
+def _find_grep_result_for_cursor(
+    state,
+    cursor_path: str | None,
+) -> GrepSearchResultState | None:
+    if state.search_workspace is None or state.search_workspace.kind != "grep":
+        return None
+    if cursor_path is None:
+        return None
+    for result in state.search_workspace.grep_results:
+        encoded = _encode_grep_path(result.path, result.line_number)
+        if encoded == cursor_path:
+            return result
+    return None
+
+
+def _encode_grep_path(real_path: str, line_number: int) -> str:
+    return f"{real_path}\x00{line_number}"
+
+
+def _child_pane_matches_grep_result(
+    child_pane: PaneState,
+    result: GrepSearchResultState,
+) -> bool:
+    return (
+        child_pane.mode == "preview"
+        and child_pane.preview_path == result.path
+        and child_pane.preview_highlight_line == result.line_number
+    )
+
+
+def sync_grep_workspace_child_pane(
+    state,
+    cursor_path: str | None,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    grep_result = _find_grep_result_for_cursor(state, cursor_path)
+    if grep_result is None or not state.config.display.enable_text_preview:
+        next_state = replace(
+            state,
+            child_pane=PaneState(directory_path=state.current_path, entries=()),
+            pending_child_pane_request_id=None,
+        )
+        return maybe_request_directory_sizes(next_state, reduce_state)
+
+    if state.pending_child_pane_request_id is None and _child_pane_matches_grep_result(
+        state.child_pane, grep_result
+    ):
+        return maybe_request_directory_sizes(state, reduce_state)
+
+    request_id = state.next_request_id
+    next_state = replace(
+        state,
+        pending_child_pane_request_id=request_id,
+        next_request_id=request_id + 1,
+    )
+    return maybe_request_directory_sizes(
+        next_state,
+        reduce_state,
+        LoadChildPaneSnapshotEffect(
+            request_id=request_id,
+            current_path=state.current_path,
+            cursor_path=grep_result.path,
+            preview_max_bytes=state.config.display.preview_max_kib * 1024,
+            enable_text_preview=state.config.display.enable_text_preview,
+            enable_image_preview=state.config.display.enable_image_preview,
+            enable_pdf_preview=state.config.display.enable_pdf_preview,
+            enable_office_preview=state.config.display.enable_office_preview,
+            grep_result=grep_result,
+            grep_context_lines=state.config.display.grep_preview_context_lines,
+        ),
+    )
+
+
 def sync_child_pane(
     state,
     cursor_path: str | None,
     reduce_state: ReducerFn,
 ) -> ReduceResult:
+    if state.search_workspace is not None and state.search_workspace.kind == "grep":
+        return sync_grep_workspace_child_pane(state, cursor_path, reduce_state)
+
     entry = current_entry_for_path(state, cursor_path)
     if entry is None:
         next_state = replace(

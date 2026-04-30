@@ -16,6 +16,7 @@ from .actions import (
     OpenFindResultInGuiEditor,
     OpenGrepResultInEditor,
     OpenGrepResultInGuiEditor,
+    OpenGrepSearchWorkspace,
     SelectedFilesGrepKeywordChanged,
     SetCommandPaletteQuery,
     SetFindReplaceField,
@@ -273,6 +274,8 @@ def dispatch_command_palette_input(
     if key == "ctrl+w" and state.command_palette is not None:
         if state.command_palette.source == "file_search":
             return supported(OpenFileSearchWorkspace())
+        if state.command_palette.source == "grep_search":
+            return supported(OpenGrepSearchWorkspace())
 
     if character and character.isprintable():
         if palette_source == "grep_search":

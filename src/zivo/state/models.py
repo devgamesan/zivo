@@ -63,7 +63,7 @@ DirectorySizeStatus = Literal["pending", "ready", "failed"]
 CurrentPaneProjectionMode = Literal["full", "viewport"]
 LayoutMode = Literal["browser", "transfer"]
 TransferPaneId = Literal["left", "right"]
-SearchWorkspaceKind = Literal["find"]
+SearchWorkspaceKind = Literal["find", "grep"]
 ConfigFieldId = Literal[
     "editor.command",
     "display.show_hidden_files",
@@ -404,11 +404,14 @@ class SearchWorkspaceState:
     root_path: str
     query: str
     file_results: tuple[FileSearchResultState, ...] = ()
+    grep_results: tuple[GrepSearchResultState, ...] = ()
 
     @property
     def title(self) -> str:
         if self.kind == "find":
             return f'Search Workspace: find "{self.query}"'
+        if self.kind == "grep":
+            return f'Search Workspace: grep "{self.query}"'
         return "Search Workspace"
 
 

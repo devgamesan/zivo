@@ -38,6 +38,7 @@ from zivo.state.actions import (
     OpenFindResultInGuiEditor,
     OpenGrepResultInEditor,
     OpenGrepResultInGuiEditor,
+    OpenGrepSearchWorkspace,
     SelectedFilesGrepKeywordChanged,
     SetCommandPaletteQuery,
     SetGrepSearchField,
@@ -1398,3 +1399,135 @@ def test_grep_filename_filter_with_non_regex_backslash() -> None:
     assert result.state.command_palette.grep_search_error_message is None
     # Non-regex mode should not crash, results may be empty or filtered
     assert isinstance(result.state.command_palette.grep_search_results, tuple)
+
+
+def test_open_grep_search_workspace_creates_new_tab_and_preview_request() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grep_search_keyword="test",
+            grep_search_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/zivo/src/main.py",
+                    display_path="src/main.py",
+                    line_number=10,
+                    line_text="def test():",
+                    column_number=1,
+                ),
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/zivo/src/utils.py",
+                    display_path="src/utils.py",
+                    line_number=42,
+                    line_text="answer = 42",
+                    column_number=1,
+                ),
+            ),
+        ),
+    )
+
+    result = reduce_app_state(state, OpenGrepSearchWorkspace())
+
+    assert result.state.ui_mode == "BROWSING"
+    assert result.state.command_palette is None
+    assert result.state.active_tab_index == 1
+    assert result.state.search_workspace is not None
+    assert result.state.search_workspace.query == "test"
+    assert result.state.search_workspace.kind == "grep"
+    assert tuple(entry.name for entry in result.state.current_pane.entries) == (
+        "src/main.py:10: def test():",
+        "src/utils.py:42: answer = 42",
+    )
+    first_encoded = result.state.current_pane.cursor_path
+    assert first_encoded.endswith("\x0010")
+    assert first_encoded.startswith("/home/tadashi/develop/zivo/src/main.py\x00")
+    assert result.effects == (
+        LoadChildPaneSnapshotEffect(
+            request_id=1,
+            current_path="/home/tadashi/develop/zivo",
+            cursor_path="/home/tadashi/develop/zivo/src/main.py",
+            preview_max_bytes=64 * 1024,
+            enable_text_preview=True,
+            enable_image_preview=True,
+            enable_pdf_preview=True,
+            enable_office_preview=True,
+            grep_result=GrepSearchResultState(
+                path="/home/tadashi/develop/zivo/src/main.py",
+                display_path="src/main.py",
+                line_number=10,
+                line_text="def test():",
+                column_number=1,
+            ),
+            grep_context_lines=3,
+        ),
+    )
+
+
+def test_enter_grep_search_workspace_result_jumps_to_normal_browser() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grep_search_keyword="answer",
+            grep_search_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/zivo/src/utils.py",
+                    display_path="src/utils.py",
+                    line_number=42,
+                    line_text="answer = 42",
+                ),
+            ),
+        ),
+    )
+    workspace_state = reduce_app_state(state, OpenGrepSearchWorkspace()).state
+
+    result = reduce_app_state(workspace_state, EnterSearchWorkspaceResult())
+
+    assert result.state.search_workspace is None
+    assert result.state.pending_browser_snapshot_request_id == 2
+    assert result.effects == (
+        LoadBrowserSnapshotEffect(
+            request_id=2,
+            path="/home/tadashi/develop/zivo/src",
+            cursor_path="/home/tadashi/develop/zivo/src/utils.py",
+            blocking=True,
+            invalidate_paths=(),
+            enable_image_preview=True,
+            enable_pdf_preview=True,
+            enable_office_preview=True,
+        ),
+    )
+
+
+def test_copy_paths_from_grep_workspace_uses_real_paths() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginGrepSearch())
+    state = replace(
+        state,
+        command_palette=replace(
+            state.command_palette,
+            grep_search_keyword="test",
+            grep_search_results=(
+                GrepSearchResultState(
+                    path="/home/tadashi/develop/zivo/src/main.py",
+                    display_path="src/main.py",
+                    line_number=10,
+                    line_text="def test():",
+                ),
+            ),
+        ),
+    )
+    workspace_state = reduce_app_state(state, OpenGrepSearchWorkspace()).state
+
+    result = reduce_app_state(workspace_state, CopyPathsToClipboard())
+
+    assert result.effects == (
+        RunExternalLaunchEffect(
+            request_id=2,
+            request=ExternalLaunchRequest(
+                kind="copy_paths",
+                paths=("/home/tadashi/develop/zivo/src/main.py",),
+            ),
+        ),
+    )
