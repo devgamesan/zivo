@@ -6,6 +6,7 @@ from zivo.models import (
     AppConfig,
     BookmarkConfig,
     ExternalLaunchRequest,
+    GuiEditorConfig,
 )
 from zivo.state import (
     BrowserSnapshot,
@@ -67,6 +68,7 @@ from zivo.state.actions import (
     MoveCursorByPage,
     OpenNewTab,
     OpenPathInEditor,
+    OpenPathInGuiEditor,
     OpenPathWithDefaultApp,
     OpenTerminalAtPath,
     ReloadDirectory,
@@ -737,6 +739,34 @@ def test_open_path_in_editor_with_line_number_emits_external_launch_effect() -> 
         ),
     )
 
+
+def test_open_path_in_gui_editor_emits_external_launch_effect() -> None:
+    state = build_initial_app_state()
+
+    result = reduce_app_state(
+        state,
+        OpenPathInGuiEditor(
+            "/home/tadashi/develop/zivo/README.md",
+            line_number=42,
+            column_number=7,
+        ),
+    )
+
+    assert result.state.ui_mode == "BROWSING"
+    assert result.state.next_request_id == 2
+    assert result.effects == (
+        RunExternalLaunchEffect(
+            request_id=1,
+            request=ExternalLaunchRequest(
+                kind="open_gui_editor",
+                path="/home/tadashi/develop/zivo/README.md",
+                line_number=42,
+                column_number=7,
+            ),
+        ),
+    )
+
+
 def test_open_terminal_at_path_emits_external_launch_effect() -> None:
     state = build_initial_app_state()
 
@@ -778,7 +808,7 @@ def test_move_config_editor_cursor_clamps_to_visible_settings() -> None:
     next_state = _reduce_state(state, MoveConfigEditorCursor(delta=99))
 
     assert next_state.config_editor is not None
-    assert next_state.config_editor.cursor_index == 17
+    assert next_state.config_editor.cursor_index == 18
 
 def test_cycle_config_editor_editor_command_updates_draft_and_dirty_state() -> None:
     state = replace(
@@ -797,7 +827,7 @@ def test_cycle_config_editor_editor_command_updates_draft_and_dirty_state() -> N
     assert next_state.config_editor.draft.editor.command == "nvim"
     assert next_state.config_editor.dirty is True
 
-def test_cycle_config_editor_value_updates_draft_and_dirty_state() -> None:
+def test_cycle_config_editor_gui_editor_updates_draft_and_dirty_state() -> None:
     state = replace(
         build_initial_app_state(config_path="/tmp/zivo/config.toml"),
         ui_mode="CONFIG",
@@ -805,6 +835,52 @@ def test_cycle_config_editor_value_updates_draft_and_dirty_state() -> None:
             path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
             cursor_index=1,
+        ),
+    )
+
+    next_state = _reduce_state(state, CycleConfigEditorValue(delta=1))
+
+    assert next_state.config_editor is not None
+    assert next_state.config_editor.draft.gui_editor == GuiEditorConfig(
+        command="codium --goto {path}:{line}:{column}",
+        fallback_command="codium {path}",
+    )
+    assert next_state.config_editor.dirty is True
+
+def test_cycle_config_editor_gui_editor_custom_value_moves_to_first_preset() -> None:
+    base_state = build_initial_app_state(config_path="/tmp/zivo/config.toml")
+    custom_config = replace(
+        base_state.config,
+        gui_editor=GuiEditorConfig(
+            command="my-editor --line {line} {path}",
+            fallback_command="my-editor {path}",
+        ),
+    )
+    state = replace(
+        base_state,
+        config=custom_config,
+        ui_mode="CONFIG",
+        config_editor=ConfigEditorState(
+            path="/tmp/zivo/config.toml",
+            draft=custom_config,
+            cursor_index=1,
+        ),
+    )
+
+    next_state = _reduce_state(state, CycleConfigEditorValue(delta=1))
+
+    assert next_state.config_editor is not None
+    assert next_state.config_editor.draft.gui_editor == GuiEditorConfig()
+    assert next_state.config_editor.dirty is True
+
+def test_cycle_config_editor_value_updates_draft_and_dirty_state() -> None:
+    state = replace(
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
+        ui_mode="CONFIG",
+        config_editor=ConfigEditorState(
+            path="/tmp/zivo/config.toml",
+            draft=build_initial_app_state().config,
+            cursor_index=2,
         ),
     )
 
@@ -822,7 +898,7 @@ def test_cycle_config_editor_theme_updates_draft_and_dirty_state() -> None:
         config_editor=ConfigEditorState(
             path="/tmp/zivo/config.toml",
             draft=original_state.config,
-            cursor_index=2,
+            cursor_index=3,
         ),
     )
 
@@ -845,7 +921,7 @@ def test_cycle_config_editor_theme_supports_all_builtin_themes() -> None:
         config_editor=ConfigEditorState(
             path="/tmp/zivo/config.toml",
             draft=themed_config,
-            cursor_index=2,
+            cursor_index=3,
         ),
     )
 
@@ -862,7 +938,7 @@ def test_cycle_config_editor_directory_size_visibility_updates_draft_and_dirty_s
         config_editor=ConfigEditorState(
             path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
-            cursor_index=3,
+            cursor_index=4,
         ),
     )
 
@@ -879,7 +955,7 @@ def test_cycle_config_editor_text_preview_updates_draft_and_dirty_state() -> Non
         config_editor=ConfigEditorState(
             path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
-            cursor_index=4,
+            cursor_index=5,
         ),
     )
 
@@ -896,7 +972,7 @@ def test_cycle_config_editor_image_preview_updates_draft_and_dirty_state() -> No
         config_editor=ConfigEditorState(
             path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
-            cursor_index=5,
+            cursor_index=6,
         ),
     )
 
@@ -913,7 +989,7 @@ def test_cycle_config_editor_pdf_preview_updates_draft_and_dirty_state() -> None
         config_editor=ConfigEditorState(
             path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
-            cursor_index=6,
+            cursor_index=7,
         ),
     )
 
@@ -930,7 +1006,7 @@ def test_cycle_config_editor_office_preview_updates_draft_and_dirty_state() -> N
         config_editor=ConfigEditorState(
             path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
-            cursor_index=7,
+            cursor_index=8,
         ),
     )
 
@@ -947,7 +1023,7 @@ def test_cycle_config_editor_preview_syntax_theme_updates_draft_and_dirty_state(
         config_editor=ConfigEditorState(
             path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
-            cursor_index=8,
+            cursor_index=9,
         ),
     )
 
@@ -964,7 +1040,7 @@ def test_cycle_config_editor_preview_max_kib_updates_draft_and_dirty_state() -> 
         config_editor=ConfigEditorState(
             path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
-            cursor_index=9,
+            cursor_index=10,
         ),
     )
 
@@ -1190,7 +1266,7 @@ def test_cycle_config_editor_file_search_max_results_updates_draft() -> None:
             config_editor=ConfigEditorState(
                 path="/tmp/zivo/config.toml",
                 draft=original_state.config,
-                cursor_index=18,  # file_search.max_results
+                cursor_index=19,  # file_search.max_results
             ),
         )
 

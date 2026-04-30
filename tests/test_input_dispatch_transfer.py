@@ -13,6 +13,7 @@ from zivo.state.actions import (
     CloseCurrentTab,
     CopyTargets,
     CutTargets,
+    ExitCurrentPath,
     FocusTransferPane,
     OpenNewTab,
     PasteClipboardToTransferPane,
@@ -130,6 +131,16 @@ def test_transfer_mode_p_toggles_back_to_browser_mode() -> None:
     assert dispatch_key_input(state, key="p") == (
         SetNotification(None),
         ToggleTransferMode(),
+    )
+
+
+def test_transfer_mode_q_exits_app() -> None:
+    """転送モードで q キーでアプリを終了することを確認"""
+    state = _reduce_state(build_initial_app_state(), ToggleTransferMode())
+
+    assert dispatch_key_input(state, key="q") == (
+        SetNotification(None),
+        ExitCurrentPath(),
     )
 
 

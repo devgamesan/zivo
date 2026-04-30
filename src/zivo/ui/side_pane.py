@@ -7,6 +7,7 @@ from textual import events
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.css.query import NoMatches
+from textual.message import Message
 from textual.widgets import Label, Static
 
 from zivo.models.shell_data import PaneEntry
@@ -25,6 +26,14 @@ class SidePane(Vertical):
     ENTRY_HORIZONTAL_PADDING = 2
     SELECTED_DIRECTORY_STYLE = "ft-directory-sel"
     SELECTED_CUT_STYLE = "ft-cut"
+    class EntryClicked(Message):
+        """Notify the app that a side-pane entry was clicked."""
+
+        def __init__(self, pane_id: str | None, path: str, *, double_click: bool) -> None:
+            super().__init__()
+            self.pane_id = pane_id
+            self.path = path
+            self.double_click = double_click
 
     def __init__(
         self,
@@ -39,6 +48,7 @@ class SidePane(Vertical):
         self._entries = tuple(entries)
         self._ft_styles: dict[str, Style] = {}
         self._last_render_width = 0
+        self._last_clicked_path: str | None = None
 
     @property
     def list_view_id(self) -> str | None:
@@ -67,6 +77,16 @@ class SidePane(Vertical):
 
     def on_resize(self, _event: events.Resize) -> None:
         self._refresh_rendered_labels()
+
+    def on_click(self, event: events.Click) -> None:
+        meta = event.style.meta
+        if "entry_path" not in meta:
+            return
+        path = str(meta["entry_path"])
+        double_click = path == self._last_clicked_path
+        self._last_clicked_path = path
+        event.stop()
+        self.post_message(self.EntryClicked(self.id, path, double_click=double_click))
 
     async def set_entries(self, entries: Sequence[PaneEntry]) -> None:
         """Replace the rendered entries without remounting the pane."""

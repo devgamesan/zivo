@@ -217,7 +217,10 @@ def _render_file_label(
         selected_cut_style=selected_cut_style,
     )
     style = _style_without_background(style)
-    return Text(label) if style is None else Text(label, style=style)
+    text = Text(label) if style is None else Text(label, style=style)
+    if label:
+        text.stylize(Style(meta={"entry_path": entry.path}), 0, len(label))
+    return text
 
 
 def _render_file_entries(

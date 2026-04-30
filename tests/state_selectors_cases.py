@@ -11,6 +11,7 @@ from zivo.models import (
     DisplayConfig,
     EditorConfig,
     ExtractArchiveRequest,
+    GuiEditorConfig,
     PasteConflict,
     PasteRequest,
     UndoDeletePathStep,
@@ -1271,8 +1272,8 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
     split_terminal_hint = " | t term" if os.name == "posix" else ""
 
     assert help_state.lines == (
-        "enter open | e edit | i info | space select | c copy | x cut | v paste | "
-        "d delete | r rename | z undo",
+        "enter open | e edit | O gui editor | i info | space select | "
+        "c copy | x cut | v paste | d delete | r rename | z undo",
         "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to | [ ] preview",
         (
             "n new-file | N new-dir | H history | "
@@ -1280,8 +1281,8 @@ def test_select_help_bar_defaults_to_browsing_shortcuts() -> None:
         ),
     )
     assert help_state.text == (
-        "enter open | e edit | i info | space select | c copy | x cut | v paste | "
-        "d delete | r rename | z undo\n"
+        "enter open | e edit | O gui editor | i info | space select | "
+        "c copy | x cut | v paste | d delete | r rename | z undo\n"
         "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to | [ ] preview\n"
         "n new-file | N new-dir | H history | "
         f"b bookmarks{split_terminal_hint} | p transfer | : palette | q quit"
@@ -1294,13 +1295,13 @@ def test_select_help_bar_for_transfer_mode_prioritizes_transfer_actions() -> Non
     help_state = select_help_bar_state(state)
 
     assert help_state.lines == (
-        "[ ] focus | y copy-to-pane | m move-to-pane | p/Esc close",
+        "[ ] focus | y copy-to-pane | m move-to-pane | p/Esc close | q quit",
         "Space select | c copy | x cut | v paste | d delete | r rename",
         "z undo | . hidden | N new-dir | o new-tab | w close-tab",
         "b bookmarks | H history | G go-to | : palette",
     )
     assert help_state.text == (
-        "[ ] focus | y copy-to-pane | m move-to-pane | p/Esc close\n"
+        "[ ] focus | y copy-to-pane | m move-to-pane | p/Esc close | q quit\n"
         "Space select | c copy | x cut | v paste | d delete | r rename\n"
         "z undo | . hidden | N new-dir | o new-tab | w close-tab\n"
         "b bookmarks | H history | G go-to | : palette"
@@ -1498,7 +1499,8 @@ def test_select_help_bar_state_for_file_search_palette() -> None:
     help_bar = select_help_bar_state(state)
 
     assert help_bar.lines == (
-        "type filename | ↑↓ or Ctrl+n/p select | enter jump | Ctrl+e edit | esc cancel",
+        "type filename | ↑↓ or Ctrl+n/p select | enter jump | "
+        "Ctrl+e edit | Ctrl+o GUI | esc cancel",
     )
 
 
@@ -1513,7 +1515,7 @@ def test_select_help_bar_state_for_grep_search_palette() -> None:
 
     assert help_bar.lines == (
         "type text / tab fields / ↑↓ or Ctrl+n/p select | "
-        "enter jump | Ctrl+e edit | esc cancel",
+        "enter jump | Ctrl+e edit | Ctrl+o GUI | esc cancel",
     )
 
 
@@ -1948,7 +1950,7 @@ def test_select_config_dialog_state_formats_editor_lines() -> None:
         config_editor=ConfigEditorState(
             path="/tmp/zivo/config.toml",
             draft=build_initial_app_state().config,
-            cursor_index=2,
+            cursor_index=3,
             dirty=True,
         ),
     )
@@ -1960,6 +1962,7 @@ def test_select_config_dialog_state_formats_editor_lines() -> None:
     assert "Path: /tmp/zivo/config.toml" in dialog.lines
     assert "  ── External ──" in dialog.lines
     assert "  Editor command: system default" in dialog.lines
+    assert "  GUI editor: VS Code" in dialog.lines
     assert "  ── Display ──" in dialog.lines
     assert "> Theme: textual-dark" in dialog.lines
     assert "  Preview syntax theme: auto" in dialog.lines
@@ -1975,6 +1978,10 @@ def test_select_config_dialog_state_formats_editor_lines() -> None:
     assert "  Current behavior: `textual-dark`." in dialog.lines
     hint = "Editor presets: system default, nvim, vim, nano, hx, micro, emacs -nw, edit"
     assert hint in dialog.lines
+    assert (
+        "GUI editor presets: VS Code, VSCodium, Cursor, Sublime Text, Zed, "
+        "JetBrains IDEA, PyCharm, WebStorm, Kate"
+    ) in dialog.lines
     assert "Terminal launch templates: edit config.toml with e" in dialog.lines
     assert dialog.options == (
         "↑↓/Ctrl+n/p choose",
@@ -2017,6 +2024,32 @@ def test_select_config_dialog_state_shows_custom_editor_command_hint() -> None:
     )
     assert "  Custom commands can only be edited in the raw config file with `e`." in dialog.lines
 
+def test_select_config_dialog_state_shows_custom_gui_editor_hint() -> None:
+    state = replace(
+        build_initial_app_state(config_path="/tmp/zivo/config.toml"),
+        ui_mode="CONFIG",
+        config_editor=ConfigEditorState(
+            path="/tmp/zivo/config.toml",
+            draft=AppConfig(
+                gui_editor=GuiEditorConfig(
+                    command="my-editor --line {line} {path}",
+                    fallback_command="my-editor {path}",
+                ),
+            ),
+            cursor_index=1,
+        ),
+    )
+
+    dialog = select_config_dialog_state(state)
+
+    assert dialog is not None
+    assert "> GUI editor: custom (raw config only)" in dialog.lines
+    assert "  Current behavior: custom raw GUI editor templates are preserved." in dialog.lines
+    assert (
+        "  Custom GUI editor templates can only be edited in the raw config file with `e`."
+        in dialog.lines
+    )
+
 
 def test_select_config_dialog_state_formats_directories_first_detail() -> None:
     state = replace(
@@ -2025,7 +2058,7 @@ def test_select_config_dialog_state_formats_directories_first_detail() -> None:
         config_editor=ConfigEditorState(
             path="/tmp/zivo/config.toml",
             draft=AppConfig(display=DisplayConfig(directories_first=False)),
-            cursor_index=14,
+            cursor_index=15,
         ),
     )
 

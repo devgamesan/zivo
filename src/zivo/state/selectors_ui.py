@@ -19,6 +19,7 @@ from zivo.platform_support import is_split_terminal_supported
 from .models import AppState
 from .reducer_config import (
     CONFIG_EDITOR_CATEGORIES,
+    CONFIG_GUI_EDITOR_PRESETS,
     config_editor_field_description,
     config_editor_labels,
     format_config_field_value,
@@ -140,7 +141,10 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             if state.config.help_bar.palette_file_search:
                 return HelpBarState(state.config.help_bar.palette_file_search)
             return HelpBarState(
-                ("type filename | ↑↓ or Ctrl+n/p select | enter jump | Ctrl+e edit | esc cancel",)
+                (
+                    "type filename | ↑↓ or Ctrl+n/p select | enter jump | "
+                    "Ctrl+e edit | Ctrl+o GUI | esc cancel",
+                )
             )
         if state.command_palette is not None and state.command_palette.source == "grep_search":
             if state.config.help_bar.palette_grep_search:
@@ -148,7 +152,7 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             return HelpBarState(
                 (
                     "type text / tab fields / ↑↓ or Ctrl+n/p select | "
-                    "enter jump | Ctrl+e edit | esc cancel",
+                    "enter jump | Ctrl+e edit | Ctrl+o GUI | esc cancel",
                 )
             )
         if (
@@ -171,7 +175,10 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             and state.command_palette.source == "selected_files_grep"
         ):
             return HelpBarState(
-                ("type keyword / ↑↓ or Ctrl+n/p select | enter jump | Ctrl+e edit | esc cancel",)
+                (
+                    "type keyword / ↑↓ or Ctrl+n/p select | enter jump | "
+                    "Ctrl+e edit | Ctrl+o GUI | esc cancel",
+                )
             )
         if state.command_palette is not None and state.command_palette.source == "history":
             if state.config.help_bar.palette_history:
@@ -199,7 +206,7 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
             return HelpBarState(state.config.help_bar.transfer)
         return HelpBarState(
             (
-                "[ ] focus | y copy-to-pane | m move-to-pane | p/Esc close",
+                "[ ] focus | y copy-to-pane | m move-to-pane | p/Esc close | q quit",
                 "Space select | c copy | x cut | v paste | d delete | r rename",
                 "z undo | . hidden | N new-dir | o new-tab | w close-tab",
                 "b bookmarks | H history | G go-to | : palette",
@@ -214,8 +221,8 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
     )
     return HelpBarState(
         (
-            "enter open | e edit | i info | space select | c copy | x cut | v paste | "
-            "d delete | r rename | z undo",
+            "enter open | e edit | O gui editor | i info | space select | "
+            "c copy | x cut | v paste | d delete | r rename | z undo",
             "/ filter | s sort | . hidden | ~ home | f find | g grep | G go-to | [ ] preview",
             browsing_shortcuts,
         )
@@ -704,6 +711,8 @@ def select_config_dialog_state(state: AppState) -> ConfigDialogState | None:
     lines_list.extend([
         "",
         _format_custom_editor_hint(config.editor.command),
+        "GUI editor presets: "
+        + ", ".join(name for name, _config in CONFIG_GUI_EDITOR_PRESETS),
         "Terminal launch templates: edit config.toml with e",
         f"  Linux templates: {len(config.terminal.linux)}",
         f"  macOS templates: {len(config.terminal.macos)}",
@@ -740,6 +749,7 @@ def select_shell_command_dialog_state(state: AppState) -> ShellCommandDialogStat
             cwd=state.shell_command.cwd,
             prompt="Command: ",
             command=state.shell_command.command,
+            cursor_pos=state.shell_command.cursor_pos,
             options=("esc close",),
             result=state.shell_command.result,
         )
@@ -750,6 +760,7 @@ def select_shell_command_dialog_state(state: AppState) -> ShellCommandDialogStat
         cwd=state.shell_command.cwd,
         prompt="Command: ",
         command=state.shell_command.command,
+        cursor_pos=state.shell_command.cursor_pos,
         options=("enter run", "esc cancel"),
         result=None,
     )

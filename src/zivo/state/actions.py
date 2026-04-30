@@ -19,12 +19,15 @@ from .actions_input import (
     DismissNameConflict,
     MoveConfigEditorCursor,
     MovePendingInputCursor,
+    MoveShellCommandCursor,
     PasteIntoPendingInput,
+    PasteIntoShellCommand,
     ResetHelpBarConfig,
     SaveConfigEditor,
     SetFilterQuery,
     SetPendingInputCursor,
     SetPendingInputValue,
+    SetShellCommandCursor,
     SetShellCommandValue,
     SubmitPendingInput,
     SubmitShellCommand,
@@ -76,12 +79,15 @@ __all__ = [
     "DismissNameConflict",
     "MoveConfigEditorCursor",
     "MovePendingInputCursor",
+    "MoveShellCommandCursor",
     "PasteIntoPendingInput",
+    "PasteIntoShellCommand",
     "ResetHelpBarConfig",
     "SaveConfigEditor",
     "SetFilterQuery",
     "SetPendingInputCursor",
     "SetPendingInputValue",
+    "SetShellCommandCursor",
     "SetShellCommandValue",
     "SubmitPendingInput",
     "SubmitShellCommand",
@@ -140,6 +146,7 @@ from .actions_navigation import (
     MoveTransferCursorByPage,
     OpenNewTab,
     OpenPathInEditor,
+    OpenPathInGuiEditor,
     OpenPathWithDefaultApp,
     OpenTerminalAtPath,
     PasteClipboardToTransferPane,
@@ -148,6 +155,7 @@ from .actions_navigation import (
     SelectAllVisibleTransferEntries,
     SetCursorPath,
     SetSort,
+    SetTransferCursorPath,
     ShowAttributes,
     ToggleHiddenFiles,
     ToggleTransferMode,
@@ -180,7 +188,9 @@ from .actions_palette import (
     GrepSearchFailed,
     MoveCommandPaletteCursor,
     OpenFindResultInEditor,
+    OpenFindResultInGuiEditor,
     OpenGrepResultInEditor,
+    OpenGrepResultInGuiEditor,
     SelectedFilesGrepKeywordChanged,
     SetCommandPaletteQuery,
     SetFindReplaceField,
@@ -287,6 +297,8 @@ Action = (
     | TextReplaceApplyFailed
     | OpenGrepResultInEditor
     | OpenFindResultInEditor
+    | OpenGrepResultInGuiEditor
+    | OpenFindResultInGuiEditor
     | BeginFilterInput
     | ConfirmFilterInput
     | CancelFilterInput
@@ -305,6 +317,8 @@ Action = (
     | MovePendingInputCursor
     | SetPendingInputCursor
     | DeletePendingInputForward
+    | MoveShellCommandCursor
+    | SetShellCommandCursor
     | SetShellCommandValue
     | SubmitPendingInput
     | CancelPendingInput
@@ -314,6 +328,7 @@ Action = (
     | DismissAttributeDialog
     | SetFilterQuery
     | PasteIntoPendingInput
+    | PasteIntoShellCommand
     | OpenNewTab
     | ActivateTabByIndex
     | ActivateNextTab
@@ -333,6 +348,7 @@ Action = (
     | ExitCurrentPath
     | OpenPathWithDefaultApp
     | OpenPathInEditor
+    | OpenPathInGuiEditor
     | OpenTerminalAtPath
     | ShowAttributes
     | CopyPathsToClipboard
@@ -345,6 +361,7 @@ Action = (
     | MoveTransferCursor
     | JumpTransferCursor
     | MoveTransferCursorByPage
+    | SetTransferCursorPath
     | MoveTransferCursorAndSelectRange
     | ToggleTransferSelectionAndAdvance
     | ClearTransferSelection

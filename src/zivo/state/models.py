@@ -269,6 +269,7 @@ class ShellCommandState:
 
     cwd: str
     command: str = ""
+    cursor_pos: int = 0
     result: ShellCommandResult | None = None
 
 
@@ -354,6 +355,7 @@ class GrepSearchResultState:
     display_path: str
     line_number: int
     line_text: str
+    column_number: int = 1
 
     @property
     def display_label(self) -> str:

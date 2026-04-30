@@ -126,6 +126,15 @@ class OpenPathInEditor:
 
 
 @dataclass(frozen=True)
+class OpenPathInGuiEditor:
+    """Open a filesystem path with the configured GUI editor."""
+
+    path: str
+    line_number: int | None = None
+    column_number: int | None = None
+
+
+@dataclass(frozen=True)
 class OpenTerminalAtPath:
     """Open a new terminal rooted at the supplied directory path."""
 
@@ -206,6 +215,13 @@ class MoveTransferCursorByPage:
     direction: Literal["up", "down"]
     page_size: int
     visible_paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class SetTransferCursorPath:
+    """Set the active transfer-pane cursor to a specific absolute path."""
+
+    path: str | None
 
 
 @dataclass(frozen=True)

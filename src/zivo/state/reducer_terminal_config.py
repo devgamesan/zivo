@@ -19,12 +19,16 @@ from .actions import (
     ExternalLaunchCompleted,
     ExternalLaunchFailed,
     MoveConfigEditorCursor,
+    MoveShellCommandCursor,
     OpenPathInEditor,
+    OpenPathInGuiEditor,
     OpenPathWithDefaultApp,
     OpenTerminalAtPath,
+    PasteIntoShellCommand,
     RemoveBookmark,
     ResetHelpBarConfig,
     SaveConfigEditor,
+    SetShellCommandCursor,
     SetShellCommandValue,
     SetTerminalHeight,
     ShellCommandCompleted,
@@ -157,7 +161,67 @@ def _handle_set_shell_command_value(
     return finalize(
         replace(
             state,
-            shell_command=replace(state.shell_command, command=action.command),
+            shell_command=replace(
+                state.shell_command,
+                command=action.command,
+                cursor_pos=action.cursor_pos,
+            ),
+        )
+    )
+
+
+def _handle_move_shell_command_cursor(
+    state: AppState,
+    action: MoveShellCommandCursor,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    if state.shell_command is None:
+        return finalize(state)
+    max_pos = len(state.shell_command.command)
+    new_pos = max(0, min(max_pos, state.shell_command.cursor_pos + action.delta))
+    return finalize(
+        replace(
+            state,
+            shell_command=replace(state.shell_command, cursor_pos=new_pos),
+        )
+    )
+
+
+def _handle_set_shell_command_cursor(
+    state: AppState,
+    action: SetShellCommandCursor,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    if state.shell_command is None:
+        return finalize(state)
+    max_pos = len(state.shell_command.command)
+    new_pos = max(0, min(max_pos, action.cursor_pos))
+    return finalize(
+        replace(
+            state,
+            shell_command=replace(state.shell_command, cursor_pos=new_pos),
+        )
+    )
+
+
+def _handle_paste_into_shell_command(
+    state: AppState,
+    action: PasteIntoShellCommand,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    if state.shell_command is None:
+        return finalize(state)
+    value = state.shell_command.command
+    pos = state.shell_command.cursor_pos
+    new_value = value[:pos] + action.text + value[pos:]
+    return finalize(
+        replace(
+            state,
+            shell_command=replace(
+                state.shell_command,
+                command=new_value,
+                cursor_pos=pos + len(action.text),
+            ),
         )
     )
 
@@ -391,6 +455,22 @@ def _handle_open_path_in_editor(
     )
 
 
+def _handle_open_path_in_gui_editor(
+    state: AppState,
+    action: OpenPathInGuiEditor,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    return run_external_launch_request(
+        replace(state, notification=None),
+        ExternalLaunchRequest(
+            kind="open_gui_editor",
+            path=action.path,
+            line_number=action.line_number,
+            column_number=action.column_number,
+        ),
+    )
+
+
 def _handle_open_terminal_at_path(
     state: AppState,
     action: OpenTerminalAtPath,
@@ -565,6 +645,9 @@ _TERMINAL_CONFIG_HANDLERS: dict[type[Action], _TerminalConfigHandler] = {
     DismissConfigEditor: _handle_dismiss_config_editor,
     CancelShellCommandInput: _handle_cancel_shell_command_input,
     SetShellCommandValue: _handle_set_shell_command_value,
+    MoveShellCommandCursor: _handle_move_shell_command_cursor,
+    SetShellCommandCursor: _handle_set_shell_command_cursor,
+    PasteIntoShellCommand: _handle_paste_into_shell_command,
     MoveConfigEditorCursor: _handle_move_config_editor_cursor,
     CycleConfigEditorValue: _handle_cycle_config_editor_value,
     SaveConfigEditor: _handle_save_config_editor,
@@ -574,6 +657,7 @@ _TERMINAL_CONFIG_HANDLERS: dict[type[Action], _TerminalConfigHandler] = {
     ResetHelpBarConfig: _handle_reset_help_bar_config,
     OpenPathWithDefaultApp: _handle_open_path_with_default_app,
     OpenPathInEditor: _handle_open_path_in_editor,
+    OpenPathInGuiEditor: _handle_open_path_in_gui_editor,
     OpenTerminalAtPath: _handle_open_terminal_at_path,
     CopyPathsToClipboard: _handle_copy_paths_to_clipboard,
     ExternalLaunchCompleted: _handle_external_launch_completed,

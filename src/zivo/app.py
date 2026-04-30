@@ -10,7 +10,7 @@ from typing import Literal
 from textual import events
 from textual.app import App, ComposeResult, ScreenStackError
 from textual.binding import Binding
-from textual.containers import Container, Vertical
+from textual.containers import Container, Vertical, VerticalScroll
 from textual.css.query import NoMatches
 from textual.keys import Keys
 from textual.timer import Timer
@@ -76,9 +76,15 @@ from zivo.state import (
 )
 from zivo.state.actions import (
     Action,
+    EnterCursorDirectory,
+    EnterTransferDirectory,
     ExitCurrentPath,
+    FocusTransferPane,
+    OpenPathWithDefaultApp,
     RequestBrowserSnapshot,
+    SetCursorPath,
     SetTerminalHeight,
+    SetTransferCursorPath,
 )
 from zivo.ui import (
     AttributeDialog,
@@ -91,6 +97,7 @@ from zivo.ui import (
     InputDialog,
     MainPane,
     ShellCommandDialog,
+    SidePane,
     StatusBar,
 )
 
@@ -235,6 +242,7 @@ class zivoApp(App[None]):
         self._pending_terminal_response_escape = False
         self._swallowing_terminal_response = False
         self._terminal_response_escape_deadline = 0.0
+        self._last_mouse_click_key: tuple[str, str] | None = None
 
     @property
     def app_state(self) -> AppState:
@@ -438,6 +446,20 @@ class zivoApp(App[None]):
             event.prevent_default()
             return
 
+        if (
+            event.key == "ctrl+v"
+            and self._app_state.ui_mode == "SHELL"
+            and self._app_state.shell_command is not None
+        ):
+            text = self._external_launch_service.get_from_clipboard()
+            if text:
+                from zivo.state.actions import PasteIntoShellCommand
+
+                await self.dispatch_actions((PasteIntoShellCommand(text=text),))
+            event.stop()
+            event.prevent_default()
+            return
+
         scroll_delta = _preview_scroll_delta(self._app_state, event.key)
         if scroll_delta is not None:
             try:
@@ -466,6 +488,52 @@ class zivoApp(App[None]):
                 )
                 event.stop()
                 event.prevent_default()
+                return
+
+        if self._app_state.ui_mode == "SHELL" and self._app_state.shell_command is not None:
+            from zivo.state.actions import PasteIntoShellCommand
+
+            await self.dispatch_actions(
+                (PasteIntoShellCommand(text=event.text),)
+            )
+            event.stop()
+            event.prevent_default()
+
+    async def on_click(self, event: events.Click) -> None:
+        """Handle bubbled mouse clicks for side panes and previews."""
+
+        widget = event.widget
+        widget_id = getattr(widget, "id", None)
+        meta = event.style.meta
+
+        if widget_id == "child-pane-preview":
+            try:
+                preview = self.query_one("#child-pane-preview-scroll", VerticalScroll)
+            except NoMatches:
+                return
+            self.set_focus(preview)
+            return
+
+        entry_path = meta.get("entry_path")
+        if not isinstance(entry_path, str):
+            return
+
+        if widget_id == "parent-pane-list":
+            if self._is_double_click("parent-pane", entry_path):
+                await self.dispatch_actions((RequestBrowserSnapshot(entry_path, blocking=True),))
+            return
+
+        if widget_id == "child-pane-list" and self._is_double_click("child-pane", entry_path):
+            await self._open_or_enter_path(entry_path)
+
+    async def on_main_pane_entry_clicked(self, message: MainPane.EntryClicked) -> None:
+        """Handle bubbled click messages from the center / transfer panes."""
+
+        await self._handle_main_pane_click(
+            message.pane_id,
+            message.path,
+            double_click=message.double_click,
+        )
 
     async def action_dispatch_bound_key(self, key: str) -> None:
         """Handle priority key bindings through the central dispatcher."""
@@ -566,6 +634,7 @@ class zivoApp(App[None]):
             adapter=LocalExternalLaunchAdapter(
                 terminal_command_templates=app_config.terminal,
                 editor_command_template=app_config.editor,
+                gui_editor_command_template=app_config.gui_editor,
             )
         )
 
@@ -602,6 +671,38 @@ class zivoApp(App[None]):
         await self.dispatch_actions((SetTerminalHeight(height=event.size.height),))
         self._sync_overlay_layout(event.size.width)
 
+    async def on_side_pane_entry_clicked(self, message: SidePane.EntryClicked) -> None:
+        """Handle left parent-pane double clicks from the widget message path."""
+
+        if message.pane_id != "parent-pane" or not message.double_click:
+            return
+        entry = next(
+            (entry for entry in self._app_state.parent_pane.entries if entry.path == message.path),
+            None,
+        )
+        if entry is None:
+            return
+        if entry.kind == "dir":
+            await self.dispatch_actions((RequestBrowserSnapshot(message.path, blocking=True),))
+            return
+        await self.dispatch_actions((OpenPathWithDefaultApp(message.path),))
+
+    async def on_child_pane_entry_clicked(self, message: ChildPane.EntryClicked) -> None:
+        """Handle right child-pane double clicks from the widget message path."""
+
+        if not message.double_click:
+            return
+        await self._open_or_enter_path(message.path)
+
+    def on_child_pane_preview_clicked(self, _message: ChildPane.PreviewClicked) -> None:
+        """Move focus to the preview scroll container when the preview is clicked."""
+
+        try:
+            preview = self.query_one("#child-pane-preview-scroll", VerticalScroll)
+        except NoMatches:
+            return
+        self.set_focus(preview)
+
     async def _refresh_shell(self, *, theme_changed: bool = False) -> None:
         try:
             await refresh_shell(
@@ -621,6 +722,81 @@ class zivoApp(App[None]):
         self._update_command_palette_geometry()
         self._update_config_dialog_geometry()
         self._update_input_dialog_geometry()
+
+    async def _handle_main_pane_click(
+        self,
+        pane_id: str | None,
+        path: str,
+        *,
+        double_click: bool,
+    ) -> None:
+        if self._app_state.layout_mode == "transfer":
+            pane = "right" if pane_id == "transfer-right-pane" else "left"
+            actions: list[Action] = []
+            if self._app_state.active_transfer_pane != pane:
+                actions.append(FocusTransferPane(pane))
+            actions.append(SetTransferCursorPath(path))
+            if double_click:
+                actions.append(EnterTransferDirectory())
+            await self.dispatch_actions(tuple(actions))
+            return
+
+        actions = [SetCursorPath(path)]
+        if double_click:
+            await self.dispatch_actions(tuple(actions))
+            await self._open_or_enter_path(path)
+            return
+        await self.dispatch_actions(tuple(actions))
+
+    async def _open_or_enter_path(self, path: str) -> None:
+        shell = select_shell_data(self._app_state)
+        current_paths = {entry.path for entry in shell.current_entries or ()}
+        child_paths = {entry.path for entry in shell.child_pane.entries}
+        if path in current_paths:
+            entry = next(
+                (entry for entry in self._app_state.current_pane.entries if entry.path == path),
+                None,
+            )
+            if entry is None:
+                return
+            if entry.kind == "dir":
+                await self.dispatch_actions((SetCursorPath(path), EnterCursorDirectory()))
+            else:
+                await self.dispatch_actions((SetCursorPath(path), OpenPathWithDefaultApp(path)))
+            return
+        if path in child_paths:
+            entry = next(
+                (entry for entry in self._app_state.child_pane.entries if entry.path == path),
+                None,
+            )
+            if entry is None:
+                return
+            if entry.kind == "dir":
+                await self.dispatch_actions((RequestBrowserSnapshot(path, blocking=True),))
+            else:
+                await self.dispatch_actions((OpenPathWithDefaultApp(path),))
+
+    def _is_double_click(self, pane_id: str, path: str) -> bool:
+        key = (pane_id, path)
+        double_click = key == self._last_mouse_click_key
+        self._last_mouse_click_key = key
+        return double_click
+
+    def _path_for_table_row(self, pane_id: str, row_index: int) -> str | None:
+        if row_index < 0:
+            return None
+        shell = select_shell_data(self._app_state)
+        if self._app_state.layout_mode == "transfer":
+            transfer = (
+                shell.transfer_right if pane_id == "transfer-right-pane" else shell.transfer_left
+            )
+            if transfer is None or row_index >= len(transfer.entries):
+                return None
+            return transfer.entries[row_index].path
+        current_entries = shell.current_entries or ()
+        if row_index >= len(current_entries):
+            return None
+        return current_entries[row_index].path
 
 
 def create_app(
