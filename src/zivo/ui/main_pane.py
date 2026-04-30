@@ -2,7 +2,6 @@
 
 from collections.abc import Sequence
 from dataclasses import replace
-from time import monotonic
 
 from rich.style import Style
 from rich.text import Text
@@ -10,7 +9,6 @@ from textual import events
 from textual.app import ComposeResult
 from textual.containers import Vertical
 from textual.css.query import NoMatches
-from textual.message import Message
 from textual.widgets import DataTable, Label
 
 from zivo.models.shell_data import (
@@ -52,17 +50,6 @@ class MainPane(Vertical):
     }
     FIXED_COLUMN_SHRINK_ORDER = ("modified", "size", "sel")
     ROW_KEY_PREFIX = "__slot__:"
-    DOUBLE_CLICK_SECONDS = 0.4
-
-    class EntryClicked(Message):
-        """Notify the app that a pane row was clicked."""
-
-        def __init__(self, pane_id: str | None, path: str, *, double_click: bool) -> None:
-            super().__init__()
-            self.pane_id = pane_id
-            self.path = path
-            self.double_click = double_click
-
     def __init__(
         self,
         title: str,
@@ -84,8 +71,6 @@ class MainPane(Vertical):
         self._context_input = context_input
         self._ft_styles: dict[str, Style] = {}
         self._last_table_width = 0
-        self._last_clicked_path: str | None = None
-        self._last_clicked_at = 0.0
 
     @property
     def table_id(self) -> str | None:
@@ -123,26 +108,6 @@ class MainPane(Vertical):
 
     def on_resize(self, _event: events.Resize) -> None:
         self._refresh_table_width()
-
-    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
-        """Translate table row selection into a higher-level pane click message."""
-
-        try:
-            row_index = int(str(event.row_key).removeprefix(self.ROW_KEY_PREFIX))
-        except ValueError:
-            return
-        if row_index < 0 or row_index >= len(self._entries):
-            return
-        path = self._entries[row_index].path
-        now = monotonic()
-        double_click = (
-            path == self._last_clicked_path
-            and now - self._last_clicked_at <= self.DOUBLE_CLICK_SECONDS
-        )
-        self._last_clicked_path = path
-        self._last_clicked_at = now
-        event.stop()
-        self.post_message(self.EntryClicked(self.id, path, double_click=double_click))
 
     def set_entries(
         self,

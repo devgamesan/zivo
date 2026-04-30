@@ -1306,6 +1306,40 @@ async def test_app_mouse_double_click_enters_directory() -> None:
 
 
 @pytest.mark.asyncio
+async def test_app_row_selected_double_click_enters_directory() -> None:
+    path = str(Path("/tmp/zivo-row-selected-enter").resolve())
+    docs_path = f"{path}/docs"
+    loader = FakeBrowserSnapshotLoader(
+        snapshots={
+            path: _build_snapshot(
+                path,
+                (
+                    DirectoryEntryState(docs_path, "docs", "dir"),
+                    DirectoryEntryState(f"{path}/README.md", "README.md", "file"),
+                ),
+                child_path=docs_path,
+                child_entries=(DirectoryEntryState(f"{docs_path}/guide.md", "guide.md", "file"),),
+            ),
+            docs_path: _build_snapshot(
+                docs_path,
+                (DirectoryEntryState(f"{docs_path}/guide.md", "guide.md", "file"),),
+                child_path=docs_path,
+            ),
+        }
+    )
+    app = create_app(snapshot_loader=loader, initial_path=path)
+
+    async with app.run_test(size=(120, 20)):
+        await _wait_for_snapshot_loaded(app, path)
+        table = app.query_one("#current-pane-table", DataTable)
+        await app.on_data_table_row_selected(DataTable.RowSelected(table, 0, "ignored"))
+        await app.on_data_table_row_selected(DataTable.RowSelected(table, 0, "ignored"))
+        await _wait_for_snapshot_loaded(app, docs_path)
+
+        assert app.app_state.current_path == docs_path
+
+
+@pytest.mark.asyncio
 async def test_app_parent_pane_double_click_opens_file_with_default_app() -> None:
     path = str(Path("/tmp/zivo-parent-file-open/current").resolve())
     parent_path = str(Path(path).parent)
