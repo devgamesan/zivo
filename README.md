@@ -130,8 +130,10 @@ See [Commands](docs/commands.md) for the full command list.
 
 zivo automatically creates `config.toml` on first launch.
 You can configure themes, previews, sorting, editor integration, delete confirmation, and more.
+You can also add custom command palette actions for external tools.
 
 See [Configuration](docs/configuration.md) for details.
+See [Custom Actions](docs/custom-actions.md) for custom action examples and safety notes.
 
 ---
 
@@ -153,6 +155,7 @@ zivo includes safety mechanisms to prevent data loss during file operations.
 - [Keybindings](docs/keybindings.md) — full keybinding reference
 - [Commands](docs/commands.md) — complete command palette reference
 - [Configuration](docs/configuration.md) — configuration file details
+- [Custom Actions](docs/custom-actions.md) — command palette custom action guide
 - [Platforms](docs/platforms.md) — OS-specific setup
 - [Safety](docs/safety.md) — safety specifications
 - [Architecture](docs/architecture.en.md) — implementation structure

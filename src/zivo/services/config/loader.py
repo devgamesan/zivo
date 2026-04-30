@@ -8,9 +8,11 @@ from dataclasses import replace
 from pathlib import Path
 
 from zivo.models import (
+    ActionsConfig,
     AppConfig,
     BookmarkConfig,
     ConfigLoadResult,
+    CustomActionConfig,
     DisplayConfig,
     EditorConfig,
     FileSearchConfig,
@@ -30,6 +32,8 @@ from .render import render_default_config
 from .schema import read_bool, read_enum, read_int, validate_section_dict
 from .shared import (
     HELP_BAR_FIELDS,
+    VALID_CUSTOM_ACTION_MODES,
+    VALID_CUSTOM_ACTION_WHEN,
     VALID_LOG_LEVELS,
     VALID_PASTE_ACTIONS,
     VALID_PREVIEW_MAX_KIB,
@@ -94,6 +98,7 @@ class AppConfigLoader:
                 bookmarks=load_bookmark_config(document.get("bookmarks"), warnings),
                 help_bar=load_help_bar_config(document.get("help_bar"), warnings),
                 file_search=load_file_search_config(document.get("file_search"), warnings),
+                actions=load_actions_config(document.get("actions"), warnings),
             ),
             path=str(path),
             warnings=tuple(warnings),
@@ -418,6 +423,122 @@ def load_file_search_config(section: object, warnings: list[str]) -> FileSearchC
         return config
 
     return FileSearchConfig(max_results=max_results)
+
+
+def load_actions_config(section: object, warnings: list[str]) -> ActionsConfig:
+    validated = validate_section_dict(section, "actions", warnings)
+    if validated is None:
+        return ActionsConfig()
+
+    raw_custom = validated.get("custom")
+    if raw_custom is None:
+        return ActionsConfig()
+    if not isinstance(raw_custom, list):
+        warnings.append("actions.custom must be an array of action tables; using default.")
+        return ActionsConfig()
+
+    actions: list[CustomActionConfig] = []
+    for index, item in enumerate(raw_custom):
+        field_name = f"actions.custom[{index}]"
+        if not isinstance(item, dict):
+            warnings.append(f"{field_name} must be a table; ignoring it.")
+            continue
+        action = _load_custom_action(item, field_name, warnings)
+        if action is not None:
+            actions.append(action)
+    return ActionsConfig(custom=tuple(actions))
+
+
+def _load_custom_action(
+    section: dict[str, object],
+    field_name: str,
+    warnings: list[str],
+) -> CustomActionConfig | None:
+    name = section.get("name")
+    if not isinstance(name, str) or not name.strip():
+        warnings.append(f"{field_name}.name must be a non-empty string; ignoring it.")
+        return None
+
+    command = section.get("command")
+    if not isinstance(command, list) or not command:
+        warnings.append(f"{field_name}.command must be a non-empty array of strings; ignoring it.")
+        return None
+    command_parts: list[str] = []
+    for index, part in enumerate(command):
+        if not isinstance(part, str) or not part:
+            warnings.append(
+                f"{field_name}.command[{index}] must be a non-empty string; ignoring action."
+            )
+            return None
+        command_parts.append(part)
+
+    when = read_enum(
+        section,
+        key="when",
+        default="always",
+        valid_values=VALID_CUSTOM_ACTION_WHEN,
+        valid_display="always, single_file, selection",
+        section_name=field_name,
+        warnings=warnings,
+    )
+    mode = read_enum(
+        section,
+        key="mode",
+        default="background",
+        valid_values=VALID_CUSTOM_ACTION_MODES,
+        valid_display="background, terminal",
+        section_name=field_name,
+        warnings=warnings,
+    )
+    cwd = _read_optional_string(section, "cwd", field_name, warnings)
+    extensions = _read_extensions(section, field_name, warnings)
+    return CustomActionConfig(
+        name=name.strip(),
+        command=tuple(command_parts),
+        when=when,
+        mode=mode,
+        cwd=cwd,
+        extensions=extensions,
+    )
+
+
+def _read_optional_string(
+    section: dict[str, object],
+    key: str,
+    field_name: str,
+    warnings: list[str],
+) -> str | None:
+    value = section.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        warnings.append(f"{field_name}.{key} must be a non-empty string; using default.")
+        return None
+    return value.strip()
+
+
+def _read_extensions(
+    section: dict[str, object],
+    field_name: str,
+    warnings: list[str],
+) -> tuple[str, ...]:
+    raw_extensions = section.get("extensions")
+    if raw_extensions is None:
+        return ()
+    if not isinstance(raw_extensions, list):
+        warnings.append(f"{field_name}.extensions must be an array of strings; ignoring it.")
+        return ()
+    extensions: list[str] = []
+    for index, item in enumerate(raw_extensions):
+        if not isinstance(item, str) or not item.strip():
+            warnings.append(f"{field_name}.extensions[{index}] must be a string; ignoring it.")
+            continue
+        normalized = item.strip().casefold()
+        if normalized.startswith("."):
+            normalized = normalized[1:]
+        if normalized:
+            extensions.append(normalized)
+    return tuple(dict.fromkeys(extensions))
 
 
 def load_logging_config(section: object, warnings: list[str]) -> LoggingConfig:

@@ -11,6 +11,8 @@ PreviewSyntaxTheme = str
 PreviewMaxKiB = Literal[64, 128, 256, 512, 1024]
 ConfigLogLevel = Literal["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
 PasteConflictAction = Literal["overwrite", "skip", "rename", "prompt"]
+CustomActionWhen = Literal["always", "single_file", "selection"]
+CustomActionMode = Literal["background", "terminal"]
 
 
 @dataclass(frozen=True)
@@ -113,6 +115,25 @@ class FileSearchConfig:
 
 
 @dataclass(frozen=True)
+class CustomActionConfig:
+    """User-defined command palette action."""
+
+    name: str
+    command: tuple[str, ...]
+    when: CustomActionWhen = "always"
+    mode: CustomActionMode = "background"
+    cwd: str | None = None
+    extensions: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ActionsConfig:
+    """User-defined command palette actions."""
+
+    custom: tuple[CustomActionConfig, ...] = ()
+
+
+@dataclass(frozen=True)
 class AppConfig:
     """Normalized application configuration."""
 
@@ -125,6 +146,7 @@ class AppConfig:
     bookmarks: BookmarkConfig = field(default_factory=BookmarkConfig)
     help_bar: HelpBarConfig = field(default_factory=HelpBarConfig)
     file_search: FileSearchConfig = field(default_factory=FileSearchConfig)
+    actions: ActionsConfig = field(default_factory=ActionsConfig)
 
 
 @dataclass(frozen=True)

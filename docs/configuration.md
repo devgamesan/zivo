@@ -39,6 +39,7 @@ If the file does not exist yet, zivo creates it automatically with default value
 | `logging` | `path` | Path string | Optional log file path. Leave empty to use `zivo.log` next to `config.toml`. Default log file locations: Linux: `~/.config/zivo/zivo.log`, macOS: `~/Library/Application Support/zivo/zivo.log`. |
 | `bookmarks` | `paths` | Array of absolute path strings | Bookmarked directories shown by `b` and `Show bookmarks` in the command palette. Duplicate paths are removed when the config is loaded. |
 | `file_search` | `max_results` | Integer or empty | Maximum number of file search results. Leave empty for unlimited (default). Set to reduce memory usage on large repositories. |
+| `actions` | `custom` | Array of action tables | Custom command palette actions. See [Custom Actions](custom-actions.md). |
 
 ## Example
 

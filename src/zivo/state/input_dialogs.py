@@ -2,6 +2,7 @@
 
 from .actions import (
     CancelArchiveExtractConfirmation,
+    CancelCustomActionConfirmation,
     CancelDeleteConfirmation,
     CancelEmptyTrashConfirmation,
     CancelFilterInput,
@@ -12,6 +13,7 @@ from .actions import (
     CancelSymlinkOverwriteConfirmation,
     CancelZipCompressConfirmation,
     ConfirmArchiveExtract,
+    ConfirmCustomAction,
     ConfirmDeleteTargets,
     ConfirmEmptyTrash,
     ConfirmFilterInput,
@@ -109,6 +111,13 @@ def dispatch_confirm_input(
         if key == "enter":
             return supported(ConfirmSymlinkOverwrite())
         return warn("Use Enter to overwrite the destination or Esc to return")
+
+    if state.custom_action_confirmation is not None:
+        if key == "escape":
+            return supported(CancelCustomActionConfirmation())
+        if key == "enter":
+            return supported(ConfirmCustomAction())
+        return warn("Use Enter to run the custom action or Esc to cancel")
 
     if state.name_conflict is not None:
         if key in {"enter", "escape"}:

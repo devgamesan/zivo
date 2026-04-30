@@ -7,6 +7,7 @@ from zivo.app_runtime_core import CompleteActionHandler, FailureActionHandler, f
 from zivo.models import (
     CreateZipArchivePreparationResult,
     CreateZipArchiveResult,
+    CustomActionResult,
     ExtractArchivePreparationResult,
     ExtractArchiveResult,
     FileMutationResult,
@@ -34,6 +35,7 @@ from zivo.state import (
     RunAttributeInspectionEffect,
     RunClipboardPasteEffect,
     RunConfigSaveEffect,
+    RunCustomActionEffect,
     RunDirectorySizeEffect,
     RunExternalLaunchEffect,
     RunFileMutationEffect,
@@ -63,6 +65,8 @@ from zivo.state.actions import (
     ConfigSaveCompleted,
     ConfigSaveFailed,
     CurrentPaneSnapshotLoaded,
+    CustomActionCompleted,
+    CustomActionFailed,
     DirectorySizesFailed,
     DirectorySizesLoaded,
     ExternalLaunchCompleted,
@@ -322,6 +326,19 @@ def complete_shell_command(
     )
 
 
+def complete_custom_action(
+    effect: RunCustomActionEffect,
+    result: CustomActionResult,
+) -> tuple[Any, ...]:
+    return (
+        CustomActionCompleted(
+            request_id=effect.request_id,
+            request=effect.request,
+            result=result,
+        ),
+    )
+
+
 def complete_file_search(effect: RunFileSearchEffect, result: object) -> tuple[Any, ...]:
     return (
         FileSearchCompleted(
@@ -413,6 +430,10 @@ failed_external_launch = make_failed_handler(
     extra_field_builders={"request": lambda e, _err, _msg: e.request},
 )
 failed_shell_command = make_failed_handler(ShellCommandFailed)
+failed_custom_action = make_failed_handler(
+    CustomActionFailed,
+    extra_field_builders={"request": lambda e, _err, _msg: e.request},
+)
 failed_undo = make_failed_handler(UndoFailed)
 failed_file_search = make_failed_handler(
     FileSearchFailed,
@@ -445,6 +466,7 @@ RESULT_COMPLETE_HANDLERS: tuple[tuple[type[Any], CompleteActionHandler], ...] = 
     (CreateZipArchiveResult, complete_zip_compress),
     (FileMutationResult, complete_file_mutation),
     (UndoResult, complete_undo),
+    (CustomActionResult, complete_custom_action),
 )
 
 COMPLETE_ACTION_HANDLERS: tuple[tuple[type[Any], CompleteActionHandler], ...] = (
@@ -458,6 +480,7 @@ COMPLETE_ACTION_HANDLERS: tuple[tuple[type[Any], CompleteActionHandler], ...] = 
     (RunAttributeInspectionEffect, complete_attribute_inspection),
     (RunExternalLaunchEffect, complete_external_launch),
     (RunShellCommandEffect, complete_shell_command),
+    (RunCustomActionEffect, complete_custom_action),
     (RunFileSearchEffect, complete_file_search),
     (RunGrepSearchEffect, complete_grep_search),
     (RunTextReplacePreviewEffect, complete_text_replace_preview),
@@ -481,6 +504,7 @@ FAILED_ACTION_HANDLERS: tuple[tuple[type[Any], FailureActionHandler], ...] = (
     (RunAttributeInspectionEffect, failed_attribute_inspection),
     (RunExternalLaunchEffect, failed_external_launch),
     (RunShellCommandEffect, failed_shell_command),
+    (RunCustomActionEffect, failed_custom_action),
     (RunUndoEffect, failed_undo),
     (RunFileSearchEffect, failed_file_search),
     (RunGrepSearchEffect, failed_grep_search),

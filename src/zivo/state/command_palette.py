@@ -5,6 +5,7 @@ import platform
 from dataclasses import dataclass
 
 from zivo.archive_utils import is_supported_archive_path
+from zivo.models import CustomActionContext, custom_action_matches
 from zivo.platform_support import is_split_terminal_supported
 from zivo.windows_paths import display_path
 
@@ -314,6 +315,8 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
         ),
     ]
 
+    items.extend(_build_custom_action_items(state))
+
     if has_single_target:
         items.append(
             CommandPaletteItem(
@@ -473,6 +476,32 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
     )
 
     return tuple(items)
+
+
+def _build_custom_action_items(state: AppState) -> list[CommandPaletteItem]:
+    context = _custom_action_context(state)
+    items: list[CommandPaletteItem] = []
+    for index, action in enumerate(state.config.actions.custom):
+        if custom_action_matches(action, context):
+            items.append(
+                CommandPaletteItem(
+                    id=f"custom_action:{index}",
+                    label=action.name,
+                    shortcut=None,
+                    enabled=True,
+                )
+            )
+    return items
+
+
+def _custom_action_context(state: AppState) -> CustomActionContext:
+    single_file_paths = select_target_file_paths(state)
+    focused_file = single_file_paths[0] if len(single_file_paths) == 1 else None
+    return CustomActionContext(
+        cwd=state.current_path,
+        focused_file=focused_file,
+        selection=select_target_paths(state),
+    )
 
 
 def _build_transfer_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, ...]:

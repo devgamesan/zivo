@@ -36,6 +36,7 @@ from zivo.services import (
     BrowserSnapshotLoader,
     ClipboardOperationService,
     ConfigSaveService,
+    CustomActionService,
     DirectorySizeService,
     ExternalLaunchService,
     FileMutationService,
@@ -46,6 +47,7 @@ from zivo.services import (
     LiveBrowserSnapshotLoader,
     LiveClipboardOperationService,
     LiveConfigSaveService,
+    LiveCustomActionService,
     LiveDirectorySizeService,
     LiveExternalLaunchService,
     LiveFileMutationService,
@@ -183,6 +185,7 @@ class zivoApp(App[None]):
         grep_search_service: GrepSearchService | None = None,
         text_replace_service: TextReplaceService | None = None,
         shell_command_service: ShellCommandService | None = None,
+        custom_action_service: CustomActionService | None = None,
         undo_service: UndoService | None = None,
         *,
         app_config: AppConfig | None = None,
@@ -226,6 +229,7 @@ class zivoApp(App[None]):
         self._grep_search_service = grep_search_service or LiveGrepSearchService()
         self._text_replace_service = text_replace_service or LiveTextReplaceService()
         self._shell_command_service = shell_command_service or LiveShellCommandService()
+        self._custom_action_service = custom_action_service or LiveCustomActionService()
         self._undo_service = undo_service or LiveUndoService()
         self._pending_workers: dict[str, Effect] = {}
         self._child_pane_timer: Timer | None = None
