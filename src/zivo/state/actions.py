@@ -199,6 +199,7 @@ from .actions_palette import (
     OpenFindResultInGuiEditor,
     OpenGrepResultInEditor,
     OpenGrepResultInGuiEditor,
+    OpenGrepSearchWorkspace,
     SelectedFilesGrepKeywordChanged,
     SetCommandPaletteQuery,
     SetFindReplaceField,
@@ -351,6 +352,7 @@ Action = (
     | MoveCursorAndSelectRange
     | SetCursorPath
     | EnterCursorDirectory
+    | OpenGrepSearchWorkspace
     | EnterSearchWorkspaceResult
     | GoToParentDirectory
     | GoToHomeDirectory

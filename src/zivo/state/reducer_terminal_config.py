@@ -486,12 +486,18 @@ def _handle_open_terminal_at_path(
     )
 
 
+def _decode_target_paths(state: AppState, paths: tuple[str, ...]) -> tuple[str, ...]:
+    if state.search_workspace is not None and state.search_workspace.kind == "grep":
+        return tuple(p.rsplit("\x00", 1)[0] for p in paths)
+    return paths
+
+
 def _handle_copy_paths_to_clipboard(
     state: AppState,
     action: CopyPathsToClipboard,
     reduce_state: ReducerFn,
 ) -> ReduceResult:
-    target_paths = select_target_paths(state)
+    target_paths = _decode_target_paths(state, select_target_paths(state))
     if not target_paths:
         return finalize(
             replace(
