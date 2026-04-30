@@ -26,6 +26,13 @@ command = ["lazygit"]
 when = "always"
 mode = "terminal"
 cwd = "{cwd}"
+
+[[actions.custom]]
+name = "Open lazygit in new window"
+command = ["lazygit"]
+when = "always"
+mode = "terminal_window"
+cwd = "{cwd}"
 ```
 
 ## フィールド
