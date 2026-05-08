@@ -7,9 +7,11 @@ from rich.text import Text
 from textual.widgets import DataTable
 
 from zivo.models import ChildPaneViewState, CurrentPaneRowUpdate, CurrentSummaryState, PaneEntry
+from zivo.ui.pane_rendering import _FileEntryLabelCache
 from zivo.ui.panes import (
     ChildPane,
     MainPane,
+    SidePane,
     _ft_resolve_style,
     _guess_preview_lexer,
     _render_file_label,
@@ -326,6 +328,87 @@ def test_render_cell_selected_entry() -> None:
     )
     assert result.plain == "file.txt"
     assert result.style == styles["ft-selected"]
+
+
+def test_file_entry_label_cache_updates_only_changed_hover_rows(monkeypatch) -> None:
+    styles = _style_map()
+    entries = tuple(
+        PaneEntry(f"file-{index}.txt", "file", path=f"/path/file-{index}.txt")
+        for index in range(100)
+    )
+    cache = _FileEntryLabelCache()
+    cache.rebuild(
+        entries,
+        40,
+        styles,
+        selected_directory_style="ft-directory-sel",
+        selected_cut_style="ft-cut",
+    )
+
+    calls: list[str] = []
+
+    def counting_render_file_label(
+        entry,
+        render_width,
+        styles,
+        *,
+        selected_directory_style,
+        selected_cut_style,
+        hovered_path=None,
+    ):
+        calls.append(entry.path)
+        return _render_file_label(
+            entry,
+            render_width,
+            styles,
+            selected_directory_style=selected_directory_style,
+            selected_cut_style=selected_cut_style,
+            hovered_path=hovered_path,
+        )
+
+    monkeypatch.setattr(
+        "zivo.ui.pane_rendering._render_file_label",
+        counting_render_file_label,
+    )
+
+    rendered = cache.update_hover(
+        None,
+        "/path/file-10.txt",
+        styles,
+        selected_directory_style="ft-directory-sel",
+        selected_cut_style="ft-cut",
+    )
+
+    assert rendered is not None
+    assert calls == ["/path/file-10.txt"]
+
+    calls.clear()
+    rendered = cache.update_hover(
+        "/path/file-10.txt",
+        "/path/file-11.txt",
+        styles,
+        selected_directory_style="ft-directory-sel",
+        selected_cut_style="ft-cut",
+    )
+
+    assert rendered is not None
+    assert calls == ["/path/file-10.txt", "/path/file-11.txt"]
+
+
+def test_side_pane_mouse_move_without_entry_meta_does_not_refresh() -> None:
+    pane = SidePane(
+        "Parent",
+        (PaneEntry("file.txt", "file", path="/path/file.txt"),),
+        id="parent-pane",
+    )
+    pane._refresh_hovered_labels = Mock(return_value=True)  # type: ignore[method-assign]
+    pane._refresh_rendered_labels = Mock()  # type: ignore[method-assign]
+    event = SimpleNamespace(style=SimpleNamespace(meta={}))
+
+    pane.on_mouse_move(event)
+
+    pane._refresh_hovered_labels.assert_not_called()
+    pane._refresh_rendered_labels.assert_not_called()
 
 
 def test_style_without_background_keeps_foreground_and_text_attributes() -> None:

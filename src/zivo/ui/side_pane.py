@@ -14,6 +14,7 @@ from zivo.models.shell_data import PaneEntry
 
 from .pane_rendering import (
     FILE_TYPE_COMPONENT_CLASSES,
+    _FileEntryLabelCache,
     _render_file_entries,
     _resolve_component_styles,
 )
@@ -50,6 +51,7 @@ class SidePane(Vertical):
         self._last_render_width = 0
         self._last_clicked_path: str | None = None
         self._hovered_path: str | None = None
+        self._label_cache = _FileEntryLabelCache()
 
     @property
     def list_view_id(self) -> str | None:
@@ -93,15 +95,23 @@ class SidePane(Vertical):
     def on_mouse_move(self, event: events.MouseMove) -> None:
         meta = event.style.meta
         path = meta.get("entry_path")
-        new_path = str(path) if path is not None else None
+        if path is None:
+            return
+        new_path = str(path)
+        if not self._label_cache.contains_path(new_path):
+            return
         if new_path != self._hovered_path:
+            previous_path = self._hovered_path
             self._hovered_path = new_path
-            self._refresh_rendered_labels(force=True)
+            if not self._refresh_hovered_labels(previous_path, new_path):
+                self._refresh_rendered_labels(force=True)
 
     def on_leave(self, _event: events.Leave) -> None:
         if self._hovered_path is not None:
+            previous_path = self._hovered_path
             self._hovered_path = None
-            self._refresh_rendered_labels(force=True)
+            if not self._refresh_hovered_labels(previous_path, None):
+                self._refresh_rendered_labels(force=True)
 
     async def set_entries(self, entries: Sequence[PaneEntry]) -> None:
         """Replace the rendered entries without remounting the pane."""
@@ -113,7 +123,7 @@ class SidePane(Vertical):
         content = self._content_widget()
         render_width = self._entry_width(content)
         content.update(
-            _render_file_entries(
+            self._label_cache.rebuild(
                 next_entries,
                 render_width,
                 self._ft_styles,
@@ -134,7 +144,7 @@ class SidePane(Vertical):
         if render_width <= 0 or (not force and render_width == self._last_render_width):
             return
         content.update(
-            _render_file_entries(
+            self._label_cache.rebuild(
                 self._entries,
                 render_width,
                 self._ft_styles,
@@ -144,6 +154,30 @@ class SidePane(Vertical):
             )
         )
         self._last_render_width = render_width
+
+    def _refresh_hovered_labels(
+        self, previous_path: str | None, next_path: str | None
+    ) -> bool:
+        try:
+            content = self._content_widget()
+        except NoMatches:
+            return False
+        render_width = self._entry_width(content)
+        if render_width <= 0:
+            return False
+        if render_width != self._last_render_width:
+            return False
+        rendered = self._label_cache.update_hover(
+            previous_path,
+            next_path,
+            self._ft_styles,
+            selected_directory_style=self.SELECTED_DIRECTORY_STYLE,
+            selected_cut_style=self.SELECTED_CUT_STYLE,
+        )
+        if rendered is None:
+            return False
+        content.update(rendered)
+        return True
 
     def _content_widget(self) -> Static:
         return self.query_one(f"#{self.list_view_id}", Static)

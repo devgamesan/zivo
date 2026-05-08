@@ -253,3 +253,83 @@ def _render_file_entries(
             for entry in entries
         ]
     )
+
+
+def _join_file_labels(labels: Sequence[Text]) -> Text:
+    """Join pre-rendered file labels into the pane's single Text block."""
+
+    if not labels:
+        return Text()
+    return Text("\n").join(labels)
+
+
+class _FileEntryLabelCache:
+    """Cache rendered side-pane labels for targeted hover updates."""
+
+    def __init__(self) -> None:
+        self.entries: tuple[PaneEntry, ...] = ()
+        self.render_width = 0
+        self.labels: list[Text] = []
+        self.path_to_index: dict[str, int] = {}
+
+    def contains_path(self, path: str) -> bool:
+        return path in self.path_to_index
+
+    def rebuild(
+        self,
+        entries: Sequence[PaneEntry],
+        render_width: int,
+        styles: dict[str, Style],
+        *,
+        selected_directory_style: str,
+        selected_cut_style: str,
+        hovered_path: str | None = None,
+    ) -> Text:
+        self.entries = tuple(entries)
+        self.render_width = render_width
+        self.labels = [
+            _render_file_label(
+                entry,
+                render_width,
+                styles,
+                selected_directory_style=selected_directory_style,
+                selected_cut_style=selected_cut_style,
+                hovered_path=hovered_path,
+            )
+            for entry in self.entries
+        ]
+        self.path_to_index = {}
+        for index, entry in enumerate(self.entries):
+            self.path_to_index.setdefault(entry.path, index)
+        return self.renderable()
+
+    def renderable(self) -> Text:
+        return _join_file_labels(self.labels)
+
+    def update_hover(
+        self,
+        previous_path: str | None,
+        next_path: str | None,
+        styles: dict[str, Style],
+        *,
+        selected_directory_style: str,
+        selected_cut_style: str,
+    ) -> Text | None:
+        changed_indexes = {
+            self.path_to_index[path]
+            for path in (previous_path, next_path)
+            if path is not None and path in self.path_to_index
+        }
+        if not changed_indexes:
+            return None
+
+        for index in sorted(changed_indexes):
+            self.labels[index] = _render_file_label(
+                self.entries[index],
+                self.render_width,
+                styles,
+                selected_directory_style=selected_directory_style,
+                selected_cut_style=selected_cut_style,
+                hovered_path=next_path,
+            )
+        return self.renderable()

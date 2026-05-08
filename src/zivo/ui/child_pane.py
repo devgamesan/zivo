@@ -17,6 +17,7 @@ from zivo.models.shell_data import ChildPaneViewState
 
 from .pane_rendering import (
     FILE_TYPE_COMPONENT_CLASSES,
+    _FileEntryLabelCache,
     _guess_preview_lexer,
     _render_file_entries,
     _resolve_component_styles,
@@ -64,6 +65,7 @@ class ChildPane(Vertical):
         self._last_render_signature: object | None = None
         self._last_clicked_path: str | None = None
         self._hovered_path: str | None = None
+        self._label_cache = _FileEntryLabelCache()
         self._chafa_cached_content: str | None = None
         self._last_chafa_width: int = 0
 
@@ -148,17 +150,25 @@ class ChildPane(Vertical):
             return
         meta = event.style.meta
         path = meta.get("entry_path")
-        new_path = str(path) if path is not None else None
+        if path is None:
+            return
+        new_path = str(path)
+        if not self._label_cache.contains_path(new_path):
+            return
         if new_path != self._hovered_path:
+            previous_path = self._hovered_path
             self._hovered_path = new_path
-            self._refresh_rendered_content(force=True)
+            if not self._refresh_hovered_labels(previous_path, new_path):
+                self._refresh_rendered_content(force=True)
 
     def on_leave(self, _event: events.Leave) -> None:
         if self._state.is_preview:
             return
         if self._hovered_path is not None:
+            previous_path = self._hovered_path
             self._hovered_path = None
-            self._refresh_rendered_content(force=True)
+            if not self._refresh_hovered_labels(previous_path, None):
+                self._refresh_rendered_content(force=True)
 
     async def set_state(self, state: ChildPaneViewState) -> None:
         if state == self._state:
@@ -273,7 +283,7 @@ class ChildPane(Vertical):
         ):
             return True
         widget.update(
-            _render_file_entries(
+            self._label_cache.rebuild(
                 self._state.entries,
                 render_width,
                 self._ft_styles,
@@ -284,6 +294,32 @@ class ChildPane(Vertical):
         )
         self._last_render_width = render_width
         self._last_render_signature = render_signature
+        return True
+
+    def _refresh_hovered_labels(
+        self, previous_path: str | None, next_path: str | None
+    ) -> bool:
+        try:
+            widget = self._list_widget()
+        except NoMatches:
+            return False
+        render_width = max(0, widget.size.width - SidePane.ENTRY_HORIZONTAL_PADDING)
+        if render_width <= 0:
+            return False
+        if render_width != self._last_render_width:
+            return False
+        if self._render_signature(self._state) != self._last_render_signature:
+            return False
+        rendered = self._label_cache.update_hover(
+            previous_path,
+            next_path,
+            self._ft_styles,
+            selected_directory_style=self.SELECTED_DIRECTORY_STYLE,
+            selected_cut_style=self.SELECTED_CUT_STYLE,
+        )
+        if rendered is None:
+            return False
+        widget.update(rendered)
         return True
 
     def _list_widget(self) -> Static:
