@@ -25,12 +25,13 @@ from .models import (
 )
 from .selectors_shared import (
     SIDE_PANE_SORT,
+    _directory_size_cache_by_path,
     _find_current_cursor_index,
     _format_child_preview_title,
     _format_current_entry_name_detail,
-    _format_entry_size_label,
+    _format_entry_size_label_from_cache,
     _format_permissions_detail_label,
-    _format_side_pane_name_detail,
+    _format_side_pane_name_detail_from_cache,
     _format_sort_label,
     _format_tab_label,
     _select_active_app_theme,
@@ -508,15 +509,16 @@ def _select_current_pane_row_updates(
     changed_paths: tuple[str, ...],
 ) -> tuple[CurrentPaneRowUpdate, ...]:
     changed_path_set = frozenset(changed_paths)
+    cache_by_path = _directory_size_cache_by_path(directory_size_cache)
     return tuple(
         CurrentPaneRowUpdate(
             path=entry.path,
             entry=_to_pane_entry(
                 entry,
                 name_detail=_format_current_entry_name_detail(entry),
-                size_label_override=_format_entry_size_label(
+                size_label_override=_format_entry_size_label_from_cache(
                     entry,
-                    directory_size_cache,
+                    cache_by_path,
                     display_directory_sizes=display_directory_sizes,
                 ),
                 selected=entry.path in selected_paths,
@@ -537,12 +539,13 @@ def _select_current_pane_size_updates(
     changed_paths: tuple[str, ...],
 ) -> tuple[CurrentPaneSizeUpdate, ...]:
     changed_path_set = frozenset(changed_paths)
+    cache_by_path = _directory_size_cache_by_path(directory_size_cache)
     return tuple(
         CurrentPaneSizeUpdate(
             path=entry.path,
-            size_label=_format_entry_size_label(
+            size_label=_format_entry_size_label_from_cache(
                 entry,
-                directory_size_cache,
+                cache_by_path,
                 display_directory_sizes=display_directory_sizes,
             ),
             row_index=row_index,
@@ -571,13 +574,14 @@ def _select_current_pane_entries(
     selected_paths: frozenset[str],
     cut_paths: frozenset[str],
 ) -> tuple[PaneEntry, ...]:
+    cache_by_path = _directory_size_cache_by_path(directory_size_cache)
     return tuple(
         _to_pane_entry(
             entry,
             name_detail=_format_current_entry_name_detail(entry),
-            size_label_override=_format_entry_size_label(
+            size_label_override=_format_entry_size_label_from_cache(
                 entry,
-                directory_size_cache,
+                cache_by_path,
                 display_directory_sizes=display_directory_sizes,
             ),
             selected=entry.path in selected_paths,
@@ -595,12 +599,13 @@ def _select_side_pane_entries(
     selected_path: str | None,
     cut_paths: frozenset[str],
 ) -> tuple[PaneEntry, ...]:
+    cache_by_path = _directory_size_cache_by_path(directory_size_cache)
     return tuple(
         _to_pane_entry(
             entry,
-            name_detail=_format_side_pane_name_detail(
+            name_detail=_format_side_pane_name_detail_from_cache(
                 entry,
-                directory_size_cache,
+                cache_by_path,
                 display_directory_sizes=display_directory_sizes,
             ),
             selected=entry.path == selected_path,

@@ -718,11 +718,24 @@ def _format_entry_size_label(
     *,
     display_directory_sizes: bool,
 ) -> str:
+    return _format_entry_size_label_from_cache(
+        entry,
+        _directory_size_cache_by_path(directory_size_cache),
+        display_directory_sizes=display_directory_sizes,
+    )
+
+
+def _format_entry_size_label_from_cache(
+    entry: DirectoryEntryState,
+    cache_by_path: dict[str, DirectorySizeCacheEntry],
+    *,
+    display_directory_sizes: bool,
+) -> str:
     if entry.kind != "dir":
         return _format_size_label(entry.size_bytes)
     if not display_directory_sizes:
         return "-"
-    cached_entry = _directory_size_cache_by_path(directory_size_cache).get(entry.path)
+    cached_entry = cache_by_path.get(entry.path)
     if cached_entry is None or cached_entry.status == "failed":
         return "-"
     if cached_entry.status == "pending":
@@ -736,11 +749,24 @@ def _format_side_pane_name_detail(
     *,
     display_directory_sizes: bool,
 ) -> str | None:
+    return _format_side_pane_name_detail_from_cache(
+        entry,
+        _directory_size_cache_by_path(directory_size_cache),
+        display_directory_sizes=display_directory_sizes,
+    )
+
+
+def _format_side_pane_name_detail_from_cache(
+    entry: DirectoryEntryState,
+    cache_by_path: dict[str, DirectorySizeCacheEntry],
+    *,
+    display_directory_sizes: bool,
+) -> str | None:
     if entry.kind != "dir":
         return None
-    size_label = _format_entry_size_label(
+    size_label = _format_entry_size_label_from_cache(
         entry,
-        directory_size_cache,
+        cache_by_path,
         display_directory_sizes=display_directory_sizes,
     )
     if size_label == "-":
