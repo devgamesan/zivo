@@ -105,6 +105,7 @@ class MainPane(Vertical):
         super().__init__(id=id, classes=classes)
         self._title = title
         self._entries = tuple(entries)
+        self._path_row_index = self._build_path_row_index(self._entries)
         self._summary = summary
         self._cursor_index = cursor_index
         self._cursor_visible = cursor_visible
@@ -188,6 +189,7 @@ class MainPane(Vertical):
 
         previous_entries = self._entries
         self._entries = next_entries
+        self._path_row_index = self._build_path_row_index(self._entries)
         self._cursor_index = cursor_index
         table = self.query_one(DataTable)
         if entries_changed:
@@ -276,6 +278,7 @@ class MainPane(Vertical):
             return
 
         self._entries = tuple(next_entries)
+        self._path_row_index = self._build_path_row_index(self._entries)
         table = self.query_one(DataTable)
         for row_key, entry in changed_rows:
             try:
@@ -312,6 +315,7 @@ class MainPane(Vertical):
             return
 
         self._entries = tuple(next_entries)
+        self._path_row_index = self._build_path_row_index(self._entries)
         table = self.query_one(DataTable)
         column_widths = self._allocate_column_widths(table)
         for row_key, entry in changed_rows:
@@ -406,16 +410,21 @@ class MainPane(Vertical):
     def _slot_row_key(index: int) -> str:
         return f"{MainPane.ROW_KEY_PREFIX}{index}"
 
+    @staticmethod
+    def _build_path_row_index(entries: Sequence[PaneEntry]) -> dict[str, int]:
+        path_row_index: dict[str, int] = {}
+        for index, entry in enumerate(entries):
+            if entry.path and entry.path not in path_row_index:
+                path_row_index[entry.path] = index
+        return path_row_index
+
     def _resolve_row_index(self, row_index: int, path: str) -> int | None:
         if 0 <= row_index < len(self._entries):
             if not path or self._entries[row_index].path == path:
                 return row_index
         if not path:
             return None
-        for index, entry in enumerate(self._entries):
-            if entry.path == path:
-                return index
-        return None
+        return self._path_row_index.get(path)
 
     def _build_row_cells(
         self,

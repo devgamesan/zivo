@@ -621,6 +621,100 @@ def test_apply_size_updates_updates_only_target_slot() -> None:
     assert table.update_cell.call_args.args[1] == "size"
 
 
+def test_apply_size_updates_resolves_stale_row_index_by_path_index() -> None:
+    summary = CurrentSummaryState(item_count=3, selected_count=0, sort_label="Name")
+    entries = (
+        PaneEntry("a.txt", "file", path="/path/a.txt", size_label="1 B"),
+        PaneEntry("b.txt", "file", path="/path/b.txt", size_label="2 B"),
+        PaneEntry("c.txt", "file", path="/path/c.txt", size_label="3 B"),
+    )
+    pane = MainPane(title="Test", entries=entries, summary=summary)
+    table = Mock(spec=DataTable)
+    pane.query_one = Mock(return_value=table)
+
+    pane.apply_size_updates(
+        (
+            CurrentPaneSizeUpdate(
+                path="/path/c.txt",
+                size_label="4 B",
+                row_index=0,
+            ),
+        )
+    )
+
+    assert pane._entries[2].size_label == "4 B"
+    table.update_cell.assert_called_once()
+    assert table.update_cell.call_args.args[0] == "__slot__:2"
+
+
+def test_apply_size_updates_path_fallback_keeps_first_duplicate_match() -> None:
+    summary = CurrentSummaryState(item_count=3, selected_count=0, sort_label="Name")
+    entries = (
+        PaneEntry("first.txt", "file", path="/path/shared.txt", size_label="1 B"),
+        PaneEntry("other.txt", "file", path="/path/other.txt", size_label="2 B"),
+        PaneEntry("second.txt", "file", path="/path/shared.txt", size_label="3 B"),
+    )
+    pane = MainPane(title="Test", entries=entries, summary=summary)
+    table = Mock(spec=DataTable)
+    pane.query_one = Mock(return_value=table)
+
+    pane.apply_size_updates(
+        (
+            CurrentPaneSizeUpdate(
+                path="/path/shared.txt",
+                size_label="4 B",
+                row_index=1,
+            ),
+        )
+    )
+
+    assert pane._entries[0].size_label == "4 B"
+    assert pane._entries[2].size_label == "3 B"
+    table.update_cell.assert_called_once()
+    assert table.update_cell.call_args.args[0] == "__slot__:0"
+
+
+def test_set_entries_refreshes_path_row_index() -> None:
+    summary = CurrentSummaryState(item_count=2, selected_count=0, sort_label="Name")
+    entries = (
+        PaneEntry("a.txt", "file", path="/path/a.txt", size_label="1 B"),
+        PaneEntry("b.txt", "file", path="/path/b.txt", size_label="2 B"),
+    )
+    next_entries = (
+        PaneEntry("c.txt", "file", path="/path/c.txt", size_label="3 B"),
+        PaneEntry("d.txt", "file", path="/path/d.txt", size_label="4 B"),
+    )
+    pane = MainPane(title="Test", entries=entries, summary=summary)
+    table = Mock(spec=DataTable)
+    table.size.width = 80
+    table.cell_padding = 1
+    pane._last_table_width = 80
+    pane.query_one = Mock(return_value=table)
+
+    pane.set_entries(next_entries)
+    table.reset_mock()
+
+    pane.apply_size_updates(
+        (
+            CurrentPaneSizeUpdate(
+                path="/path/a.txt",
+                size_label="9 B",
+                row_index=1,
+            ),
+            CurrentPaneSizeUpdate(
+                path="/path/d.txt",
+                size_label="5 B",
+                row_index=0,
+            ),
+        )
+    )
+
+    assert pane._entries[0].size_label == "3 B"
+    assert pane._entries[1].size_label == "5 B"
+    table.update_cell.assert_called_once()
+    assert table.update_cell.call_args.args[0] == "__slot__:1"
+
+
 def test_set_entries_clears_stale_hover_cursor() -> None:
     summary = CurrentSummaryState(item_count=2, selected_count=0, sort_label="Name")
     entries = (
