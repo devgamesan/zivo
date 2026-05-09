@@ -119,35 +119,33 @@ class LiveFileSearchService:
                 return ()
             directory = stack.pop()
             try:
-                children = tuple(directory.iterdir())
+                for child in directory.iterdir():
+                    if is_cancelled is not None and is_cancelled():
+                        return ()
+                    if not show_hidden and child.name.startswith("."):
+                        continue
+                    is_dir = _is_walkable_directory(child)
+                    if is_dir:
+                        stack.append(child)
+                    if search_target == "directories" and not is_dir:
+                        continue
+                    if search_target == "files" and is_dir:
+                        continue
+                    if not parsed_query.matches(child.name):
+                        continue
+                    results.append(
+                        FileSearchResultState(
+                            path=str(child),
+                            display_path=child.relative_to(root).as_posix(),
+                            entry_type="directory" if is_dir else "file",
+                        )
+                    )
+
+                    if max_results is not None and len(results) >= max_results:
+                        results.sort(key=lambda result: result.display_path.casefold())
+                        return tuple(results)
             except (FileNotFoundError, PermissionError):
                 continue
-
-            for child in children:
-                if is_cancelled is not None and is_cancelled():
-                    return ()
-                if not show_hidden and child.name.startswith("."):
-                    continue
-                is_dir = _is_walkable_directory(child)
-                if is_dir:
-                    stack.append(child)
-                if search_target == "directories" and not is_dir:
-                    continue
-                if search_target == "files" and is_dir:
-                    continue
-                if not parsed_query.matches(child.name):
-                    continue
-                results.append(
-                    FileSearchResultState(
-                        path=str(child),
-                        display_path=child.relative_to(root).as_posix(),
-                        entry_type="directory" if is_dir else "file",
-                    )
-                )
-
-                if max_results is not None and len(results) >= max_results:
-                    results.sort(key=lambda result: result.display_path.casefold())
-                    return tuple(results)
 
         results.sort(key=lambda result: result.display_path.casefold())
         return tuple(results)
