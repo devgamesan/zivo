@@ -216,6 +216,47 @@ def test_child_pane_image_preview_resize_ignores_stale_chafa_results(
     assert widget.updates[-1].plain == "fresh\n"
 
 
+def test_child_pane_reuses_image_preview_loader_for_resize_workers() -> None:
+    class StubImagePreviewLoader:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, int, str, int]] = []
+
+        def load_preview(
+            self,
+            path,
+            *,
+            preview_columns: int,
+            image_preview_format: str = "symbols",
+        ):
+            self.calls.append(
+                (str(path), preview_columns, image_preview_format, id(self))
+            )
+            return SimpleNamespace(content=f"{preview_columns}:{image_preview_format}\n")
+
+    loader = StubImagePreviewLoader()
+    pane = ChildPane(
+        ChildPaneViewState(
+            title="Preview: image.png",
+            preview_path="/tmp/image.png",
+            preview_content="seed\n",
+            preview_kind="image",
+        ),
+        image_preview_loader=loader,
+    )
+    pane.run_worker = lambda worker, **_kwargs: worker()  # type: ignore[method-assign]
+
+    pane._chafa_resize_request_id = 1
+    pane._pending_chafa_resize_key = ("/tmp/image.png", 40, "symbols")
+    pane._start_chafa_resize_worker(1, "/tmp/image.png", 40, "symbols")
+    pane._pending_chafa_resize_key = ("/tmp/image.png", 60, "symbols")
+    pane._start_chafa_resize_worker(1, "/tmp/image.png", 60, "symbols")
+
+    assert loader.calls == [
+        ("/tmp/image.png", 40, "symbols", id(loader)),
+        ("/tmp/image.png", 60, "symbols", id(loader)),
+    ]
+
+
 def test_side_pane_selected_directory_uses_text_only_highlight() -> None:
     styles = _style_map()
     entry = PaneEntry("docs", "dir", selected=True)

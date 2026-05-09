@@ -308,6 +308,7 @@ class ImagePreviewLoader(Protocol):
         path: Path,
         *,
         preview_columns: int,
+        image_preview_format: str = "symbols",
     ) -> FilePreviewState | None: ...
 
 
