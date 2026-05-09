@@ -1239,6 +1239,55 @@ def test_live_browser_snapshot_loader_caches_grep_context_preview_reads(
     assert open_calls == [readme]
 
 
+def test_live_browser_snapshot_loader_reuses_grep_context_window_for_nearby_results(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    readme = project / "README.md"
+    readme.write_text(
+        "".join(f"line {line}\n" for line in range(1, 20)),
+        encoding="utf-8",
+    )
+
+    original_open = Path.open
+    open_calls: list[Path] = []
+
+    def _tracking_open(self: Path, *args, **kwargs):
+        if self == readme and args and args[0] == "rb":
+            open_calls.append(self)
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", _tracking_open)
+    loader = LiveBrowserSnapshotLoader()
+
+    first = loader.load_grep_preview(
+        str(project),
+        GrepSearchResultState(
+            path=str(readme),
+            display_path="README.md",
+            line_number=3,
+            line_text="line 3",
+        ),
+        context_lines=1,
+    )
+    second = loader.load_grep_preview(
+        str(project),
+        GrepSearchResultState(
+            path=str(readme),
+            display_path="README.md",
+            line_number=4,
+            line_text="line 4",
+        ),
+        context_lines=1,
+    )
+
+    assert first.preview_content == "line 2\nline 3\nline 4\n"
+    assert second.preview_content == "line 3\nline 4\nline 5\n"
+    assert open_calls == [readme]
+
+
 def test_live_browser_snapshot_loader_invalidates_grep_context_cache_when_file_changes(
     tmp_path,
     monkeypatch,
@@ -1281,6 +1330,53 @@ def test_live_browser_snapshot_loader_invalidates_grep_context_cache_when_file_c
 
     assert first.preview_content == "line 1\nline 2\nline 3\n"
     assert second.preview_content == "line 1 updated\nline 2 updated\nline 3 updated\n"
+    assert len(open_calls) == 2
+
+
+def test_live_browser_snapshot_loader_invalidates_grep_context_window_when_file_changes(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    readme = project / "README.md"
+    readme.write_text("line 1\nline 2\nline 3\nline 4\nline 5\n", encoding="utf-8")
+
+    original_open = Path.open
+    open_calls: list[Path] = []
+
+    def _tracking_open(self: Path, *args, **kwargs):
+        if self == readme and args and args[0] == "rb":
+            open_calls.append(self)
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", _tracking_open)
+    loader = LiveBrowserSnapshotLoader()
+
+    first = loader.load_grep_preview(
+        str(project),
+        GrepSearchResultState(
+            path=str(readme),
+            display_path="README.md",
+            line_number=3,
+            line_text="line 3",
+        ),
+        context_lines=1,
+    )
+    readme.write_text("LINE 1\nLINE 2\nLINE 3\nLINE 4\nLINE 5\n", encoding="utf-8")
+    second = loader.load_grep_preview(
+        str(project),
+        GrepSearchResultState(
+            path=str(readme),
+            display_path="README.md",
+            line_number=4,
+            line_text="LINE 4",
+        ),
+        context_lines=1,
+    )
+
+    assert first.preview_content == "line 2\nline 3\nline 4\n"
+    assert second.preview_content == "LINE 3\nLINE 4\nLINE 5\n"
     assert len(open_calls) == 2
 
 

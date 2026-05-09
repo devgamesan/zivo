@@ -21,11 +21,15 @@ from zivo.services.previews import (
     DocumentPreviewLoader,
     FilePreviewState,
     GrepContextCacheKey,
+    GrepContextWindowCacheKey,
+    GrepContextWindowState,
     ImagePreviewLoader,
     PandocDocumentPreviewLoader,
     _build_grep_context_cache_key,
+    _build_grep_context_preview_from_window,
     _build_text_preview_cache_key,
     _load_grep_context_preview,
+    _load_grep_context_window,
     _load_text_preview,
 )
 from zivo.services.previews import (
@@ -170,6 +174,20 @@ class LiveBrowserSnapshotLoader:
         compare=False,
     )
     _grep_context_cache_lock: threading.Lock = field(
+        default_factory=threading.Lock,
+        init=False,
+        repr=False,
+        compare=False,
+    )
+    _grep_context_window_cache: (
+        "OrderedDict[GrepContextWindowCacheKey, GrepContextWindowState]"
+    ) = field(
+        default_factory=OrderedDict,
+        init=False,
+        repr=False,
+        compare=False,
+    )
+    _grep_context_window_cache_lock: threading.Lock = field(
         default_factory=threading.Lock,
         init=False,
         repr=False,
@@ -435,8 +453,9 @@ class LiveBrowserSnapshotLoader:
                 if cached_preview is not None:
                     preview = cached_preview
                 else:
-                    preview = _load_grep_context_preview(
+                    preview = self._load_cached_grep_context_window_preview(
                         child_path,
+                        cache_key,
                         result.line_number,
                         context_lines,
                         preview_max_bytes=preview_max_bytes,
@@ -461,6 +480,36 @@ class LiveBrowserSnapshotLoader:
             preview_start_line=preview.start_line,
             preview_highlight_line=preview.highlight_line,
         )
+
+    def _load_cached_grep_context_window_preview(
+        self,
+        path: Path,
+        cache_key: GrepContextCacheKey,
+        line_number: int,
+        context_lines: int,
+        *,
+        preview_max_bytes: int,
+    ) -> "ContextPreviewState":
+        window_cache_key = _grep_context_window_cache_key_from_context_key(cache_key)
+        cached_window = self._get_cached_grep_context_window(window_cache_key)
+        if cached_window is not None:
+            preview = _build_grep_context_preview_from_window(
+                cached_window,
+                line_number,
+                context_lines,
+            )
+            if preview is not None:
+                return preview
+
+        preview, window = _load_grep_context_window(
+            path,
+            line_number,
+            context_lines,
+            preview_max_bytes=preview_max_bytes,
+        )
+        if window is not None:
+            self._store_cached_grep_context_window(window_cache_key, window)
+        return preview
 
     def invalidate_directory_listing_cache(
         self,
@@ -673,9 +722,38 @@ class LiveBrowserSnapshotLoader:
             while len(self._grep_context_cache) > self.grep_context_cache_capacity:
                 self._grep_context_cache.popitem(last=False)
 
+    def _get_cached_grep_context_window(
+        self,
+        cache_key: GrepContextWindowCacheKey,
+    ) -> "GrepContextWindowState | None":
+        with self._grep_context_window_cache_lock:
+            window = self._grep_context_window_cache.get(cache_key)
+            if window is None:
+                return None
+            self._grep_context_window_cache.move_to_end(cache_key)
+            return window
+
+    def _store_cached_grep_context_window(
+        self,
+        cache_key: GrepContextWindowCacheKey,
+        window: "GrepContextWindowState",
+    ) -> None:
+        with self._grep_context_window_cache_lock:
+            self._grep_context_window_cache[cache_key] = window
+            self._grep_context_window_cache.move_to_end(cache_key)
+            while len(self._grep_context_window_cache) > self.grep_context_cache_capacity:
+                self._grep_context_window_cache.popitem(last=False)
+
 
 def _is_permission_denied_error(error: OSError) -> bool:
     return str(error).startswith("Permission denied:")
+
+
+def _grep_context_window_cache_key_from_context_key(
+    cache_key: GrepContextCacheKey,
+) -> GrepContextWindowCacheKey:
+    path, mtime_ns, size, _line_number, _context_lines, preview_max_bytes = cache_key
+    return (path, mtime_ns, size, preview_max_bytes)
 
 
 @dataclass
