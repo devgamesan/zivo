@@ -50,6 +50,10 @@ class _MainPaneDataTable(DataTable):
             return
         await handler(row_index)
 
+    def _on_mouse_move(self, event: events.MouseMove) -> None:
+        super()._on_mouse_move(event)
+        self._set_hover_cursor(False)
+
 
 class MainPane(Vertical):
     """Center pane with detailed columns for the current directory."""
@@ -191,6 +195,7 @@ class MainPane(Vertical):
                 self._rebuild_table(table)
             else:
                 self._update_changed_rows(table, previous_entries, next_entries)
+            self._clear_hover_cursor(table)
         if entries_changed or cursor_changed:
             self._apply_cursor_state(table)
 
@@ -248,7 +253,7 @@ class MainPane(Vertical):
             return
 
         changed_rows: list[tuple[str, PaneEntry]] = []
-        next_entries: list[PaneEntry] = []
+        next_entries: list[PaneEntry] | None = None
         update_by_row = {
             row_index: size_label
             for row_index, size_label in (
@@ -257,13 +262,14 @@ class MainPane(Vertical):
             )
             if row_index is not None
         }
-        for row_index, entry in enumerate(self._entries):
-            next_size_label = update_by_row.get(row_index)
-            if next_size_label is None or next_size_label == entry.size_label:
-                next_entries.append(entry)
+        for row_index, next_size_label in update_by_row.items():
+            entry = self._entries[row_index]
+            if next_size_label == entry.size_label:
                 continue
+            if next_entries is None:
+                next_entries = list(self._entries)
             next_entry = replace(entry, size_label=next_size_label)
-            next_entries.append(next_entry)
+            next_entries[row_index] = next_entry
             changed_rows.append((self._slot_row_key(row_index), next_entry))
 
         if not changed_rows:
@@ -284,7 +290,7 @@ class MainPane(Vertical):
             return
 
         changed_rows: list[tuple[str, PaneEntry]] = []
-        next_entries: list[PaneEntry] = []
+        next_entries: list[PaneEntry] | None = None
         update_by_row = {
             row_index: entry
             for row_index, entry in (
@@ -293,12 +299,13 @@ class MainPane(Vertical):
             )
             if row_index is not None
         }
-        for row_index, entry in enumerate(self._entries):
-            next_entry = update_by_row.get(row_index)
-            if next_entry is None or next_entry == entry:
-                next_entries.append(entry)
+        for row_index, next_entry in update_by_row.items():
+            entry = self._entries[row_index]
+            if next_entry == entry:
                 continue
-            next_entries.append(next_entry)
+            if next_entries is None:
+                next_entries = list(self._entries)
+            next_entries[row_index] = next_entry
             changed_rows.append((self._slot_row_key(row_index), next_entry))
 
         if not changed_rows:
@@ -385,6 +392,11 @@ class MainPane(Vertical):
                 key=self._slot_row_key(index),
             )
         self._last_table_width = table.size.width
+        self._clear_hover_cursor(table)
+
+    @staticmethod
+    def _clear_hover_cursor(table: DataTable) -> None:
+        table._set_hover_cursor(False)
 
     @classmethod
     def _entry_row_keys(cls, entries: Sequence[PaneEntry]) -> tuple[str, ...]:

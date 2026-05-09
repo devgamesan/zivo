@@ -6,7 +6,13 @@ from rich.style import Style
 from rich.text import Text
 from textual.widgets import DataTable
 
-from zivo.models import ChildPaneViewState, CurrentPaneRowUpdate, CurrentSummaryState, PaneEntry
+from zivo.models import (
+    ChildPaneViewState,
+    CurrentPaneRowUpdate,
+    CurrentPaneSizeUpdate,
+    CurrentSummaryState,
+    PaneEntry,
+)
 from zivo.ui.pane_rendering import _FileEntryLabelCache
 from zivo.ui.panes import (
     ChildPane,
@@ -586,6 +592,55 @@ def test_apply_row_updates_updates_slot_key_for_visible_row() -> None:
     assert pane._entries[1].name == "renamed.txt"
     assert table.update_cell.call_count == 4
     assert table.update_cell.call_args_list[0].args[0] == "__slot__:1"
+
+
+def test_apply_size_updates_updates_only_target_slot() -> None:
+    summary = CurrentSummaryState(item_count=2, selected_count=0, sort_label="Name")
+    entries = (
+        PaneEntry("a.txt", "file", path="/path/a.txt", size_label="1 B"),
+        PaneEntry("b.txt", "file", path="/path/b.txt", size_label="2 B"),
+    )
+    pane = MainPane(title="Test", entries=entries, summary=summary)
+    table = Mock(spec=DataTable)
+    pane.query_one = Mock(return_value=table)
+
+    pane.apply_size_updates(
+        (
+            CurrentPaneSizeUpdate(
+                path="/path/b.txt",
+                size_label="3 B",
+                row_index=1,
+            ),
+        )
+    )
+
+    assert pane._entries[0] is entries[0]
+    assert pane._entries[1].size_label == "3 B"
+    table.update_cell.assert_called_once()
+    assert table.update_cell.call_args.args[0] == "__slot__:1"
+    assert table.update_cell.call_args.args[1] == "size"
+
+
+def test_set_entries_clears_stale_hover_cursor() -> None:
+    summary = CurrentSummaryState(item_count=2, selected_count=0, sort_label="Name")
+    entries = (
+        PaneEntry("a.txt", "file", path="/path/a.txt"),
+        PaneEntry("b.txt", "file", path="/path/b.txt"),
+    )
+    next_entries = (
+        PaneEntry("c.txt", "file", path="/path/c.txt"),
+        PaneEntry("d.txt", "file", path="/path/d.txt"),
+    )
+    pane = MainPane(title="Test", entries=entries, summary=summary)
+    table = Mock(spec=DataTable)
+    table.size.width = 80
+    table.cell_padding = 1
+    pane._last_table_width = 80
+    pane.query_one = Mock(return_value=table)
+
+    pane.set_entries(next_entries, cursor_index=0)
+
+    table._set_hover_cursor.assert_called_with(False)
 
 
 def test_child_pane_refresh_rendered_content_skips_duplicate_preview_render(
