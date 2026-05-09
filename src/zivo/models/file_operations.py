@@ -135,8 +135,21 @@ class ChmodRequest:
     mode: int
 
 
+@dataclass(frozen=True)
+class RecursiveChmodRequest:
+    """A request to recursively change permission bits for one or more paths."""
+
+    paths: tuple[str, ...]
+    mode: int
+
+
 FileMutationRequest = (
-    RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest | ChmodRequest
+    RenameRequest
+    | CreatePathRequest
+    | CreateSymlinkRequest
+    | DeleteRequest
+    | ChmodRequest
+    | RecursiveChmodRequest
 )
 
 

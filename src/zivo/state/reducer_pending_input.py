@@ -10,6 +10,7 @@ from zivo.models import (
     CreateSymlinkRequest,
     CreateZipArchiveRequest,
     ExtractArchiveRequest,
+    RecursiveChmodRequest,
     RenameRequest,
 )
 from zivo.windows_paths import join_path, resolve_parent_directory_path
@@ -26,7 +27,10 @@ def validate_pending_input(state, *, is_macos: bool) -> str | None:
     if state.pending_input is None:
         return "No input is active"
 
-    if state.pending_input.chmod_target_path is not None:
+    if (
+        state.pending_input.chmod_target_path is not None
+        or state.pending_input.chmod_target_paths is not None
+    ):
         mode_text = state.pending_input.value.strip()
         if len(mode_text) != 3 or any(char not in "01234567" for char in mode_text):
             return "Permissions must be a 3-digit octal mode (000-777)"
@@ -137,12 +141,24 @@ def name_conflict_kind(state):
 
 def build_file_mutation_request(
     state,
-) -> RenameRequest | CreatePathRequest | CreateSymlinkRequest | ChmodRequest | None:
+) -> (
+    RenameRequest
+    | CreatePathRequest
+    | CreateSymlinkRequest
+    | ChmodRequest
+    | RecursiveChmodRequest
+    | None
+):
     if state.pending_input is None:
         return None
     if state.ui_mode == "CHMOD" and state.pending_input.chmod_target_path is not None:
         return ChmodRequest(
             path=state.pending_input.chmod_target_path,
+            mode=int(state.pending_input.value.strip(), 8),
+        )
+    if state.ui_mode == "CHMOD" and state.pending_input.chmod_target_paths is not None:
+        return RecursiveChmodRequest(
+            paths=state.pending_input.chmod_target_paths,
             mode=int(state.pending_input.value.strip(), 8),
         )
     if state.ui_mode == "RENAME" and state.pending_input.target_path is not None:
@@ -231,6 +247,10 @@ def pending_input_parent_and_target(state) -> tuple[str | None, str | None]:
     if state.ui_mode == "CHMOD" and state.pending_input.chmod_target_path is not None:
         _, parent_path = resolve_parent_directory_path(state.pending_input.chmod_target_path)
         return (parent_path, state.pending_input.chmod_target_path)
+    if state.ui_mode == "CHMOD" and state.pending_input.chmod_target_paths is not None:
+        first_path = state.pending_input.chmod_target_paths[0]
+        _, parent_path = resolve_parent_directory_path(first_path)
+        return (parent_path, first_path)
     if state.ui_mode == "CREATE":
         if state.layout_mode == "transfer":
             active_pane = _active_transfer_pane(state)

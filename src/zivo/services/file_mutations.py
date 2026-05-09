@@ -13,12 +13,18 @@ from zivo.models import (
     CreateSymlinkRequest,
     DeleteRequest,
     FileMutationResult,
+    RecursiveChmodRequest,
     RenameRequest,
 )
 from zivo.services.trash_operations import TrashService, resolve_trash_service
 
 FileMutationRequest = (
-    RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest | ChmodRequest
+    RenameRequest
+    | CreatePathRequest
+    | CreateSymlinkRequest
+    | DeleteRequest
+    | ChmodRequest
+    | RecursiveChmodRequest
 )
 
 
@@ -50,6 +56,8 @@ class LiveFileMutationService:
             return self._execute_delete(request)
         if isinstance(request, ChmodRequest):
             return self._execute_chmod(request)
+        if isinstance(request, RecursiveChmodRequest):
+            return self._execute_recursive_chmod(request)
         return self._execute_create(request)
 
     def _execute_rename(self, request: RenameRequest) -> FileMutationResult:
@@ -164,6 +172,45 @@ class LiveFileMutationService:
             operation="chmod",
         )
 
+    def _execute_recursive_chmod(self, request: RecursiveChmodRequest) -> FileMutationResult:
+        changed_paths: list[str] = []
+        failures: list[tuple[str, str]] = []
+
+        for target_path in _iter_recursive_chmod_targets(request.paths):
+            try:
+                self.adapter.change_permissions(str(target_path), request.mode)
+            except OSError as error:
+                failures.append((str(target_path), str(error) or "Permission change failed"))
+            else:
+                changed_paths.append(str(target_path))
+
+        if not changed_paths:
+            if len(failures) == 1:
+                failed_name = Path(failures[0][0]).name
+                raise OSError(f"Failed to change permissions for {failed_name}: {failures[0][1]}")
+            if failures:
+                raise OSError(f"Failed to change permissions for {len(failures)} items")
+            raise OSError("No files matched recursive permissions change")
+
+        if failures:
+            return FileMutationResult(
+                path=None,
+                message=(
+                    f"Changed permissions to {request.mode:03o} for "
+                    f"{len(changed_paths)}/{len(changed_paths) + len(failures)} items "
+                    f"with {len(failures)} failure(s)"
+                ),
+                level="warning",
+                operation="chmod",
+            )
+
+        noun = "item" if len(changed_paths) == 1 else "items"
+        return FileMutationResult(
+            path=str(_absolute_entry_path(request.paths[0])) if request.paths else None,
+            message=f"Changed permissions to {request.mode:03o} for {len(changed_paths)} {noun}",
+            operation="chmod",
+        )
+
 
 @dataclass(frozen=True)
 class FakeFileMutationService:
@@ -234,6 +281,17 @@ class FakeFileMutationService:
                 operation="chmod",
             )
 
+        if isinstance(request, RecursiveChmodRequest):
+            noun = "item" if len(request.paths) == 1 else "items"
+            return FileMutationResult(
+                path=str(_absolute_entry_path(request.paths[0])) if request.paths else None,
+                message=(
+                    f"Changed permissions to {request.mode:03o} "
+                    f"for {len(request.paths)} {noun}"
+                ),
+                operation="chmod",
+            )
+
         target_path = _absolute_entry_path(request.parent_dir) / request.name
         message = (
             f"Created file {request.name}"
@@ -245,3 +303,27 @@ class FakeFileMutationService:
 
 def _absolute_entry_path(path: str) -> Path:
     return Path(os.path.abspath(os.path.expanduser(path)))
+
+
+def _iter_recursive_chmod_targets(paths: tuple[str, ...]) -> tuple[Path, ...]:
+    targets: list[Path] = []
+    for path in paths:
+        root = _absolute_entry_path(path)
+        if root.is_symlink():
+            continue
+        targets.append(root)
+        if root.is_dir():
+            for current_root, dirnames, filenames in os.walk(root, followlinks=False):
+                current_path = Path(current_root)
+                dirnames[:] = [
+                    dirname
+                    for dirname in dirnames
+                    if not (current_path / dirname).is_symlink()
+                ]
+                for dirname in dirnames:
+                    targets.append(current_path / dirname)
+                for filename in filenames:
+                    child = current_path / filename
+                    if not child.is_symlink():
+                        targets.append(child)
+    return tuple(targets)

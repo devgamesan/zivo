@@ -1476,7 +1476,40 @@ def test_select_command_palette_state_shows_chmod_for_single_target() -> None:
     palette_state = select_command_palette_state(state)
 
     assert palette_state is not None
-    assert [item.label for item in palette_state.items] == ["Change permissions"]
+    assert [item.label for item in palette_state.items] == [
+        "Change permissions",
+        "Change permissions recursively",
+    ]
+    assert palette_state.items[0].enabled is True
+    assert palette_state.items[1].enabled is True
+
+
+def test_select_command_palette_state_shows_recursive_chmod_for_selection() -> None:
+    initial_state = build_initial_app_state()
+    state = replace(
+        initial_state,
+        current_pane=replace(
+            initial_state.current_pane,
+            selected_paths=frozenset(
+                {
+                    "/home/tadashi/develop/zivo/docs",
+                    "/home/tadashi/develop/zivo/src",
+                }
+            ),
+        ),
+    )
+    state = _reduce_state(state, BeginCommandPalette())
+    state = replace(
+        state,
+        command_palette=replace(state.command_palette, query="recursively"),
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert [item.label for item in palette_state.items] == [
+        "Change permissions recursively",
+    ]
     assert palette_state.items[0].enabled is True
 
 
@@ -1490,6 +1523,7 @@ def test_command_palette_hides_chmod_on_windows(monkeypatch) -> None:
     ]
 
     assert "Change permissions" not in labels
+    assert "Change permissions recursively" not in labels
 
 
 def test_select_command_palette_state_enables_history_navigation_items() -> None:

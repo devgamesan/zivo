@@ -382,6 +382,14 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
                         enabled=True,
                     )
                 )
+                items.append(
+                    CommandPaletteItem(
+                        id="change_permissions_recursively",
+                        label="Change permissions recursively",
+                        shortcut=None,
+                        enabled=True,
+                    )
+                )
             items.append(
                 CommandPaletteItem(
                     id="create_symlink",
@@ -424,6 +432,15 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             )
         )
     elif has_target and not is_search_workspace:
+        if chmod_supported:
+            items.append(
+                CommandPaletteItem(
+                    id="change_permissions_recursively",
+                    label="Change permissions recursively",
+                    shortcut=None,
+                    enabled=True,
+                )
+            )
         items.append(
             CommandPaletteItem(
                 id="compress_as_zip",
@@ -576,6 +593,12 @@ def _build_transfer_command_palette_items(state: AppState) -> tuple[CommandPalet
                 label="Change permissions",
                 shortcut=None,
                 enabled=has_single_target,
+            ),
+            CommandPaletteItem(
+                id="change_permissions_recursively",
+                label="Change permissions recursively",
+                shortcut=None,
+                enabled=has_target,
             ),
         )
         if _is_chmod_supported()
