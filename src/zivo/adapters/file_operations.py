@@ -30,6 +30,8 @@ class FileOperationAdapter(Protocol):
 
     def create_symlink(self, source: str, destination: str, *, overwrite: bool = False) -> None: ...
 
+    def change_permissions(self, path: str, mode: int) -> None: ...
+
     def send_to_trash(self, path: str) -> None: ...
 
 
@@ -130,6 +132,13 @@ class LocalFileOperationAdapter:
             destination_path.symlink_to(relative_target)
         except OSError as error:
             raise OSError(str(error) or "Symlink creation failed") from error
+
+    def change_permissions(self, path: str, mode: int) -> None:
+        target = self._entry_path(path)
+        try:
+            os.chmod(target, mode)
+        except OSError as error:
+            raise OSError(str(error) or "Permission change failed") from error
 
     def send_to_trash(self, path: str) -> None:
         target = self._entry_path(path)

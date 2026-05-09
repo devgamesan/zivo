@@ -545,6 +545,31 @@ def test_submit_command_palette_begins_rename_in_transfer_mode() -> None:
     assert next_state.pending_input is not None
     assert next_state.pending_input.value == "docs"
 
+
+def test_submit_command_palette_begins_chmod_in_transfer_mode() -> None:
+    state = _reduce_state(build_initial_app_state(), ToggleTransferMode())
+    assert state.transfer_left is not None
+    docs_entry = replace(state.transfer_left.pane.entries[0], permissions_mode=0o40755)
+    state = replace(
+        state,
+        transfer_left=replace(
+            state.transfer_left,
+            pane=replace(
+                state.transfer_left.pane,
+                entries=(docs_entry, *state.transfer_left.pane.entries[1:]),
+            ),
+        ),
+    )
+    state = _reduce_state(state, BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("permissions"))
+
+    next_state = _reduce_state(state, SubmitCommandPalette())
+
+    assert next_state.ui_mode == "CHMOD"
+    assert next_state.pending_input is not None
+    assert next_state.pending_input.value == "755"
+
+
 def test_submit_bookmarks_palette_navigates_to_selected_directory(tmp_path) -> None:
     bookmarked_path = tmp_path / "project"
     bookmarked_path.mkdir()
@@ -1123,6 +1148,29 @@ def test_submit_command_palette_begins_rename_with_single_target() -> None:
     assert result.state.command_palette is None
     assert result.state.pending_input is not None
     assert result.state.pending_input.prompt == "Rename: "
+
+
+def test_submit_command_palette_begins_chmod_with_single_target() -> None:
+    state = build_initial_app_state()
+    docs_entry = replace(state.current_pane.entries[0], permissions_mode=0o40755)
+    state = replace(
+        state,
+        current_pane=replace(
+            state.current_pane,
+            entries=(docs_entry, *state.current_pane.entries[1:]),
+        ),
+    )
+    state = _reduce_state(state, BeginCommandPalette())
+    state = _reduce_state(state, SetCommandPaletteQuery("permissions"))
+
+    result = reduce_app_state(state, SubmitCommandPalette())
+
+    assert result.state.ui_mode == "CHMOD"
+    assert result.state.command_palette is None
+    assert result.state.pending_input is not None
+    assert result.state.pending_input.prompt == "Permissions: "
+    assert result.state.pending_input.value == "755"
+
 
 def test_submit_command_palette_deletes_targets() -> None:
     state = _reduce_state(build_initial_app_state(), BeginCommandPalette())

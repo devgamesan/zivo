@@ -374,6 +374,14 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
             )
             items.append(
                 CommandPaletteItem(
+                    id="change_permissions",
+                    label="Change permissions",
+                    shortcut=None,
+                    enabled=True,
+                )
+            )
+            items.append(
+                CommandPaletteItem(
                     id="create_symlink",
                     label="Make symlink",
                     shortcut=None,
@@ -667,6 +675,12 @@ def _build_transfer_command_palette_items(state: AppState) -> tuple[CommandPalet
             id="rename",
             label="Rename",
             shortcut="r",
+            enabled=has_single_target,
+        ),
+        CommandPaletteItem(
+            id="change_permissions",
+            label="Change permissions",
+            shortcut=None,
             enabled=has_single_target,
         ),
         CommandPaletteItem(

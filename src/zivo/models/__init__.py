@@ -34,6 +34,7 @@ from .custom_action import (
 from .external_launch import ExternalLaunchKind, ExternalLaunchRequest
 from .file_operations import (
     ArchiveFormat,
+    ChmodRequest,
     ConflictResolution,
     CreateKind,
     CreatePathRequest,
@@ -128,6 +129,7 @@ __all__ = [
     "CustomActionExpansionError",
     "CustomActionResult",
     "ConflictResolution",
+    "ChmodRequest",
     "CreateKind",
     "CreatePathRequest",
     "CreateSymlinkRequest",

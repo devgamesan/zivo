@@ -8,6 +8,7 @@ from typing import Mapping, Protocol
 
 from zivo.adapters import FileOperationAdapter, LocalFileOperationAdapter
 from zivo.models import (
+    ChmodRequest,
     CreatePathRequest,
     CreateSymlinkRequest,
     DeleteRequest,
@@ -16,13 +17,17 @@ from zivo.models import (
 )
 from zivo.services.trash_operations import TrashService, resolve_trash_service
 
+FileMutationRequest = (
+    RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest | ChmodRequest
+)
+
 
 class FileMutationService(Protocol):
     """Boundary for asynchronous rename/create/delete operations."""
 
     def execute(
         self,
-        request: RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest,
+        request: FileMutationRequest,
     ) -> FileMutationResult: ...
 
 
@@ -35,7 +40,7 @@ class LiveFileMutationService:
 
     def execute(
         self,
-        request: RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest,
+        request: FileMutationRequest,
     ) -> FileMutationResult:
         if isinstance(request, RenameRequest):
             return self._execute_rename(request)
@@ -43,6 +48,8 @@ class LiveFileMutationService:
             return self._execute_symlink(request)
         if isinstance(request, DeleteRequest):
             return self._execute_delete(request)
+        if isinstance(request, ChmodRequest):
+            return self._execute_chmod(request)
         return self._execute_create(request)
 
     def _execute_rename(self, request: RenameRequest) -> FileMutationResult:
@@ -148,22 +155,33 @@ class LiveFileMutationService:
             trash_records=tuple(trash_records),
         )
 
+    def _execute_chmod(self, request: ChmodRequest) -> FileMutationResult:
+        target_path = _absolute_entry_path(request.path)
+        self.adapter.change_permissions(str(target_path), request.mode)
+        return FileMutationResult(
+            path=str(target_path),
+            message=f"Changed permissions to {request.mode:03o}",
+            operation="chmod",
+        )
+
 
 @dataclass(frozen=True)
 class FakeFileMutationService:
     """Deterministic file-mutation service used by tests."""
 
     results: Mapping[
-        RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest, FileMutationResult
+        FileMutationRequest,
+        FileMutationResult,
     ] = field(default_factory=dict)
     failure_messages: Mapping[
-        RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest, str
+        FileMutationRequest,
+        str,
     ] = field(default_factory=dict)
     default_delay_seconds: float = 0.0
 
     def execute(
         self,
-        request: RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest,
+        request: FileMutationRequest,
     ) -> FileMutationResult:
         if self.default_delay_seconds > 0:
             sleep(self.default_delay_seconds)
@@ -206,6 +224,14 @@ class FakeFileMutationService:
                 removed_paths=request.paths,
                 operation="delete",
                 delete_mode=request.mode,
+            )
+
+        if isinstance(request, ChmodRequest):
+            target_path = _absolute_entry_path(request.path)
+            return FileMutationResult(
+                path=str(target_path),
+                message=f"Changed permissions to {request.mode:03o}",
+                operation="chmod",
             )
 
         target_path = _absolute_entry_path(request.parent_dir) / request.name

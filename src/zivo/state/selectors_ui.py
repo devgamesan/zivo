@@ -128,6 +128,8 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
         if state.config.help_bar.filter:
             return HelpBarState(state.config.help_bar.filter)
         return HelpBarState(("type filter | enter/down apply | esc clear",))
+    if state.ui_mode == "CHMOD":
+        return HelpBarState(("type octal mode | enter apply | esc cancel",))
     if state.ui_mode == "RENAME":
         if state.config.help_bar.rename:
             return HelpBarState(state.config.help_bar.rename)
@@ -279,11 +281,13 @@ def select_grep_export_dialog_state(state: AppState) -> GrepExportDialogViewStat
 def select_input_dialog_state(state: AppState) -> InputDialogState | None:
     """Return dialog content when the app is in an input mode."""
 
-    if state.ui_mode not in {"RENAME", "CREATE", "EXTRACT", "ZIP", "SYMLINK"}:
+    if state.ui_mode not in {"CHMOD", "RENAME", "CREATE", "EXTRACT", "ZIP", "SYMLINK"}:
         return None
     if state.pending_input is None:
         return None
-    if state.ui_mode == "RENAME":
+    if state.ui_mode == "CHMOD":
+        title = "Change Permissions"
+    elif state.ui_mode == "RENAME":
         title = "Rename"
     elif state.ui_mode == "EXTRACT":
         title = "Extract"

@@ -1436,6 +1436,7 @@ def test_command_palette_items_for_search_workspace_are_limited_to_safe_actions(
     assert "Grep and replace in selected files" not in labels
     assert "Format project" not in labels
     assert "Rename" not in labels
+    assert "Change permissions" not in labels
     assert "Make symlink" not in labels
     assert "Compress as zip" not in labels
     assert "Extract archive" not in labels
@@ -1462,6 +1463,20 @@ def test_select_command_palette_state_shows_single_target_commands_when_filtered
 
     assert palette_state is not None
     assert [item.label for item in palette_state.items] == ["Rename"]
+    assert palette_state.items[0].enabled is True
+
+
+def test_select_command_palette_state_shows_chmod_for_single_target() -> None:
+    state = _reduce_state(build_initial_app_state(), BeginCommandPalette())
+    state = replace(
+        state,
+        command_palette=replace(state.command_palette, query="permissions"),
+    )
+
+    palette_state = select_command_palette_state(state)
+
+    assert palette_state is not None
+    assert [item.label for item in palette_state.items] == ["Change permissions"]
     assert palette_state.items[0].enabled is True
 
 

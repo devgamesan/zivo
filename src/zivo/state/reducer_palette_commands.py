@@ -14,6 +14,7 @@ from .actions import (
     ActivatePreviousTab,
     AddBookmark,
     BeginBookmarkSearch,
+    BeginChmodInput,
     BeginCreateInput,
     BeginCustomActionConfirmation,
     BeginDeleteTargets,
@@ -274,6 +275,25 @@ def _run_rename_command(
     if target_path is None:
         return notify(next_state, level="warning", message="Rename requires a single target")
     return reduce_state(next_state, BeginRenameInput(path=target_path))
+
+
+def _run_change_permissions_command(
+    state: AppState,
+    next_state: AppState,
+    reduce_state: ReducerFn,
+) -> ReduceResult:
+    target_path = (
+        _transfer_single_target_path(state)
+        if state.layout_mode == "transfer"
+        else single_target_path(state)
+    )
+    if target_path is None:
+        return notify(
+            next_state,
+            level="warning",
+            message="Change permissions requires a single target",
+        )
+    return reduce_state(next_state, BeginChmodInput(path=target_path))
 
 
 def _run_open_in_editor_command(
@@ -605,6 +625,8 @@ def _run_palette_command_item(
         return _run_copy_path_command(next_state, reduce_state)
     if item_id == "rename":
         return _run_rename_command(state, next_state, reduce_state)
+    if item_id == "change_permissions":
+        return _run_change_permissions_command(state, next_state, reduce_state)
     if item_id == "create_symlink":
         return _run_create_symlink_command(state, next_state, reduce_state)
     if item_id == "compress_as_zip":

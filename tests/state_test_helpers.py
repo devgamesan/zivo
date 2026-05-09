@@ -18,6 +18,7 @@ def entry(
     hidden: bool = False,
     size_bytes: int | None = None,
     modified_at=None,
+    permissions_mode: int | None = None,
 ) -> DirectoryEntryState:
     return DirectoryEntryState(
         path=path,
@@ -26,6 +27,7 @@ def entry(
         size_bytes=size_bytes,
         modified_at=modified_at,
         hidden=hidden,
+        permissions_mode=permissions_mode,
     )
 
 

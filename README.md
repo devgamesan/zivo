@@ -139,6 +139,7 @@ See [Commands](docs/commands.md) for the full command list.
 ### File operations
 - **Copy / Cut / Paste**: within a pane or across panes in Transfer mode
 - **Rename**: inline rename
+- **Permissions**: change a single target's octal mode from the command palette
 - **Delete**: move to trash (`d`) or permanent delete (`D`), with configurable confirmation
 - **Undo**: revert rename, paste, or trash operations
 - **Multi-selection**: select files with Space, or Select all

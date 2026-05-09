@@ -3,7 +3,13 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from zivo.models import CreatePathRequest, CreateSymlinkRequest, DeleteRequest, RenameRequest
+from zivo.models import (
+    ChmodRequest,
+    CreatePathRequest,
+    CreateSymlinkRequest,
+    DeleteRequest,
+    RenameRequest,
+)
 from zivo.services import LiveFileMutationService
 from zivo.services.trash_operations import WindowsTrashService
 
@@ -21,6 +27,7 @@ class StubFileOperationAdapter:
     created_files: list[str] = field(default_factory=list)
     created_directories: list[str] = field(default_factory=list)
     created_symlinks: list[tuple[str, str, bool]] = field(default_factory=list)
+    changed_permissions: list[tuple[str, int]] = field(default_factory=list)
 
     def path_exists(self, path: str) -> bool:
         return False
@@ -58,6 +65,11 @@ class StubFileOperationAdapter:
         if source in self.failing_paths or destination in self.failing_paths:
             raise OSError("symlink creation failed")
         self.created_symlinks.append((source, destination, overwrite))
+
+    def change_permissions(self, path: str, mode: int) -> None:
+        if path in self.failing_paths:
+            raise OSError("chmod failed")
+        self.changed_permissions.append((path, mode))
 
     def send_to_trash(self, path: str) -> None:
         if path in self.failing_paths:
@@ -172,6 +184,26 @@ def test_file_mutation_service_creates_symlink() -> None:
     ]
     assert result.path == _absolute("/tmp/zivo/docs.link")
     assert result.message == "Created symlink docs.link"
+
+
+def test_file_mutation_service_changes_permissions() -> None:
+    adapter = StubFileOperationAdapter()
+    service = LiveFileMutationService(adapter=adapter)
+
+    result = service.execute(ChmodRequest(path="/tmp/zivo/run.sh", mode=0o755))
+
+    assert adapter.changed_permissions == [(_absolute("/tmp/zivo/run.sh"), 0o755)]
+    assert result.path == _absolute("/tmp/zivo/run.sh")
+    assert result.message == "Changed permissions to 755"
+    assert result.operation == "chmod"
+
+
+def test_file_mutation_service_raises_chmod_error() -> None:
+    adapter = StubFileOperationAdapter(failing_paths={_absolute("/tmp/zivo/run.sh")})
+    service = LiveFileMutationService(adapter=adapter)
+
+    with pytest.raises(OSError, match="chmod failed"):
+        service.execute(ChmodRequest(path="/tmp/zivo/run.sh", mode=0o755))
 
 
 @pytest.mark.skipif(os.name == "nt", reason="symlink creation requires extra Windows privileges")

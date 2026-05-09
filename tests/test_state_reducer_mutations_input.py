@@ -2,7 +2,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from tests.test_state_reducer import _reduce_state
-from zivo.models import CreatePathRequest, CreateSymlinkRequest, RenameRequest
+from zivo.models import ChmodRequest, CreatePathRequest, CreateSymlinkRequest, RenameRequest
 from zivo.state import (
     NameConflictState,
     NotificationState,
@@ -13,6 +13,7 @@ from zivo.state import (
     reduce_app_state,
 )
 from zivo.state.actions import (
+    BeginChmodInput,
     BeginCreateInput,
     BeginExtractArchiveInput,
     BeginRenameInput,
@@ -47,6 +48,48 @@ def test_begin_rename_input_ignores_unknown_path() -> None:
     next_state = _reduce_state(state, BeginRenameInput("/tmp/missing"))
 
     assert next_state == state
+
+
+def test_begin_chmod_input_sets_initial_value_from_target_permissions() -> None:
+    state = build_initial_app_state()
+    docs_entry = replace(state.current_pane.entries[0], permissions_mode=0o40755)
+    state = replace(
+        state,
+        current_pane=replace(
+            state.current_pane,
+            entries=(docs_entry, *state.current_pane.entries[1:]),
+        ),
+    )
+
+    next_state = _reduce_state(state, BeginChmodInput("/home/tadashi/develop/zivo/docs"))
+
+    assert next_state.ui_mode == "CHMOD"
+    assert next_state.pending_input == PendingInputState(
+        prompt="Permissions: ",
+        value="755",
+        cursor_pos=3,
+        chmod_target_path="/home/tadashi/develop/zivo/docs",
+    )
+
+
+def test_submit_chmod_input_rejects_invalid_octal_mode() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CHMOD",
+        pending_input=PendingInputState(
+            prompt="Permissions: ",
+            value="88",
+            chmod_target_path="/home/tadashi/develop/zivo/docs",
+        ),
+    )
+
+    next_state = _reduce_state(state, SubmitPendingInput())
+
+    assert next_state.ui_mode == "CHMOD"
+    assert next_state.notification == NotificationState(
+        level="error",
+        message="Permissions must be a 3-digit octal mode (000-777)",
+    )
 
 
 def test_begin_create_input_sets_mode_and_kind() -> None:
@@ -198,6 +241,31 @@ def test_submit_pending_input_emits_file_mutation_effect() -> None:
             request=RenameRequest(
                 source_path="/home/tadashi/develop/zivo/docs",
                 new_name="manuals",
+            ),
+        ),
+    )
+
+
+def test_submit_chmod_input_emits_file_mutation_effect() -> None:
+    state = replace(
+        build_initial_app_state(),
+        ui_mode="CHMOD",
+        pending_input=PendingInputState(
+            prompt="Permissions: ",
+            value="755",
+            chmod_target_path="/home/tadashi/develop/zivo/docs",
+        ),
+    )
+
+    result = reduce_app_state(state, SubmitPendingInput())
+
+    assert result.state.ui_mode == "BUSY"
+    assert result.effects == (
+        RunFileMutationEffect(
+            request_id=1,
+            request=ChmodRequest(
+                path="/home/tadashi/develop/zivo/docs",
+                mode=0o755,
             ),
         ),
     )

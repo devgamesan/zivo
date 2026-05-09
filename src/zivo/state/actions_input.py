@@ -28,6 +28,13 @@ class BeginRenameInput:
 
 
 @dataclass(frozen=True)
+class BeginChmodInput:
+    """Enter chmod input mode for a single path."""
+
+    path: str
+
+
+@dataclass(frozen=True)
 class BeginCreateInput:
     """Enter create input mode for a new file or directory."""
 

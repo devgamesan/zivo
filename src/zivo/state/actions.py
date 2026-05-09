@@ -1,6 +1,7 @@
 """Reducer actions for app state transitions."""
 
 from .actions_input import (
+    BeginChmodInput,
     BeginCreateInput,
     BeginExtractArchiveInput,
     BeginFilterInput,
@@ -68,6 +69,7 @@ from .actions_mutations import (
 
 __all__ = [
     # Input actions
+    "BeginChmodInput",
     "BeginCreateInput",
     "BeginExtractArchiveInput",
     "BeginFilterInput",
@@ -340,6 +342,7 @@ Action = (
     | BeginFilterInput
     | ConfirmFilterInput
     | CancelFilterInput
+    | BeginChmodInput
     | BeginRenameInput
     | BeginCreateInput
     | BeginSymlinkInput

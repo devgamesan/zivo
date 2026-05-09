@@ -5,6 +5,7 @@ from pathlib import Path
 
 from zivo.archive_utils import resolve_zip_destination_input
 from zivo.models import (
+    ChmodRequest,
     CreatePathRequest,
     CreateSymlinkRequest,
     CreateZipArchiveRequest,
@@ -24,6 +25,12 @@ from .reducer_path_helpers import (
 def validate_pending_input(state, *, is_macos: bool) -> str | None:
     if state.pending_input is None:
         return "No input is active"
+
+    if state.pending_input.chmod_target_path is not None:
+        mode_text = state.pending_input.value.strip()
+        if len(mode_text) != 3 or any(char not in "01234567" for char in mode_text):
+            return "Permissions must be a 3-digit octal mode (000-777)"
+        return None
 
     if state.pending_input.extract_source_path is not None:
         destination = state.pending_input.value.strip()
@@ -130,9 +137,14 @@ def name_conflict_kind(state):
 
 def build_file_mutation_request(
     state,
-) -> RenameRequest | CreatePathRequest | CreateSymlinkRequest | None:
+) -> RenameRequest | CreatePathRequest | CreateSymlinkRequest | ChmodRequest | None:
     if state.pending_input is None:
         return None
+    if state.ui_mode == "CHMOD" and state.pending_input.chmod_target_path is not None:
+        return ChmodRequest(
+            path=state.pending_input.chmod_target_path,
+            mode=int(state.pending_input.value.strip(), 8),
+        )
     if state.ui_mode == "RENAME" and state.pending_input.target_path is not None:
         return RenameRequest(
             source_path=state.pending_input.target_path,
@@ -216,6 +228,9 @@ def pending_input_parent_and_target(state) -> tuple[str | None, str | None]:
     if state.ui_mode == "RENAME" and state.pending_input.target_path is not None:
         _, parent_path = resolve_parent_directory_path(state.pending_input.target_path)
         return (parent_path, state.pending_input.target_path)
+    if state.ui_mode == "CHMOD" and state.pending_input.chmod_target_path is not None:
+        _, parent_path = resolve_parent_directory_path(state.pending_input.chmod_target_path)
+        return (parent_path, state.pending_input.chmod_target_path)
     if state.ui_mode == "CREATE":
         if state.layout_mode == "transfer":
             active_pane = _active_transfer_pane(state)

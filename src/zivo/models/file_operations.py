@@ -9,7 +9,7 @@ CreateKind = Literal["file", "dir"]
 DeleteMode = Literal["trash", "permanent"]
 MutationResultLevel = Literal["info", "warning", "error"]
 ArchiveFormat = Literal["zip", "tar", "tar.gz", "tar.bz2", "gz", "bz2"]
-FileMutationOperation = Literal["rename", "create", "delete", "symlink"]
+FileMutationOperation = Literal["rename", "create", "delete", "symlink", "chmod"]
 UndoOperationKind = Literal["rename", "paste_copy", "paste_cut", "trash_delete"]
 
 
@@ -127,7 +127,17 @@ class DeleteRequest:
     mode: DeleteMode = "trash"
 
 
-FileMutationRequest = RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest
+@dataclass(frozen=True)
+class ChmodRequest:
+    """A request to change the permission bits for a single path."""
+
+    path: str
+    mode: int
+
+
+FileMutationRequest = (
+    RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest | ChmodRequest
+)
 
 
 @dataclass(frozen=True)
