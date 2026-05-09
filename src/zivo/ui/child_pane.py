@@ -16,6 +16,7 @@ from textual.timer import Timer
 from textual.widgets import Label, Static
 
 from zivo.models.shell_data import ChildPaneViewState
+from zivo.services.previews.core import ChafaImagePreviewLoader, ImagePreviewLoader
 
 from .pane_rendering import (
     FILE_TYPE_COMPONENT_CLASSES,
@@ -58,6 +59,7 @@ class ChildPane(Vertical):
         self,
         state: ChildPaneViewState,
         *,
+        image_preview_loader: ImagePreviewLoader | None = None,
         id: str | None = None,
         classes: str | None = None,
     ) -> None:
@@ -74,6 +76,7 @@ class ChildPane(Vertical):
         self._chafa_resize_timer: Timer | None = None
         self._chafa_resize_request_id = 0
         self._pending_chafa_resize_key: tuple[str, int, str] | None = None
+        self._image_preview_loader = image_preview_loader or ChafaImagePreviewLoader()
 
     @property
     def list_view_id(self) -> str | None:
@@ -475,10 +478,7 @@ class ChildPane(Vertical):
         def _load_preview() -> None:
             content: str | None = None
             try:
-                from zivo.services.previews.core import ChafaImagePreviewLoader
-
-                loader = ChafaImagePreviewLoader()
-                result = loader.load_preview(
+                result = self._image_preview_loader.load_preview(
                     FsPath(path),
                     preview_columns=preview_columns,
                     image_preview_format=image_preview_format,
