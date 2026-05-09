@@ -25,6 +25,8 @@ from zivo.services.previews import (
     GrepContextWindowState,
     ImagePreviewLoader,
     PandocDocumentPreviewLoader,
+    PdfPreviewLoader,
+    PdftotextPdfPreviewLoader,
     _build_grep_context_cache_key,
     _build_grep_context_preview_from_window,
     _build_text_preview_cache_key,
@@ -136,6 +138,7 @@ class LiveBrowserSnapshotLoader:
     text_preview_cache_capacity: int = DEFAULT_TEXT_PREVIEW_CACHE_CAPACITY
     grep_context_cache_capacity: int = DEFAULT_GREP_CONTEXT_CACHE_CAPACITY
     document_preview_loader: "DocumentPreviewLoader | None" = None
+    pdf_preview_loader: "PdfPreviewLoader | None" = None
     image_preview_loader: "ImagePreviewLoader | None" = None
     app_state: "AppState | None" = field(default=None, compare=False, repr=False)
     _directory_entries_cache: OrderedDict[str, tuple[DirectoryEntryState, ...]] = field(
@@ -194,6 +197,12 @@ class LiveBrowserSnapshotLoader:
         compare=False,
     )
     _document_preview_loader_lock: threading.Lock = field(
+        default_factory=threading.Lock,
+        init=False,
+        repr=False,
+        compare=False,
+    )
+    _pdf_preview_loader_lock: threading.Lock = field(
         default_factory=threading.Lock,
         init=False,
         repr=False,
@@ -625,6 +634,7 @@ class LiveBrowserSnapshotLoader:
                 enable_pdf_preview=enable_pdf_preview,
                 enable_office_preview=enable_office_preview,
                 document_preview_loader=self._resolve_document_preview_loader(),
+                pdf_preview_loader=self._resolve_pdf_preview_loader(),
                 image_preview_loader=self._resolve_image_preview_loader(),
                 preview_columns=preview_columns,
             )
@@ -652,6 +662,7 @@ class LiveBrowserSnapshotLoader:
             enable_pdf_preview=enable_pdf_preview,
             enable_office_preview=enable_office_preview,
             document_preview_loader=self._resolve_document_preview_loader(),
+            pdf_preview_loader=self._resolve_pdf_preview_loader(),
             image_preview_loader=self._resolve_image_preview_loader(),
             preview_columns=preview_columns,
         )
@@ -667,6 +678,16 @@ class LiveBrowserSnapshotLoader:
                     PandocDocumentPreviewLoader(),
                 )
             return self.document_preview_loader
+
+    def _resolve_pdf_preview_loader(self) -> "PdfPreviewLoader":
+        with self._pdf_preview_loader_lock:
+            if self.pdf_preview_loader is None:
+                object.__setattr__(
+                    self,
+                    "pdf_preview_loader",
+                    PdftotextPdfPreviewLoader(),
+                )
+            return self.pdf_preview_loader
 
     def _resolve_image_preview_loader(self) -> "ImagePreviewLoader":
         with self._image_preview_loader_lock:

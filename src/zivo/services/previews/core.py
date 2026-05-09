@@ -315,6 +315,15 @@ class DocumentPreviewLoader(Protocol):
     ) -> FilePreviewState | None: ...
 
 
+class PdfPreviewLoader(Protocol):
+    def load_preview(
+        self,
+        path: Path,
+        *,
+        preview_max_bytes: int,
+    ) -> FilePreviewState | None: ...
+
+
 class ImagePreviewLoader(Protocol):
     def load_preview(
         self,
@@ -376,6 +385,54 @@ class PandocDocumentPreviewLoader:
             return None
         self.pandoc_path = pandoc
         return pandoc
+
+
+@dataclass
+class PdftotextPdfPreviewLoader:
+    pdftotext_path: str | None = field(default=None, init=False, repr=False)
+    pdftotext_missing: bool = field(default=False, init=False, repr=False)
+
+    def load_preview(
+        self,
+        path: Path,
+        *,
+        preview_max_bytes: int,
+    ) -> FilePreviewState | None:
+        pdftotext = self._resolve_pdftotext()
+        if pdftotext is None:
+            return None
+        try:
+            path_str = str(path)
+            if " " in path_str:
+                path_str = f'"{path_str}"'
+            result = subprocess.run(
+                [pdftotext, "-q", path_str, "-"],
+                check=True,
+                capture_output=True,
+            )
+        except (OSError, subprocess.SubprocessError, FileNotFoundError):
+            return None
+        try:
+            content = _normalize_preview_newlines(result.stdout.decode("utf-8"))
+        except UnicodeDecodeError:
+            content = _normalize_preview_newlines(
+                result.stdout.decode("utf-8", errors="ignore")
+            )
+        if not content.strip():
+            return FilePreviewState.with_message("PDF preview: no text content found")
+        return _truncate_preview_text(content, preview_max_bytes)
+
+    def _resolve_pdftotext(self) -> str | None:
+        if self.pdftotext_missing:
+            return None
+        if self.pdftotext_path is not None:
+            return self.pdftotext_path
+        pdftotext = shutil.which("pdftotext")
+        if pdftotext is None:
+            self.pdftotext_missing = True
+            return None
+        self.pdftotext_path = pdftotext
+        return pdftotext
 
 
 def resolve_image_preview_format(image_preview_mode: ImagePreviewMode) -> str:
@@ -564,6 +621,7 @@ def _load_text_preview(
     enable_pdf_preview: bool = True,
     enable_office_preview: bool = True,
     document_preview_loader: DocumentPreviewLoader | None = None,
+    pdf_preview_loader: PdfPreviewLoader | None = None,
     image_preview_loader: ImagePreviewLoader | None = None,
     preview_columns: int = DEFAULT_IMAGE_PREVIEW_COLUMNS,
     image_preview_mode: ImagePreviewMode = "auto",
@@ -585,7 +643,8 @@ def _load_text_preview(
     if _is_pdf_preview_candidate(path):
         if not enable_pdf_preview:
             return FilePreviewState.unavailable()
-        preview = _load_pdf_preview(path, preview_max_bytes=preview_max_bytes)
+        loader = pdf_preview_loader or PdftotextPdfPreviewLoader()
+        preview = loader.load_preview(path, preview_max_bytes=preview_max_bytes)
         if preview is not None:
             return preview
         return FilePreviewState.unsupported()
@@ -653,29 +712,10 @@ def _load_pdf_preview(
     *,
     preview_max_bytes: int,
 ) -> FilePreviewState | None:
-    pdftotext = shutil.which("pdftotext")
-    if pdftotext is None:
-        return None
-    try:
-        path_str = str(path)
-        if " " in path_str:
-            path_str = f'"{path_str}"'
-        result = subprocess.run(
-            [pdftotext, "-q", path_str, "-"],
-            check=True,
-            capture_output=True,
-        )
-    except (OSError, subprocess.SubprocessError, FileNotFoundError):
-        return None
-    try:
-        content = _normalize_preview_newlines(result.stdout.decode("utf-8"))
-    except UnicodeDecodeError:
-        content = _normalize_preview_newlines(
-            result.stdout.decode("utf-8", errors="ignore")
-        )
-    if not content.strip():
-        return FilePreviewState.with_message("PDF preview: no text content found")
-    return _truncate_preview_text(content, preview_max_bytes)
+    return PdftotextPdfPreviewLoader().load_preview(
+        path,
+        preview_max_bytes=preview_max_bytes,
+    )
 
 
 def _load_grep_context_preview(

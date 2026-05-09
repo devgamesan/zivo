@@ -39,6 +39,16 @@ class StubDocumentPreviewLoader:
 
 
 @dataclass
+class StubPdfPreviewLoader:
+    previews_by_path: dict[str, FilePreviewState] = field(default_factory=dict)
+    calls: list[str] = field(default_factory=list)
+
+    def load_preview(self, path: Path, *, preview_max_bytes: int) -> FilePreviewState | None:
+        self.calls.append(f"{path}:{preview_max_bytes}")
+        return self.previews_by_path.get(str(path))
+
+
+@dataclass
 class StubImagePreviewLoader:
     previews_by_path: dict[str, FilePreviewState] = field(default_factory=dict)
     calls: list[str] = field(default_factory=list)
@@ -612,6 +622,87 @@ def test_live_browser_snapshot_loader_uses_pdftotext_for_pdf_preview(
     assert pane.mode == "preview"
     assert pane.preview_path == str(report)
     assert pane.preview_content == "PDF text\n"
+
+
+def test_live_browser_snapshot_loader_uses_pdf_preview_loader_for_supported_pdfs(
+    tmp_path,
+) -> None:
+    project = tmp_path / "project"
+    project.mkdir()
+    report = project / "report.pdf"
+    report.write_bytes(b"%PDF-1.4")
+    preview_loader = StubPdfPreviewLoader(
+        previews_by_path={
+            str(report): FilePreviewState.with_content("PDF text\n", False),
+        }
+    )
+    loader = LiveBrowserSnapshotLoader(pdf_preview_loader=preview_loader)
+
+    pane = loader.load_child_pane_snapshot(str(project), str(report))
+
+    assert pane.mode == "preview"
+    assert pane.preview_path == str(report)
+    assert pane.preview_content == "PDF text\n"
+    assert preview_loader.calls == [f"{report}:{64 * 1024}"]
+
+
+def test_pdftotext_pdf_preview_loader_caches_pdftotext_path(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from zivo.services.browser_snapshot import PdftotextPdfPreviewLoader
+
+    first = tmp_path / "first.pdf"
+    second = tmp_path / "second.pdf"
+    first.write_bytes(b"%PDF-1.4")
+    second.write_bytes(b"%PDF-1.4")
+    loader = PdftotextPdfPreviewLoader()
+    which_calls: list[str] = []
+
+    def _which(name: str) -> str:
+        which_calls.append(name)
+        return "/usr/bin/pdftotext"
+
+    class _CompletedProcess:
+        stdout = b"PDF text\n"
+
+    monkeypatch.setattr("zivo.services.previews.core.shutil.which", _which)
+    monkeypatch.setattr(
+        "zivo.services.previews.core.subprocess.run",
+        lambda *args, **kwargs: _CompletedProcess(),
+    )
+
+    assert loader.load_preview(first, preview_max_bytes=64 * 1024) == (
+        FilePreviewState.with_content("PDF text\n", False)
+    )
+    assert loader.load_preview(second, preview_max_bytes=64 * 1024) == (
+        FilePreviewState.with_content("PDF text\n", False)
+    )
+    assert which_calls == ["pdftotext"]
+
+
+def test_pdftotext_pdf_preview_loader_caches_missing_pdftotext(
+    tmp_path,
+    monkeypatch,
+) -> None:
+    from zivo.services.browser_snapshot import PdftotextPdfPreviewLoader
+
+    first = tmp_path / "first.pdf"
+    second = tmp_path / "second.pdf"
+    first.write_bytes(b"%PDF-1.4")
+    second.write_bytes(b"%PDF-1.4")
+    loader = PdftotextPdfPreviewLoader()
+    which_calls: list[str] = []
+
+    def _which(name: str) -> None:
+        which_calls.append(name)
+        return None
+
+    monkeypatch.setattr("zivo.services.previews.core.shutil.which", _which)
+
+    assert loader.load_preview(first, preview_max_bytes=64 * 1024) is None
+    assert loader.load_preview(second, preview_max_bytes=64 * 1024) is None
+    assert which_calls == ["pdftotext"]
 
 
 def test_live_browser_snapshot_loader_skips_pdf_preview_when_disabled(
