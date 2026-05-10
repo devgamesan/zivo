@@ -236,6 +236,8 @@ def restore_ui_mode_after_pending_input(state) -> str:
         or state.pending_input.chmod_target_paths is not None
     ):
         return "CHMOD"
+    if state.pending_input.chown_target_paths is not None:
+        return "CHOWN"
     if state.pending_input.extract_source_path is not None:
         return "EXTRACT"
     if state.pending_input.zip_source_paths is not None:

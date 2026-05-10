@@ -6,11 +6,13 @@ from pathlib import Path
 from zivo.archive_utils import resolve_zip_destination_input
 from zivo.models import (
     ChmodRequest,
+    ChownRequest,
     CreatePathRequest,
     CreateSymlinkRequest,
     CreateZipArchiveRequest,
     ExtractArchiveRequest,
     RecursiveChmodRequest,
+    RecursiveChownRequest,
     RenameRequest,
 )
 from zivo.windows_paths import join_path, resolve_parent_directory_path
@@ -35,6 +37,9 @@ def validate_pending_input(state, *, is_macos: bool) -> str | None:
         if len(mode_text) != 3 or any(char not in "01234567" for char in mode_text):
             return "Permissions must be a 3-digit octal mode (000-777)"
         return None
+
+    if state.pending_input.chown_target_paths is not None:
+        return validate_chown_input(state.pending_input.value)
 
     if state.pending_input.extract_source_path is not None:
         destination = state.pending_input.value.strip()
@@ -147,6 +152,8 @@ def build_file_mutation_request(
     | CreateSymlinkRequest
     | ChmodRequest
     | RecursiveChmodRequest
+    | ChownRequest
+    | RecursiveChownRequest
     | None
 ):
     if state.pending_input is None:
@@ -166,6 +173,19 @@ def build_file_mutation_request(
         return ChmodRequest(
             paths=state.pending_input.chmod_target_paths,
             mode=mode,
+        )
+    if state.ui_mode == "CHOWN" and state.pending_input.chown_target_paths is not None:
+        owner, group = parse_chown_input(state.pending_input.value)
+        if state.pending_input.chown_recursive:
+            return RecursiveChownRequest(
+                paths=state.pending_input.chown_target_paths,
+                owner=owner,
+                group=group,
+            )
+        return ChownRequest(
+            paths=state.pending_input.chown_target_paths,
+            owner=owner,
+            group=group,
         )
     if state.ui_mode == "RENAME" and state.pending_input.target_path is not None:
         return RenameRequest(
@@ -257,6 +277,10 @@ def pending_input_parent_and_target(state) -> tuple[str | None, str | None]:
         first_path = state.pending_input.chmod_target_paths[0]
         _, parent_path = resolve_parent_directory_path(first_path)
         return (parent_path, first_path)
+    if state.ui_mode == "CHOWN" and state.pending_input.chown_target_paths is not None:
+        first_path = state.pending_input.chown_target_paths[0]
+        _, parent_path = resolve_parent_directory_path(first_path)
+        return (parent_path, first_path)
     if state.ui_mode == "CREATE":
         if state.layout_mode == "transfer":
             active_pane = _active_transfer_pane(state)
@@ -285,6 +309,30 @@ def _active_transfer_pane(state):
     if state.active_transfer_pane == "left":
         return state.transfer_left
     return state.transfer_right
+
+
+def validate_chown_input(value: str) -> str | None:
+    owner_group = value.strip()
+    if not owner_group:
+        return "Owner must include an owner, group, or both"
+    if owner_group.count(":") > 1:
+        return "Owner must use owner[:group] format"
+    owner, separator, group = owner_group.partition(":")
+    if separator and not owner and not group:
+        return "Owner must include an owner, group, or both"
+    if not owner and not group:
+        return "Owner must include an owner, group, or both"
+    if any(char.isspace() for char in owner_group):
+        return "Owner and group cannot contain whitespace"
+    return None
+
+
+def parse_chown_input(value: str) -> tuple[str | None, str | None]:
+    owner_group = value.strip()
+    owner, separator, group = owner_group.partition(":")
+    if not separator:
+        return (owner, None)
+    return (owner or None, group or None)
 
 
 def _pending_input_existing_paths(state) -> tuple[str, ...]:

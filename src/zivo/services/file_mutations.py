@@ -9,11 +9,13 @@ from typing import Mapping, Protocol
 from zivo.adapters import FileOperationAdapter, LocalFileOperationAdapter
 from zivo.models import (
     ChmodRequest,
+    ChownRequest,
     CreatePathRequest,
     CreateSymlinkRequest,
     DeleteRequest,
     FileMutationResult,
     RecursiveChmodRequest,
+    RecursiveChownRequest,
     RenameRequest,
 )
 from zivo.services.trash_operations import TrashService, resolve_trash_service
@@ -25,6 +27,8 @@ FileMutationRequest = (
     | DeleteRequest
     | ChmodRequest
     | RecursiveChmodRequest
+    | ChownRequest
+    | RecursiveChownRequest
 )
 
 
@@ -58,6 +62,10 @@ class LiveFileMutationService:
             return self._execute_chmod(request)
         if isinstance(request, RecursiveChmodRequest):
             return self._execute_recursive_chmod(request)
+        if isinstance(request, ChownRequest):
+            return self._execute_chown(request)
+        if isinstance(request, RecursiveChownRequest):
+            return self._execute_recursive_chown(request)
         return self._execute_create(request)
 
     def _execute_rename(self, request: RenameRequest) -> FileMutationResult:
@@ -249,6 +257,49 @@ class LiveFileMutationService:
             operation="chmod",
         )
 
+    def _execute_chown(self, request: ChownRequest) -> FileMutationResult:
+        changed_paths: list[str] = []
+        failures: list[tuple[str, str]] = []
+
+        for path in request.paths:
+            target_path = _absolute_entry_path(path)
+            try:
+                self.adapter.change_owner(str(target_path), request.owner, request.group)
+            except OSError as error:
+                failures.append((str(target_path), str(error) or "Owner change failed"))
+            else:
+                changed_paths.append(str(target_path))
+
+        return _build_chown_result(
+            changed_paths=changed_paths,
+            failures=failures,
+            owner=request.owner,
+            group=request.group,
+            empty_message="Change owner requires at least one target",
+            result_path=None,
+        )
+
+    def _execute_recursive_chown(self, request: RecursiveChownRequest) -> FileMutationResult:
+        changed_paths: list[str] = []
+        failures: list[tuple[str, str]] = []
+
+        for target_path in _iter_recursive_mutation_targets(request.paths):
+            try:
+                self.adapter.change_owner(str(target_path), request.owner, request.group)
+            except OSError as error:
+                failures.append((str(target_path), str(error) or "Owner change failed"))
+            else:
+                changed_paths.append(str(target_path))
+
+        return _build_chown_result(
+            changed_paths=changed_paths,
+            failures=failures,
+            owner=request.owner,
+            group=request.group,
+            empty_message="No files matched recursive owner change",
+            result_path=str(_absolute_entry_path(request.paths[0])) if request.paths else None,
+        )
+
 
 @dataclass(frozen=True)
 class FakeFileMutationService:
@@ -338,6 +389,16 @@ class FakeFileMutationService:
                 operation="chmod",
             )
 
+        if isinstance(request, ChownRequest | RecursiveChownRequest):
+            noun = "item" if len(request.paths) == 1 else "items"
+            suffix = "" if len(request.paths) == 1 else f" for {len(request.paths)} {noun}"
+            owner_group = _format_owner_group(request.owner, request.group)
+            return FileMutationResult(
+                path=str(_absolute_entry_path(request.paths[0])) if request.paths else None,
+                message=f"Changed owner to {owner_group}{suffix}",
+                operation="chown",
+            )
+
         target_path = _absolute_entry_path(request.parent_dir) / request.name
         message = (
             f"Created file {request.name}"
@@ -352,6 +413,10 @@ def _absolute_entry_path(path: str) -> Path:
 
 
 def _iter_recursive_chmod_targets(paths: tuple[str, ...]) -> tuple[Path, ...]:
+    return _iter_recursive_mutation_targets(paths)
+
+
+def _iter_recursive_mutation_targets(paths: tuple[str, ...]) -> tuple[Path, ...]:
     targets: list[Path] = []
     for path in paths:
         root = _absolute_entry_path(path)
@@ -373,3 +438,59 @@ def _iter_recursive_chmod_targets(paths: tuple[str, ...]) -> tuple[Path, ...]:
                     if not child.is_symlink():
                         targets.append(child)
     return tuple(targets)
+
+
+def _format_owner_group(owner: str | None, group: str | None) -> str:
+    if owner is not None and group is not None:
+        return f"{owner}:{group}"
+    if owner is not None:
+        return owner
+    if group is not None:
+        return f":{group}"
+    return "<unchanged>"
+
+
+def _build_chown_result(
+    *,
+    changed_paths: list[str],
+    failures: list[tuple[str, str]],
+    owner: str | None,
+    group: str | None,
+    empty_message: str,
+    result_path: str | None,
+) -> FileMutationResult:
+    owner_group = _format_owner_group(owner, group)
+
+    if not changed_paths:
+        if len(failures) == 1:
+            failed_name = Path(failures[0][0]).name
+            raise OSError(f"Failed to change owner for {failed_name}: {failures[0][1]}")
+        if failures:
+            raise OSError(f"Failed to change owner for {len(failures)} items")
+        raise OSError(empty_message)
+
+    if failures:
+        return FileMutationResult(
+            path=None,
+            message=(
+                f"Changed owner to {owner_group} for "
+                f"{len(changed_paths)}/{len(changed_paths) + len(failures)} items "
+                f"with {len(failures)} failure(s)"
+            ),
+            level="warning",
+            operation="chown",
+        )
+
+    if len(changed_paths) == 1:
+        return FileMutationResult(
+            path=changed_paths[0],
+            message=f"Changed owner to {owner_group}",
+            operation="chown",
+        )
+
+    noun = "item" if len(changed_paths) == 1 else "items"
+    return FileMutationResult(
+        path=result_path,
+        message=f"Changed owner to {owner_group} for {len(changed_paths)} {noun}",
+        operation="chown",
+    )

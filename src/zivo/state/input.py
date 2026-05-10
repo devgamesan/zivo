@@ -77,7 +77,7 @@ def dispatch_key_input(
         return warn("Input ignored while processing")
     if state.ui_mode == "PALETTE":
         return dispatch_command_palette_input(state, key=key, character=character)
-    if state.ui_mode in {"CHMOD", "RENAME", "CREATE", "EXTRACT", "ZIP", "SYMLINK"}:
+    if state.ui_mode in {"CHMOD", "CHOWN", "RENAME", "CREATE", "EXTRACT", "ZIP", "SYMLINK"}:
         return dispatch_input_dialog_input(state, key=key, character=character)
     if state.ui_mode == "SHELL":
         return dispatch_shell_command_input(state, key=key, character=character)
@@ -106,6 +106,7 @@ def _normalize_input_character(
     if state.ui_mode in {
         "PALETTE",
         "CHMOD",
+        "CHOWN",
         "RENAME",
         "CREATE",
         "EXTRACT",

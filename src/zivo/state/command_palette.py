@@ -390,6 +390,22 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
                         enabled=True,
                     )
                 )
+                items.append(
+                    CommandPaletteItem(
+                        id="change_owner",
+                        label="Change owner",
+                        shortcut=None,
+                        enabled=True,
+                    )
+                )
+                items.append(
+                    CommandPaletteItem(
+                        id="change_owner_recursively",
+                        label="Change owner recursively",
+                        shortcut=None,
+                        enabled=True,
+                    )
+                )
             items.append(
                 CommandPaletteItem(
                     id="create_symlink",
@@ -445,6 +461,22 @@ def _build_command_palette_items(state: AppState) -> tuple[CommandPaletteItem, .
                 CommandPaletteItem(
                     id="change_permissions_recursively",
                     label="Change permissions recursively",
+                    shortcut=None,
+                    enabled=True,
+                )
+            )
+            items.append(
+                CommandPaletteItem(
+                    id="change_owner",
+                    label="Change owner",
+                    shortcut=None,
+                    enabled=True,
+                )
+            )
+            items.append(
+                CommandPaletteItem(
+                    id="change_owner_recursively",
+                    label="Change owner recursively",
                     shortcut=None,
                     enabled=True,
                 )
@@ -605,6 +637,18 @@ def _build_transfer_command_palette_items(state: AppState) -> tuple[CommandPalet
             CommandPaletteItem(
                 id="change_permissions_recursively",
                 label="Change permissions recursively",
+                shortcut=None,
+                enabled=has_target,
+            ),
+            CommandPaletteItem(
+                id="change_owner",
+                label="Change owner",
+                shortcut=None,
+                enabled=has_target,
+            ),
+            CommandPaletteItem(
+                id="change_owner_recursively",
+                label="Change owner recursively",
                 shortcut=None,
                 enabled=has_target,
             ),

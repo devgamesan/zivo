@@ -32,6 +32,8 @@ class FileOperationAdapter(Protocol):
 
     def change_permissions(self, path: str, mode: int) -> None: ...
 
+    def change_owner(self, path: str, owner: str | None, group: str | None) -> None: ...
+
     def send_to_trash(self, path: str) -> None: ...
 
 
@@ -140,6 +142,17 @@ class LocalFileOperationAdapter:
         except OSError as error:
             raise OSError(str(error) or "Permission change failed") from error
 
+    def change_owner(self, path: str, owner: str | None, group: str | None) -> None:
+        target = self._entry_path(path)
+        try:
+            os.chown(
+                target,
+                _resolve_owner_id(owner),
+                _resolve_group_id(group),
+            )
+        except (AttributeError, OSError) as error:
+            raise OSError(str(error) or "Owner change failed") from error
+
     def send_to_trash(self, path: str) -> None:
         target = self._entry_path(path)
         try:
@@ -150,3 +163,29 @@ class LocalFileOperationAdapter:
     @staticmethod
     def _entry_path(path: str) -> Path:
         return Path(os.path.abspath(os.path.expanduser(path)))
+
+
+def _resolve_owner_id(owner: str | None) -> int:
+    if owner is None:
+        return -1
+    if owner.isdecimal():
+        return int(owner)
+    try:
+        import pwd
+
+        return pwd.getpwnam(owner).pw_uid
+    except (ImportError, KeyError) as error:
+        raise OSError(f"Unknown owner: {owner}") from error
+
+
+def _resolve_group_id(group: str | None) -> int:
+    if group is None:
+        return -1
+    if group.isdecimal():
+        return int(group)
+    try:
+        import grp
+
+        return grp.getgrnam(group).gr_gid
+    except (ImportError, KeyError) as error:
+        raise OSError(f"Unknown group: {group}") from error

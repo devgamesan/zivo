@@ -9,7 +9,7 @@ CreateKind = Literal["file", "dir"]
 DeleteMode = Literal["trash", "permanent"]
 MutationResultLevel = Literal["info", "warning", "error"]
 ArchiveFormat = Literal["zip", "tar", "tar.gz", "tar.bz2", "gz", "bz2"]
-FileMutationOperation = Literal["rename", "create", "delete", "symlink", "chmod"]
+FileMutationOperation = Literal["rename", "create", "delete", "symlink", "chmod", "chown"]
 UndoOperationKind = Literal["rename", "paste_copy", "paste_cut", "trash_delete"]
 
 
@@ -143,6 +143,24 @@ class RecursiveChmodRequest:
     mode: int
 
 
+@dataclass(frozen=True)
+class ChownRequest:
+    """A request to change the owner and/or group for one or more paths."""
+
+    paths: tuple[str, ...]
+    owner: str | None = None
+    group: str | None = None
+
+
+@dataclass(frozen=True)
+class RecursiveChownRequest:
+    """A request to recursively change owner and/or group for one or more paths."""
+
+    paths: tuple[str, ...]
+    owner: str | None = None
+    group: str | None = None
+
+
 FileMutationRequest = (
     RenameRequest
     | CreatePathRequest
@@ -150,6 +168,8 @@ FileMutationRequest = (
     | DeleteRequest
     | ChmodRequest
     | RecursiveChmodRequest
+    | ChownRequest
+    | RecursiveChownRequest
 )
 
 

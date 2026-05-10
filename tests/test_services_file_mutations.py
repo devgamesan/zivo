@@ -6,10 +6,12 @@ import pytest
 
 from zivo.models import (
     ChmodRequest,
+    ChownRequest,
     CreatePathRequest,
     CreateSymlinkRequest,
     DeleteRequest,
     RecursiveChmodRequest,
+    RecursiveChownRequest,
     RenameRequest,
 )
 from zivo.services import LiveFileMutationService
@@ -30,6 +32,7 @@ class StubFileOperationAdapter:
     created_directories: list[str] = field(default_factory=list)
     created_symlinks: list[tuple[str, str, bool]] = field(default_factory=list)
     changed_permissions: list[tuple[str, int]] = field(default_factory=list)
+    changed_owners: list[tuple[str, str | None, str | None]] = field(default_factory=list)
 
     def path_exists(self, path: str) -> bool:
         return False
@@ -72,6 +75,11 @@ class StubFileOperationAdapter:
         if path in self.failing_paths:
             raise OSError("chmod failed")
         self.changed_permissions.append((path, mode))
+
+    def change_owner(self, path: str, owner: str | None, group: str | None) -> None:
+        if path in self.failing_paths:
+            raise OSError("chown failed")
+        self.changed_owners.append((path, owner, group))
 
     def send_to_trash(self, path: str) -> None:
         if path in self.failing_paths:
@@ -236,6 +244,108 @@ def test_file_mutation_service_chmod_reports_partial_failures() -> None:
     assert adapter.changed_permissions == [(_absolute("/tmp/zivo/run.sh"), 0o755)]
     assert result.level == "warning"
     assert result.message == "Changed permissions to 755 for 1/2 items with 1 failure(s)"
+
+
+def test_file_mutation_service_changes_owner() -> None:
+    adapter = StubFileOperationAdapter()
+    service = LiveFileMutationService(adapter=adapter)
+
+    result = service.execute(
+        ChownRequest(paths=("/tmp/zivo/run.sh",), owner="alice", group="staff")
+    )
+
+    assert adapter.changed_owners == [(_absolute("/tmp/zivo/run.sh"), "alice", "staff")]
+    assert result.path == _absolute("/tmp/zivo/run.sh")
+    assert result.message == "Changed owner to alice:staff"
+    assert result.operation == "chown"
+
+
+def test_file_mutation_service_changes_group_only() -> None:
+    adapter = StubFileOperationAdapter()
+    service = LiveFileMutationService(adapter=adapter)
+
+    result = service.execute(ChownRequest(paths=("/tmp/zivo/run.sh",), group="staff"))
+
+    assert adapter.changed_owners == [(_absolute("/tmp/zivo/run.sh"), None, "staff")]
+    assert result.message == "Changed owner to :staff"
+
+
+def test_file_mutation_service_changes_owner_for_multiple_paths() -> None:
+    adapter = StubFileOperationAdapter()
+    service = LiveFileMutationService(adapter=adapter)
+
+    result = service.execute(
+        ChownRequest(
+            paths=("/tmp/zivo/run.sh", "/tmp/zivo/build.sh"),
+            owner="alice",
+            group=None,
+        )
+    )
+
+    assert adapter.changed_owners == [
+        (_absolute("/tmp/zivo/run.sh"), "alice", None),
+        (_absolute("/tmp/zivo/build.sh"), "alice", None),
+    ]
+    assert result.path is None
+    assert result.message == "Changed owner to alice for 2 items"
+    assert result.operation == "chown"
+
+
+def test_file_mutation_service_chown_reports_partial_failures() -> None:
+    adapter = StubFileOperationAdapter(failing_paths={_absolute("/tmp/zivo/build.sh")})
+    service = LiveFileMutationService(adapter=adapter)
+
+    result = service.execute(
+        ChownRequest(
+            paths=("/tmp/zivo/run.sh", "/tmp/zivo/build.sh"),
+            owner="alice",
+        )
+    )
+
+    assert adapter.changed_owners == [(_absolute("/tmp/zivo/run.sh"), "alice", None)]
+    assert result.level == "warning"
+    assert result.message == "Changed owner to alice for 1/2 items with 1 failure(s)"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlink handling differs on Windows")
+def test_file_mutation_service_recursive_chown_skips_symlinks(tmp_path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    ok_file = root / "ok.txt"
+    ok_file.write_text("ok\n", encoding="utf-8")
+    target = tmp_path / "target"
+    target.mkdir()
+    link = root / "target-link"
+    link.symlink_to(target, target_is_directory=True)
+    adapter = StubFileOperationAdapter()
+    service = LiveFileMutationService(adapter=adapter)
+
+    result = service.execute(RecursiveChownRequest(paths=(str(root),), group="staff"))
+
+    assert adapter.changed_owners == [
+        (str(root), None, "staff"),
+        (str(ok_file), None, "staff"),
+    ]
+    assert result.message == "Changed owner to :staff for 2 items"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="chown is not supported on native Windows")
+def test_file_mutation_service_recursive_chown_reports_partial_failures(tmp_path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    ok_file = root / "ok.txt"
+    ok_file.write_text("ok\n", encoding="utf-8")
+    failing_file = root / "fail.txt"
+    failing_file.write_text("fail\n", encoding="utf-8")
+    adapter = StubFileOperationAdapter(failing_paths={str(failing_file)})
+    service = LiveFileMutationService(adapter=adapter)
+
+    result = service.execute(RecursiveChownRequest(paths=(str(root),), owner="alice"))
+
+    assert result.level == "warning"
+    assert result.message == "Changed owner to alice for 2/3 items with 1 failure(s)"
+    assert (str(root), "alice", None) in adapter.changed_owners
+    assert (str(ok_file), "alice", None) in adapter.changed_owners
 
 
 @pytest.mark.skipif(os.name == "nt", reason="chmod is not supported on native Windows")

@@ -42,6 +42,20 @@ class BeginRecursiveChmodInput:
 
 
 @dataclass(frozen=True)
+class BeginChownInput:
+    """Enter chown input mode for one or more paths."""
+
+    paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class BeginRecursiveChownInput:
+    """Enter recursive chown input mode for one or more paths."""
+
+    paths: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class BeginCreateInput:
     """Enter create input mode for a new file or directory."""
 
