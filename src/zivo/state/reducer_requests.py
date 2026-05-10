@@ -231,7 +231,10 @@ def cursor_path_after_file_mutation(
 def restore_ui_mode_after_pending_input(state) -> str:
     if state.pending_input is None:
         return "BROWSING"
-    if state.pending_input.chmod_target_path is not None:
+    if (
+        state.pending_input.chmod_target_path is not None
+        or state.pending_input.chmod_target_paths is not None
+    ):
         return "CHMOD"
     if state.pending_input.extract_source_path is not None:
         return "EXTRACT"

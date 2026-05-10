@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass, field
+from stat import S_IMODE
 
 import pytest
 
@@ -8,6 +9,7 @@ from zivo.models import (
     CreatePathRequest,
     CreateSymlinkRequest,
     DeleteRequest,
+    RecursiveChmodRequest,
     RenameRequest,
 )
 from zivo.services import LiveFileMutationService
@@ -204,6 +206,79 @@ def test_file_mutation_service_raises_chmod_error() -> None:
 
     with pytest.raises(OSError, match="chmod failed"):
         service.execute(ChmodRequest(path="/tmp/zivo/run.sh", mode=0o755))
+
+
+@pytest.mark.skipif(os.name == "nt", reason="chmod is not supported on native Windows")
+def test_file_mutation_service_changes_permissions_recursively(tmp_path) -> None:
+    root = tmp_path / "project"
+    nested = root / "src"
+    nested.mkdir(parents=True)
+    script = nested / "run.sh"
+    script.write_text("#!/bin/sh\n", encoding="utf-8")
+    readme = root / "README.md"
+    readme.write_text("docs\n", encoding="utf-8")
+    service = LiveFileMutationService()
+
+    result = service.execute(RecursiveChmodRequest(paths=(str(root),), mode=0o700))
+
+    assert S_IMODE(root.stat().st_mode) == 0o700
+    assert S_IMODE(nested.stat().st_mode) == 0o700
+    assert S_IMODE(script.stat().st_mode) == 0o700
+    assert S_IMODE(readme.stat().st_mode) == 0o700
+    assert result.message == "Changed permissions to 700 for 4 items"
+    assert result.operation == "chmod"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="symlink handling differs on Windows")
+def test_file_mutation_service_recursive_chmod_skips_symlinks(tmp_path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    target = tmp_path / "target"
+    target.mkdir()
+    target_file = target / "secret.txt"
+    target_file.write_text("secret\n", encoding="utf-8")
+    link = root / "target-link"
+    link.symlink_to(target, target_is_directory=True)
+    service = LiveFileMutationService()
+    original_target_mode = S_IMODE(target.stat().st_mode)
+    original_file_mode = S_IMODE(target_file.stat().st_mode)
+
+    result = service.execute(RecursiveChmodRequest(paths=(str(root),), mode=0o700))
+
+    assert S_IMODE(root.stat().st_mode) == 0o700
+    assert S_IMODE(target.stat().st_mode) == original_target_mode
+    assert S_IMODE(target_file.stat().st_mode) == original_file_mode
+    assert result.message == "Changed permissions to 700 for 1 item"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="chmod is not supported on native Windows")
+def test_file_mutation_service_recursive_chmod_reports_partial_failures(tmp_path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    ok_file = root / "ok.txt"
+    ok_file.write_text("ok\n", encoding="utf-8")
+    failing_file = root / "fail.txt"
+    failing_file.write_text("fail\n", encoding="utf-8")
+    adapter = StubFileOperationAdapter(failing_paths={str(failing_file)})
+    service = LiveFileMutationService(adapter=adapter)
+
+    result = service.execute(RecursiveChmodRequest(paths=(str(root),), mode=0o700))
+
+    assert result.level == "warning"
+    assert result.message == "Changed permissions to 700 for 2/3 items with 1 failure(s)"
+    assert (str(root), 0o700) in adapter.changed_permissions
+    assert (str(ok_file), 0o700) in adapter.changed_permissions
+
+
+@pytest.mark.skipif(os.name == "nt", reason="chmod is not supported on native Windows")
+def test_file_mutation_service_recursive_chmod_raises_when_all_targets_fail(tmp_path) -> None:
+    root = tmp_path / "project"
+    root.mkdir()
+    adapter = StubFileOperationAdapter(failing_paths={str(root)})
+    service = LiveFileMutationService(adapter=adapter)
+
+    with pytest.raises(OSError, match="Failed to change permissions for project"):
+        service.execute(RecursiveChmodRequest(paths=(str(root),), mode=0o700))
 
 
 @pytest.mark.skipif(os.name == "nt", reason="symlink creation requires extra Windows privileges")

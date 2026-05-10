@@ -13,6 +13,7 @@ from zivo.models import (
     ExternalLaunchRequest,
     ExtractArchiveRequest,
     PasteRequest,
+    RecursiveChmodRequest,
     RenameRequest,
     TextReplaceRequest,
     UndoEntry,
@@ -119,7 +120,14 @@ class RunFileMutationEffect:
     """Execute a rename/create mutation outside the reducer."""
 
     request_id: int
-    request: RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest | ChmodRequest
+    request: (
+        RenameRequest
+        | CreatePathRequest
+        | CreateSymlinkRequest
+        | DeleteRequest
+        | ChmodRequest
+        | RecursiveChmodRequest
+    )
 
 
 @dataclass(frozen=True)

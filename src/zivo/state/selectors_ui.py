@@ -286,7 +286,11 @@ def select_input_dialog_state(state: AppState) -> InputDialogState | None:
     if state.pending_input is None:
         return None
     if state.ui_mode == "CHMOD":
-        title = "Change Permissions"
+        title = (
+            "Change Permissions Recursively"
+            if state.pending_input.chmod_target_paths is not None
+            else "Change Permissions"
+        )
     elif state.ui_mode == "RENAME":
         title = "Rename"
     elif state.ui_mode == "EXTRACT":
