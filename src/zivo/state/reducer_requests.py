@@ -5,6 +5,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from zivo.models import (
+    ChmodRequest,
     CreatePathRequest,
     CreateSymlinkRequest,
     CreateZipArchiveRequest,
@@ -40,6 +41,9 @@ from .effects import (
 from .models import HistoryState, NotificationState, resolve_parent_directory_path
 
 ReducerFn = Callable[[object, Action], ReduceResult]
+FileMutationRequest = (
+    RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest | ChmodRequest
+)
 
 
 def finalize(next_state, *effects: Effect) -> ReduceResult:
@@ -82,7 +86,7 @@ def run_external_launch_request(
 
 def run_file_mutation_request(
     state,
-    request: RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest,
+    request: FileMutationRequest,
 ) -> ReduceResult:
     request_id = state.next_request_id
     next_state = replace(
@@ -227,6 +231,13 @@ def cursor_path_after_file_mutation(
 def restore_ui_mode_after_pending_input(state) -> str:
     if state.pending_input is None:
         return "BROWSING"
+    if (
+        state.pending_input.chmod_target_path is not None
+        or state.pending_input.chmod_target_paths is not None
+    ):
+        return "CHMOD"
+    if state.pending_input.chown_target_paths is not None:
+        return "CHOWN"
     if state.pending_input.extract_source_path is not None:
         return "EXTRACT"
     if state.pending_input.zip_source_paths is not None:

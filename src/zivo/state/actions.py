@@ -1,9 +1,13 @@
 """Reducer actions for app state transitions."""
 
 from .actions_input import (
+    BeginChmodInput,
+    BeginChownInput,
     BeginCreateInput,
     BeginExtractArchiveInput,
     BeginFilterInput,
+    BeginRecursiveChmodInput,
+    BeginRecursiveChownInput,
     BeginRenameInput,
     BeginShellCommandInput,
     BeginSymlinkInput,
@@ -68,9 +72,13 @@ from .actions_mutations import (
 
 __all__ = [
     # Input actions
+    "BeginChmodInput",
+    "BeginChownInput",
     "BeginCreateInput",
     "BeginExtractArchiveInput",
     "BeginFilterInput",
+    "BeginRecursiveChmodInput",
+    "BeginRecursiveChownInput",
     "BeginRenameInput",
     "BeginShellCommandInput",
     "BeginSymlinkInput",
@@ -340,6 +348,10 @@ Action = (
     | BeginFilterInput
     | ConfirmFilterInput
     | CancelFilterInput
+    | BeginChmodInput
+    | BeginRecursiveChmodInput
+    | BeginChownInput
+    | BeginRecursiveChownInput
     | BeginRenameInput
     | BeginCreateInput
     | BeginSymlinkInput

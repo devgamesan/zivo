@@ -2,14 +2,19 @@
 
 from dataclasses import replace
 from pathlib import Path
+from stat import S_IMODE
 
 from zivo.archive_utils import default_extract_destination, default_zip_destination
 from zivo.models import CreateSymlinkRequest, RenameRequest
 from zivo.windows_paths import basename, join_path
 
 from .actions import (
+    BeginChmodInput,
+    BeginChownInput,
     BeginCreateInput,
     BeginExtractArchiveInput,
+    BeginRecursiveChmodInput,
+    BeginRecursiveChownInput,
     BeginRenameInput,
     BeginSymlinkInput,
     BeginZipCompressInput,
@@ -197,6 +202,228 @@ def _handle_begin_rename_input(state, action, reduce_state):
             attribute_inspection=None,
         )
     )
+
+
+def _handle_begin_chmod_input(state, action, reduce_state):
+    if not action.paths:
+        return notify(
+            state,
+            level="warning",
+            message="Change permissions requires at least one target",
+        )
+
+    first_path = action.paths[0]
+    if state.layout_mode == "transfer":
+        active_pane = (
+            state.transfer_left
+            if state.active_transfer_pane == "left"
+            else state.transfer_right
+        )
+        entry = (
+            next(
+                (
+                    candidate
+                    for candidate in active_pane.pane.entries
+                    if candidate.path == first_path
+                ),
+                None,
+            )
+            if active_pane is not None
+            else None
+        )
+    else:
+        entry = current_entry_for_path(state, first_path)
+    if entry is None:
+        return finalize(state)
+    value = "" if entry.permissions_mode is None else f"{S_IMODE(entry.permissions_mode):03o}"
+    return finalize(
+        replace(
+            state,
+            ui_mode="CHMOD",
+            notification=None,
+            pending_input=PendingInputState(
+                prompt="Permissions: ",
+                value=value,
+                cursor_pos=len(value),
+                chmod_target_paths=action.paths,
+                chmod_recursive=False,
+            ),
+            command_palette=None,
+            pending_file_search_request_id=None,
+            pending_grep_search_request_id=None,
+            delete_confirmation=None,
+            archive_extract_confirmation=None,
+            archive_extract_progress=None,
+            zip_compress_confirmation=None,
+            zip_compress_progress=None,
+            symlink_overwrite_confirmation=None,
+            name_conflict=None,
+            attribute_inspection=None,
+        )
+    )
+
+
+def _handle_begin_recursive_chmod_input(state, action, reduce_state):
+    if not action.paths:
+        return notify(
+            state,
+            level="warning",
+            message="Change permissions recursively requires at least one target",
+        )
+
+    first_path = action.paths[0]
+    if state.layout_mode == "transfer":
+        active_pane = (
+            state.transfer_left
+            if state.active_transfer_pane == "left"
+            else state.transfer_right
+        )
+        entry = (
+            next(
+                (
+                    candidate
+                    for candidate in active_pane.pane.entries
+                    if candidate.path == first_path
+                ),
+                None,
+            )
+            if active_pane is not None
+            else None
+        )
+    else:
+        entry = current_entry_for_path(state, first_path)
+    value = (
+        ""
+        if entry is None or entry.permissions_mode is None
+        else f"{S_IMODE(entry.permissions_mode):03o}"
+    )
+    return finalize(
+        replace(
+            state,
+            ui_mode="CHMOD",
+            notification=None,
+            pending_input=PendingInputState(
+                prompt="Permissions recursively: ",
+                value=value,
+                cursor_pos=len(value),
+                chmod_target_paths=action.paths,
+                chmod_recursive=True,
+            ),
+            command_palette=None,
+            pending_file_search_request_id=None,
+            pending_grep_search_request_id=None,
+            delete_confirmation=None,
+            archive_extract_confirmation=None,
+            archive_extract_progress=None,
+            zip_compress_confirmation=None,
+            zip_compress_progress=None,
+            symlink_overwrite_confirmation=None,
+            name_conflict=None,
+            attribute_inspection=None,
+        )
+    )
+
+
+def _handle_begin_chown_input(state, action, reduce_state):
+    if not action.paths:
+        return notify(
+            state,
+            level="warning",
+            message="Change owner requires at least one target",
+        )
+
+    entry = _entry_for_pending_input_path(state, action.paths[0])
+    value = _format_owner_group_input(entry)
+    return finalize(
+        replace(
+            state,
+            ui_mode="CHOWN",
+            notification=None,
+            pending_input=PendingInputState(
+                prompt="Owner: ",
+                value=value,
+                cursor_pos=len(value),
+                chown_target_paths=action.paths,
+                chown_recursive=False,
+            ),
+            command_palette=None,
+            pending_file_search_request_id=None,
+            pending_grep_search_request_id=None,
+            delete_confirmation=None,
+            archive_extract_confirmation=None,
+            archive_extract_progress=None,
+            zip_compress_confirmation=None,
+            zip_compress_progress=None,
+            symlink_overwrite_confirmation=None,
+            name_conflict=None,
+            attribute_inspection=None,
+        )
+    )
+
+
+def _handle_begin_recursive_chown_input(state, action, reduce_state):
+    if not action.paths:
+        return notify(
+            state,
+            level="warning",
+            message="Change owner recursively requires at least one target",
+        )
+
+    entry = _entry_for_pending_input_path(state, action.paths[0])
+    value = _format_owner_group_input(entry)
+    return finalize(
+        replace(
+            state,
+            ui_mode="CHOWN",
+            notification=None,
+            pending_input=PendingInputState(
+                prompt="Owner recursively: ",
+                value=value,
+                cursor_pos=len(value),
+                chown_target_paths=action.paths,
+                chown_recursive=True,
+            ),
+            command_palette=None,
+            pending_file_search_request_id=None,
+            pending_grep_search_request_id=None,
+            delete_confirmation=None,
+            archive_extract_confirmation=None,
+            archive_extract_progress=None,
+            zip_compress_confirmation=None,
+            zip_compress_progress=None,
+            symlink_overwrite_confirmation=None,
+            name_conflict=None,
+            attribute_inspection=None,
+        )
+    )
+
+
+def _entry_for_pending_input_path(state, path: str):
+    if state.layout_mode == "transfer":
+        active_pane = (
+            state.transfer_left
+            if state.active_transfer_pane == "left"
+            else state.transfer_right
+        )
+        if active_pane is None:
+            return None
+        return next(
+            (candidate for candidate in active_pane.pane.entries if candidate.path == path),
+            None,
+        )
+    return current_entry_for_path(state, path)
+
+
+def _format_owner_group_input(entry) -> str:
+    if entry is None:
+        return ""
+    if entry.owner and entry.group:
+        return f"{entry.owner}:{entry.group}"
+    if entry.owner:
+        return entry.owner
+    if entry.group:
+        return f":{entry.group}"
+    return ""
 
 
 def _handle_begin_create_input(state, action, reduce_state):
@@ -447,6 +674,10 @@ def _handle_cancel_symlink_overwrite_confirmation(state, action, reduce_state):
 
 
 INPUT_MUTATION_HANDLERS: dict[type, MutationHandler] = {
+    BeginChmodInput: _handle_begin_chmod_input,
+    BeginRecursiveChmodInput: _handle_begin_recursive_chmod_input,
+    BeginChownInput: _handle_begin_chown_input,
+    BeginRecursiveChownInput: _handle_begin_recursive_chown_input,
     BeginExtractArchiveInput: _handle_begin_extract_archive_input,
     BeginZipCompressInput: _handle_begin_zip_compress_input,
     BeginRenameInput: _handle_begin_rename_input,

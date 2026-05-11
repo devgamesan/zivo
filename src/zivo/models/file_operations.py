@@ -9,7 +9,7 @@ CreateKind = Literal["file", "dir"]
 DeleteMode = Literal["trash", "permanent"]
 MutationResultLevel = Literal["info", "warning", "error"]
 ArchiveFormat = Literal["zip", "tar", "tar.gz", "tar.bz2", "gz", "bz2"]
-FileMutationOperation = Literal["rename", "create", "delete", "symlink"]
+FileMutationOperation = Literal["rename", "create", "delete", "symlink", "chmod", "chown"]
 UndoOperationKind = Literal["rename", "paste_copy", "paste_cut", "trash_delete"]
 
 
@@ -127,7 +127,50 @@ class DeleteRequest:
     mode: DeleteMode = "trash"
 
 
-FileMutationRequest = RenameRequest | CreatePathRequest | CreateSymlinkRequest | DeleteRequest
+@dataclass(frozen=True)
+class ChmodRequest:
+    """A request to change the permission bits for one or more paths."""
+
+    paths: tuple[str, ...]
+    mode: int
+
+
+@dataclass(frozen=True)
+class RecursiveChmodRequest:
+    """A request to recursively change permission bits for one or more paths."""
+
+    paths: tuple[str, ...]
+    mode: int
+
+
+@dataclass(frozen=True)
+class ChownRequest:
+    """A request to change the owner and/or group for one or more paths."""
+
+    paths: tuple[str, ...]
+    owner: str | None = None
+    group: str | None = None
+
+
+@dataclass(frozen=True)
+class RecursiveChownRequest:
+    """A request to recursively change owner and/or group for one or more paths."""
+
+    paths: tuple[str, ...]
+    owner: str | None = None
+    group: str | None = None
+
+
+FileMutationRequest = (
+    RenameRequest
+    | CreatePathRequest
+    | CreateSymlinkRequest
+    | DeleteRequest
+    | ChmodRequest
+    | RecursiveChmodRequest
+    | ChownRequest
+    | RecursiveChownRequest
+)
 
 
 @dataclass(frozen=True)

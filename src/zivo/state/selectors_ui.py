@@ -128,6 +128,10 @@ def select_help_bar_state(state: AppState) -> HelpBarState:
         if state.config.help_bar.filter:
             return HelpBarState(state.config.help_bar.filter)
         return HelpBarState(("type filter | enter/down apply | esc clear",))
+    if state.ui_mode == "CHMOD":
+        return HelpBarState(("type octal mode | enter apply | esc cancel",))
+    if state.ui_mode == "CHOWN":
+        return HelpBarState(("type owner[:group] | enter apply | esc cancel",))
     if state.ui_mode == "RENAME":
         if state.config.help_bar.rename:
             return HelpBarState(state.config.help_bar.rename)
@@ -279,11 +283,23 @@ def select_grep_export_dialog_state(state: AppState) -> GrepExportDialogViewStat
 def select_input_dialog_state(state: AppState) -> InputDialogState | None:
     """Return dialog content when the app is in an input mode."""
 
-    if state.ui_mode not in {"RENAME", "CREATE", "EXTRACT", "ZIP", "SYMLINK"}:
+    if state.ui_mode not in {"CHMOD", "CHOWN", "RENAME", "CREATE", "EXTRACT", "ZIP", "SYMLINK"}:
         return None
     if state.pending_input is None:
         return None
-    if state.ui_mode == "RENAME":
+    if state.ui_mode == "CHMOD":
+        title = (
+            "Change Permissions Recursively"
+            if state.pending_input.chmod_recursive
+            else "Change Permissions"
+        )
+    elif state.ui_mode == "CHOWN":
+        title = (
+            "Change Owner Recursively"
+            if state.pending_input.chown_recursive
+            else "Change Owner"
+        )
+    elif state.ui_mode == "RENAME":
         title = "Rename"
     elif state.ui_mode == "EXTRACT":
         title = "Extract"
